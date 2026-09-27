@@ -1,0 +1,17 @@
+{
+  "name": "Gramshiksha — ग्राम शिक्षा",
+  "short_name": "Gramshiksha",
+  "description": "Free bilingual lessons and quizzes for village learners",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdf8ef",
+  "theme_color": "#1a7f37",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

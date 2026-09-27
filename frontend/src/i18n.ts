@@ -1,0 +1,77 @@
+import type { Lang } from './types';
+
+/** Trilingual UI strings — index 0: en, 1: hi, 2: mr */
+const S: Record<string, [string, string, string]> = {
+  appName: ['GramShiksha', 'ग्रामशिक्षा', 'ग्रामशिक्षा'],
+  tagline: ['Free school learning for every village student',
+    'हर गाँव के छात्र के लिए मुफ़्त स्कूली शिक्षा',
+    'गावातील प्रत्येक विद्यार्थ्यासाठी मोफत शालेय शिक्षण'],
+  home: ['Home', 'होम', 'मुख्यपृष्ठ'],
+  classes: ['Classes', 'कक्षाएँ', 'इयत्ता'],
+  courses: ['Courses', 'कोर्स', 'अभ्यासक्रम'],
+  textbooks: ['Textbooks', 'पाठ्यपुस्तकें', 'पाठ्यपुस्तके'],
+  materials: ['Study Material', 'अध्ययन सामग्री', 'अभ्यास साहित्य'],
+  practice: ['Practice', 'अभ्यास', 'सराव'],
+  doubts: ['Doubts', 'प्रश्न', 'शंका'],
+  downloads: ['My Downloads', 'मेरे डाउनलोड', 'माझी डाउनलोड'],
+  progress: ['Progress', 'प्रगति', 'प्रगती'],
+  about: ['About', 'हमारे बारे में', 'आमच्याविषयी'],
+  login: ['Log in', 'लॉग इन', 'लॉग इन'],
+  register: ['Sign up', 'साइन अप', 'नोंदणी'],
+  logout: ['Log out', 'लॉग आउट', 'लॉग आउट'],
+  email: ['Email', 'ईमेल', 'ईमेल'],
+  password: ['Password', 'पासवर्ड', 'पासवर्ड'],
+  name: ['Name', 'नाम', 'नाव'],
+  student: ['Student', 'छात्र', 'विद्यार्थी'],
+  teacher: ['Teacher', 'शिक्षक', 'शिक्षक'],
+  parent: ['Parent', 'अभिभावक', 'पालक'],
+  startLearning: ['Start Learning', 'सीखना शुरू करें', 'शिकणे सुरू करा'],
+  exploreClasses: ['Explore Classes', 'कक्षाएँ देखें', 'इयत्ता पहा'],
+  exploreCourses: ['Explore Courses', 'कोर्स देखें', 'अभ्यासक्रम पहा'],
+  todaysLearning: ["Today's Learning", 'आज की पढ़ाई', 'आजचे शिक्षण'],
+  continueLearning: ['Continue Learning', 'पढ़ाई जारी रखें', 'शिकणे सुरू ठेवा'],
+  recommendedPractice: ['Recommended Practice', 'सुझाया गए अभ्यास', 'शिफारस केलेला सराव'],
+  revisionRequired: ['Revision Required', 'पुनरावृत्ति ज़रूरी', 'उजळणी आवश्यक'],
+  weakTopics: ['Weak Topics', 'कमज़ोर विषय', 'कमकुवत विषय'],
+  streak: ['Day streak', 'दिन की लय', 'दिवसांची लय'],
+  xp: ['XP', 'XP', 'XP'],
+  badges: ['Badges', 'बैज', 'बॅज'],
+  certificates: ['Certificates', 'प्रमाणपत्र', 'प्रमाणपत्रे'],
+  dataSaver: ['Data Saver', 'डेटा सेवर', 'डेटा सेव्हर'],
+  offlineNote: ['Offline — cached lessons shown', 'ऑफ़लाइन — कैश किए पाठ दिख रहे हैं', 'ऑफलाइन — कॅश केलेले धडे दिसत आहेत'],
+  submit: ['Submit', 'जमा करें', 'जमा करा'],
+  next: ['Next', 'आगे', 'पुढे'],
+  back: ['Back', 'वापस', 'मागे'],
+  markComplete: ['Mark complete', 'पूर्ण करें', 'पूर्ण करा'],
+  completed: ['Completed', 'पूर्ण', 'पूर्ण'],
+  enroll: ['Enroll', 'नामांकन', 'प्रवेश'],
+  continue: ['Continue', 'जारी रखें', 'सुरू ठेवा'],
+  yourScore: ['Your score', 'आपका स्कोर', 'तुमचा गुण'],
+  loading: ['Loading…', 'लोड हो रहा है…', 'लोड होत आहे…'],
+  errorLoad: ['Unable to load. Please try again.', 'लोड करने में त्रुटि। पुनः प्रयास करें।', 'लोड करण्यात त्रुटी. पुन्हा प्रयत्न करा.'],
+  empty: ['Nothing here yet.', 'यहाँ अभी कुछ नहीं है।', 'येथे अजून काही नाही.'],
+  askDoubt: ['Ask a doubt', 'प्रश्न पूछें', 'शंका विचारा'],
+  send: ['Send', 'भेजें', 'पाठवा'],
+  newMaterial: ['Upload material', 'सामग्री अपलोड करें', 'साहित्य अपलोड करा'],
+  download: ['Download', 'डाउनलोड', 'डाउनलोड'],
+  bookmark: ['Bookmark', 'बुकमार्क', 'बुकमार्क'],
+  myNotes: ['My Notes', 'मेरे नोट्स', 'माझे नोट्स'],
+  addNote: ['Add note', 'नोट जोड़ें', 'नोट जोडा'],
+  lessonsDone: ['Lessons done', 'पाठ पूर्ण', 'धडे पूर्ण'],
+  quizAvg: ['Quiz average', 'क्विज़ औसत', 'क्विझ सरासरी'],
+  studyTime: ['Study time', 'पढ़ाई का समय', 'अभ्यासाचा वेळ'],
+  needHelp: ['Needs practice', 'अभ्यास चाहिए', 'सरावाची गरज'],
+  students: ['Students', 'छात्र', 'विद्यार्थी'],
+  approve: ['Approve', 'स्वीकृत', 'मंजूर'],
+  reject: ['Reject', 'अस्वीकृत', 'नाकार'],
+  pending: ['Pending review', 'समीक्षा लंबित', 'तपासणी प्रलंबित'],
+};
+
+export function t(key: keyof typeof S | string, lang: Lang): string {
+  const v = S[key as string];
+  return v ? (lang === 'hi' ? v[1] : lang === 'mr' ? v[2] : v[0]) : (key as string);
+}
+
+export function pick(lang: Lang, en: string, hi: string, mr?: string): string {
+  return lang === 'hi' ? hi : lang === 'mr' ? (mr || hi) : en;
+}
