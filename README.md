@@ -18,7 +18,7 @@ slow internet, shared phones and limited data.
 | **Weak topics** | Rule-based detection (≥5 attempts, <50% accuracy) → revision + easy practice |
 | **Today's Learning** | Personalized daily plan: continue → practice quiz → revision |
 | **Gamification** | XP, daily streaks, 7 server-awarded badges, certificates (GS-XXXX IDs) |
-| **Materials** | Teacher uploads (auto-approved) + student uploads → **approval workflow** (pending → approved/needs_changes/rejected) + reporting |
+| **Materials** | Uploads → **approval workflow** (pending → approved/needs_changes/rejected): students and *unapproved* teachers always land in review, approved teachers publish immediately + reporting |
 | **Textbooks** | Official links only (ePathshala/NCERT, eBalbharati) — no re-hosting |
 | **Doubts** | Ask → teacher replies → resolve, with notifications |
 | **Dashboards** | Student, Teacher (monitor + doubts), Parent (weekly child summary), School, Admin |
@@ -57,8 +57,11 @@ cd frontend && npm install && npm run dev   # http://localhost:5174 (proxies /ap
 ## Tests
 
 ```bash
-# Backend — 49 tests: API behaviour, password reset, authorization limits,
-# migrations and the production boot gates
+# Backend — 78 tests: API behaviour, password reset, authorization limits,
+# every registered endpoint, migrations and the production boot gates.
+# test_route_coverage_canary.py fails the build if a route is ever
+# registered without a test calling it, or if the bare and /api mounts
+# of a router drift apart.
 .venv/Scripts/python -m pytest -q
 
 # Frontend — 15 unit tests (request framing, session/offline storage)

@@ -88,6 +88,10 @@ def register(payload: RegisterIn, request: Request, session: Session = Depends(g
         name=payload.name,
         hashed_password=hash_password(payload.password),
         role=payload.role,
+        # Anyone may type "teacher" at signup, so the role alone must not
+        # confer anything: teachers start pending until a platform admin
+        # approves them (POST /admin/users/{id}/approve).
+        role_status="pending" if payload.role == "teacher" else "active",
         lang_pref=payload.lang_pref if payload.lang_pref in ("en", "hi", "mr") else "hi",
         class_grade=payload.class_grade,
         board=payload.board,
@@ -99,6 +103,7 @@ def register(payload: RegisterIn, request: Request, session: Session = Depends(g
     seed_badges(session)
     token = create_access_token(user.email, user.role)
     return {"id": user.id, "email": user.email, "name": user.name, "role": user.role,
+            "role_status": user.role_status,
             "access_token": token, "token_type": "bearer"}
 
 
@@ -119,6 +124,7 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "email": user.email, "name": user.name, "role": user.role,
+            "role_status": user.role_status,
             "lang_pref": user.lang_pref, "class_grade": user.class_grade, "board": user.board,
             "school_id": user.school_id, "xp": user.xp, "streak_days": user.streak_days,
             "profile_pic": user.profile_pic}

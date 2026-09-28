@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -31,57 +31,86 @@ class UserCreate(BaseModel):
 
 
 class LessonCreate(BaseModel):
-    slug: str = Field(min_length=2, max_length=80, pattern=r"^[a-z0-9-]+$")
-    title_en: str
-    title_hi: str
-    subject: str = "general"
-    level: int = Field(default=1, ge=1, le=5)
-    body_en: str = ""
-    body_hi: str = ""
-    audio_url: Optional[str] = None
+    """Everything a teacher supplies to author a lesson.
+
+    The earlier shape (slug/subject/level) described columns the Lesson model
+    never had; a lesson now hangs off a chapter like everywhere else in the app.
+    """
+    chapter_id: int
+    type: str = "text"  # text | video | audio | mixed
+    title_en: str = Field(min_length=1, max_length=200)
+    title_hi: str = Field(min_length=1, max_length=200)
+    title_mr: str = Field(min_length=1, max_length=200)
+    body_en: str = Field(default="", max_length=20000)
+    body_hi: str = Field(default="", max_length=20000)
+    body_mr: str = Field(default="", max_length=20000)
+    duration_min: int = Field(default=10, ge=1, le=240)
     video_url: Optional[str] = None
+    video_url_low: Optional[str] = None
+    audio_url: Optional[str] = None
     published: bool = True
 
 
 class LessonRead(LessonCreate):
     id: int
-    created_at: datetime
+    order: int
 
     class Config:
         from_attributes = True
 
 
 class QuestionIn(BaseModel):
-    prompt_en: str
-    prompt_hi: str
-    options_en: list[str] = Field(min_length=2, max_length=6)
-    options_hi: list[str] = Field(min_length=2, max_length=6)
-    correct_index: int = Field(ge=0, le=5)
+    """Authoring shape for a lesson question; the router validates `correct`
+    against `type` and the option lists before anything reaches the database."""
+    type: str = "mcq"  # mcq | truefalse | multi | fill
+    prompt_en: str = Field(min_length=1, max_length=1000)
+    prompt_hi: str = Field(min_length=1, max_length=1000)
+    prompt_mr: str = Field(min_length=1, max_length=1000)
+    options_en: list[str] = Field(default_factory=list, max_length=6)
+    options_hi: list[str] = Field(default_factory=list, max_length=6)
+    options_mr: list[str] = Field(default_factory=list, max_length=6)
+    correct: str = "0"  # "0" | "[0,2]" (multi) | answer text (fill)
     explanation_en: str = ""
     explanation_hi: str = ""
+    explanation_mr: str = ""
+    difficulty: str = "easy"  # easy | medium | hard
+    topic: str = "general"
+    subject_name: str = "general"  # feeds weak-topic stats
 
 
 class QuestionOut(BaseModel):
     id: int
+    type: str
     prompt_en: str
     prompt_hi: str
-    options_en: str
-    options_hi: str
-    correct_index: int | None = None  # hidden unless grading
-    explanation_en: str | None = None
-    explanation_hi: str | None = None
+    prompt_mr: str
+    options_en: list[str]
+    options_hi: list[str]
+    options_mr: list[str]
+    difficulty: str
+    topic: str
+    subject_name: str
+    correct: Optional[str] = None  # hidden unless grading
+    explanation_en: Optional[str] = None
+    explanation_hi: Optional[str] = None
+    explanation_mr: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
+class AttemptAnswer(BaseModel):
+    question_id: int
+    answer: Any = None  # int index | list[int] | free text, judged per question type
+
+
 class AttemptIn(BaseModel):
-    lesson_id: int
-    answers: list[int]  # parallel to question order
+    answers: list[AttemptAnswer] = Field(min_length=1)
+    minutes: int = Field(default=10, ge=0, le=240)
 
 
 class AttemptOut(BaseModel):
-    score: float
+    score: float  # percentage
     total: int
     correct: int
     per_question: list[dict]
@@ -95,3 +124,8 @@ class ProgressOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class BatchIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=500)

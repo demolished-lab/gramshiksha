@@ -12,7 +12,8 @@ import os
 
 from .config import settings
 from .db import create_db_and_tables, engine
-from .routers import auth, catalog, dashboards, learn, materials, social
+from .routers import auth, catalog, dashboards, learn, materials, progress, social
+from .routers import lessons
 from .seed import seed
 
 log = logging.getLogger("gramshiksha")
@@ -196,6 +197,10 @@ app.include_router(learn.router)
 app.include_router(materials.router)
 app.include_router(social.router)
 app.include_router(dashboards.router)
+# Authored separately from learn.py/dashboards.py; both were long written
+# against the current models but never mounted (see each module's docstring).
+app.include_router(lessons.router)
+app.include_router(progress.router)
 
 # Production routes under /api (matches Netlify/Vercel rewrites /api/* -> backend /api/*)
 app.include_router(auth.router, prefix="/api")
@@ -204,6 +209,8 @@ app.include_router(learn.router, prefix="/api")
 app.include_router(materials.router, prefix="/api")
 app.include_router(social.router, prefix="/api")
 app.include_router(dashboards.router, prefix="/api")
+app.include_router(lessons.router, prefix="/api")
+app.include_router(progress.router, prefix="/api")
 
 # Uploaded files are served ONLY via the authenticated
 # GET /materials/{id}/download endpoint (approval + visibility checked).

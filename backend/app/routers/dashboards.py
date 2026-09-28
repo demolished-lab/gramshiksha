@@ -190,7 +190,29 @@ def admin_users(role: Optional[str] = None, limit: int = 50, offset: int = 0,
         q = q.where(User.role == role)
     rows = session.exec(q.offset(offset).limit(limit)).all()
     return [{"id": u.id, "email": u.email, "name": u.name, "role": u.role,
+             "role_status": u.role_status,
              "class_grade": u.class_grade, "board": u.board, "xp": u.xp} for u in rows]
+
+
+@router.post("/admin/users/{user_id}/approve")
+def approve_user(user_id: int, user=Depends(require_roles("platform_admin")),
+                 session: Session = Depends(get_session)):
+    """Move a user out of `pending` — the step that actually grants the
+    teacher role's privileges.
+
+    Registration gives anyone the `teacher` *string*; publishing lessons,
+    moderating material and reading student rosters are gated on approval.
+    Idempotent: approving an already-active account is a no-op, not an error.
+    """
+    target = session.get(User, user_id)
+    if not target:
+        raise HTTPException(404, "User not found")
+    target.role_status = "active"
+    session.add(target)
+    session.commit()
+    session.refresh(target)
+    return {"ok": True, "id": target.id, "email": target.email,
+            "role": target.role, "role_status": target.role_status}
 
 
 @router.get("/admin/reports")

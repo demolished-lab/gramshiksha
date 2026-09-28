@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..models import MATERIAL_STATUSES, MATERIAL_TYPES, Material, MaterialReport, User
 from ..ratelimit import rate_limit
-from ..security import get_current_user, require_any, require_roles
+from ..security import get_current_user, has_role, require_any, require_roles
 from ..storage import delete_ref, download_target, save_upload
 
 router = APIRouter(prefix="/materials", tags=["materials"])
@@ -46,8 +46,10 @@ def upload_material(
         raise HTTPException(422, f"type must be one of {MATERIAL_TYPES}")
     if visibility not in ("private", "school", "public"):
         raise HTTPException(422, "visibility must be private|school|public")
-    # Students' uploads always start pending; teacher uploads are approved automatically.
-    status = "pending" if user.role == "student" else "approved"
+    # Students' uploads always start pending; approved teachers publish
+    # immediately. A teacher still awaiting approval is treated like a
+    # student — otherwise self-signup would be a shortcut past moderation.
+    status = "pending" if user.role == "student" or user.role_status != "active" else "approved"
     if user.role == "student" and visibility == "public":
         visibility = "public"  # allowed, but gated behind approval
     path, size = _save_file(file)
@@ -220,7 +222,7 @@ def delete_material(material_id: int, user: User = Depends(get_current_user),
     m = session.get(Material, material_id)
     if not m:
         raise HTTPException(404, "Material not found")
-    if m.uploader_id != user.id and user.role not in ("teacher", "school_admin", "platform_admin"):
+    if m.uploader_id != user.id and not has_role(user, "teacher", "school_admin", "platform_admin"):
         raise HTTPException(403, "Not allowed")
     delete_ref(m.file_path)  # local unlink or Cloudinary destroy (best-effort)
     session.delete(m)

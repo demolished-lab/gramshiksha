@@ -41,6 +41,9 @@ class User(SQLModel, table=True):
     name: str
     hashed_password: str
     role: str = "student"
+    # active | pending. Self-registered teachers start pending and hold no
+    # privileges until a platform admin approves them (see security.require_roles).
+    role_status: str = "active"
     lang_pref: str = "hi"  # en | hi | mr
     class_grade: Optional[int] = Field(default=None)  # 1..12
     board: Optional[str] = Field(default=None)
@@ -219,6 +222,15 @@ class Enrollment(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     course_id: int = Field(foreign_key="course.id", index=True)
     progress_pct: float = 0.0
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Batch(SQLModel, table=True):
+    """A teacher-owned class group, created via POST /progress/batches."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    description: str = ""
+    teacher_id: int = Field(foreign_key="user.id", index=True)
     created_at: datetime = Field(default_factory=utcnow)
 
 

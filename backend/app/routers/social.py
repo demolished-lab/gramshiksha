@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..models import (Bookmark, Doubt, DoubtReply, Lesson, Note, Notification, User, utcnow)
 from ..ratelimit import rate_limit
-from ..security import get_current_user, require_roles
+from ..security import get_current_user, has_role, require_roles
 
 router = APIRouter(tags=["social"])
 
@@ -80,7 +80,7 @@ def resolve_doubt(doubt_id: int, user=Depends(get_current_user),
     d = session.get(Doubt, doubt_id)
     if not d:
         raise HTTPException(404, "Doubt not found")
-    if d.student_id != user.id and user.role not in ("teacher", "school_admin", "platform_admin"):
+    if d.student_id != user.id and not has_role(user, "teacher", "school_admin", "platform_admin"):
         raise HTTPException(403, "Not allowed")
     d.status = "resolved"
     session.add(d)

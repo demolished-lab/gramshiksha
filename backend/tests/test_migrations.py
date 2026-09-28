@@ -1,10 +1,12 @@
 """Migration coverage — schemas now come from Alembic, not create_all().
 
-Three properties that make schema changes safe:
+Four properties that make schema changes safe:
 
 * a fresh database is built entirely by `alembic upgrade head`,
 * a pre-Alembic database (how production was actually created) is *stamped*
   rather than re-created — existing tables and rows survive,
+* a stamped database still receives what head expects of it: tables from
+  create_all() in the legacy branch, columns from the idempotent shims,
 * the models and the migration head must not drift: if someone edits
   models.py without generating a revision, this suite fails instead of the
   first production deploy.
@@ -87,3 +89,44 @@ def test_models_and_migration_head_do_not_drift(tmp_path, monkeypatch):
         "--autogenerate -m 'describe the change'\n"
         + "\n".join(f"  {d!r}" for d in diffs)
     )
+
+
+def test_stamped_database_gains_post_baseline_tables_and_columns(tmp_path, monkeypatch):
+    """A stamped database is *claimed* to be at head, but boot never replays a
+    revision against it — so everything head expects has to be supplied by the
+    legacy branch itself: new tables by create_all(), new columns on existing
+    tables by the idempotent shims.
+
+    Built as the oldest shape still in the wild: a `user` table from before
+    the approval workflow, no alembic_version, and one row that must survive.
+    """
+    _, engine = _point_at(tmp_path, monkeypatch, "legacy-old.db")
+    with engine.begin() as conn:
+        conn.execute(text(
+            'CREATE TABLE "user" (id INTEGER PRIMARY KEY, email VARCHAR NOT NULL, '
+            "name VARCHAR NOT NULL, hashed_password VARCHAR NOT NULL, role VARCHAR NOT NULL)"
+        ))
+        conn.execute(text(
+            "INSERT INTO \"user\" (email, name, hashed_password, role) "
+            "VALUES ('old@x.in', 'Old User', 'hash', 'teacher')"
+        ))
+
+    dbmod.create_db_and_tables()                   # must not raise
+
+    columns = {c["name"] for c in inspect(engine).get_columns("user")}
+    tables = set(inspect(engine).get_table_names())
+    assert "role_status" in columns, (
+        "stamped databases never replay revisions, so a new model column "
+        "would be invisible to every User query until the shim adds it"
+    )
+    assert {"batch", "school", "passwordresetcode"} <= tables, (
+        "the stamp asserts head, so head's tables must exist as well"
+    )
+
+    with engine.connect() as conn:
+        status = conn.execute(text('SELECT role_status FROM "user"')).scalar_one()
+        rows = conn.execute(text('SELECT COUNT(*) FROM "user"')).scalar_one()
+        version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert status == "active", "pre-existing accounts are approved by definition"
+    assert rows == 1, "existing rows must survive boot"
+    assert version == ScriptDirectory.from_config(dbmod._alembic_config()).get_current_head()
