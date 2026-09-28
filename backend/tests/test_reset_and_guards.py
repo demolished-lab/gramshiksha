@@ -184,9 +184,19 @@ def test_production_marker_is_one_way(monkeypatch):
                     database_url="postgresql+psycopg://u:p@h/db").is_production
 
 
-def test_production_marker_activates_every_production_default(monkeypatch):
-    """A forgotten DATABASE_URL must not leak dev behaviours either."""
-    s = Settings(app_env="production", database_url="sqlite:///./x.db")
+def test_production_marker_activates_every_production_default():
+    """A forgotten DATABASE_URL must not leak dev behaviours either.
+
+    seed_demo and docs_enabled are pinned for the same reason
+    test_boot_guard_blocks_ephemeral_upload_disk pins allow_ephemeral_uploads:
+    Settings is a BaseSettings, so anything left out is read from the
+    environment — and CI's Postgres job sets SEED_DEMO=true (its suite logs
+    in as the seeded demo accounts), which would bypass the "auto" rule this
+    test exists to pin. Unpinned, that job fails while SQLite stays green —
+    an assertion that depends on which job runs isn't testing the rule.
+    """
+    s = Settings(app_env="production", database_url="sqlite:///./x.db",
+                 seed_demo="auto", docs_enabled=None)
     assert not s.seed_demo_enabled, "demo accounts with published passwords"
     assert not s.docs_on, "/docs maps the attack surface"
 
