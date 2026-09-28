@@ -118,8 +118,13 @@ def test_boot_guard_blocks_default_jwt_secret(monkeypatch):
 
 
 def test_boot_guard_blocks_ephemeral_upload_disk(monkeypatch):
+    # allow_ephemeral_uploads must be pinned: Settings is a BaseSettings, so
+    # anything left out is read from the environment — and CI sets
+    # ALLOW_EPHEMERAL_UPLOADS=true, which would make the guard pass and this
+    # assertion fail for the wrong reason.
     unsafe = Settings(database_url="postgresql+psycopg://user:pass@host/db",
-                      jwt_secret="x" * 64)
+                      jwt_secret="x" * 64,
+                      allow_ephemeral_uploads=False)
     monkeypatch.setattr(main_mod, "settings", unsafe)
     with pytest.raises(RuntimeError, match="ephemeral"):
         main_mod.check_production_safety()
