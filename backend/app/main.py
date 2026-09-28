@@ -116,6 +116,13 @@ def check_production_safety() -> None:
             "JWT_SECRET is still the dev default 'dev-secret-change-me' — anyone who has read "
             "the README can forge a platform_admin token. Set a random 64-char value "
             "(Render: JWT_SECRET with generateValue: true).")
+    if settings.database_url.startswith("sqlite"):
+        problems.append(
+            "DATABASE_URL is not set to a Postgres connection — this instance would run on "
+            "a local SQLite file (on Render: an ephemeral disk wiped on every redeploy, so "
+            "every user, lesson and upload is lost). Set DATABASE_URL to your managed "
+            "Postgres connection string; 'postgres://…?sslmode=require' becomes "
+            "'postgresql+psycopg://…?sslmode=require'.")
     if not settings.cloudinary_enabled and not settings.allow_ephemeral_uploads:
         problems.append(
             "Uploads would be written to an ephemeral disk and destroyed on every redeploy, "

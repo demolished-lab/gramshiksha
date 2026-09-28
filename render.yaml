@@ -5,15 +5,28 @@ services:
     plan: free
     healthCheckPath: /ready
     envVars:
+      # Marks this host as production on its own. The URL-based signal cannot
+      # do that: DATABASE_URL is itself what's missing when someone forgets
+      # it, and the app would then boot dev-mode on ephemeral SQLite (demo
+      # accounts, reset codes logged, data wiped on redeploy). With
+      # APP_ENV=production the boot guard fires and names the missing var.
+      - key: APP_ENV
+        value: production
       # Boot-time guard (app/main.py: check_production_safety) refuses to start
       # until DATABASE_URL, JWT_SECRET and Cloudinary are all real — fix those
       # before the first deploy succeeds.
       - key: DATABASE_URL
         sync: false
+        # postgres://user:pass@host/db?sslmode=require  →  prefix with postgresql+psycopg://
       - key: JWT_SECRET
         generateValue: true
+      # Frontend origin. The Vercel deploy serves the SPA and rewrites
+      # /api/* to this service (frontend/vercel.json), so everyday calls are
+      # same-origin; this list only matters if the SPA points VITE_API_URL
+      # straight at the API. Change it if the frontend lands on another
+      # host or custom domain.
       - key: CORS_ORIGINS
-        value: '["https://gramshiksha.netlify.app"]'
+        value: '["https://gramshiksha.vercel.app"]'
       # REQUIRED in production: uploads land on an ephemeral disk otherwise.
       - key: CLOUDINARY_CLOUD_NAME
         sync: false

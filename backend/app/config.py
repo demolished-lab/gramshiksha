@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     sentry_env: str = "production"
 
     # --- Deploy safety gates -------------------------------------------
+    # Explicit environment marker. Empty = infer from DATABASE_URL (historic
+    # behaviour). Set APP_ENV=production on hosts where a *forgotten*
+    # DATABASE_URL must not silently demote the app to dev mode: the URL is
+    # itself the production signal, so the signal is absent exactly when the
+    # mistake happens (ephemeral SQLite, demo accounts, logged reset codes).
+    app_env: str = ""
     # Demo accounts (admin@gramshiksha.in / Admin@1234, etc.) are a dev
     # convenience. "auto" seeds them ONLY on a local SQLite DB; production
     # (Postgres) never gets them unless you explicitly force "true".
@@ -56,8 +62,18 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        """Non-SQLite DATABASE_URL is our production signal — the same proxy
-        main.py already uses for the JWT_SECRET guard."""
+        """APP_ENV=production forces production; otherwise a non-SQLite
+        DATABASE_URL is the production signal (the proxy main.py's guards
+        already use).
+
+        Deliberately one-way: only the value "production" can escalate, and
+        nothing can de-escalate a Postgres URL back to dev — otherwise a typo
+        like APP_ENV=deveopment on a real instance would switch every guard
+        off. The point is that forgetting DATABASE_URL no longer means
+        "development", because APP_ENV already said production.
+        """
+        if self.app_env.strip().lower() in ("production", "prod"):
+            return True
         return not self.database_url.startswith("sqlite")
 
     @property

@@ -41,8 +41,9 @@ class User(SQLModel, table=True):
     name: str
     hashed_password: str
     role: str = "student"
-    # active | pending. Self-registered teachers start pending and hold no
-    # privileges until a platform admin approves them (see security.require_roles).
+    # active | pending | suspended. Self-registered teachers start pending and
+    # hold no privileges until a platform admin approves them; suspend
+    # withdraws an approval again (see security.require_roles).
     role_status: str = "active"
     lang_pref: str = "hi"  # en | hi | mr
     class_grade: Optional[int] = Field(default=None)  # 1..12

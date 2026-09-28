@@ -29,6 +29,8 @@ slow internet, shared phones and limited data.
 
 - [`docs/ANALYSIS.md`](docs/ANALYSIS.md) — research mining & decisions
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — data model & flows
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — runbook: Render + Vercel + Neon,
+  secret-by-secret, first-admin bootstrap, smoke test
 
 ## Run locally
 
@@ -58,7 +60,7 @@ cd frontend && npm install && npm run dev   # http://localhost:5174 (proxies /ap
 ## Tests
 
 ```bash
-# Backend — 80 tests: API behaviour, password reset, authorization limits,
+# Backend — 86 tests: API behaviour, password reset, authorization limits,
 # every registered endpoint, migrations and the production boot gates.
 # test_route_coverage_canary.py fails the build if a route is ever
 # registered without a test calling it, or if the bare and /api mounts

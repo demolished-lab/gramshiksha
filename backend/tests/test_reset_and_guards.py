@@ -148,6 +148,49 @@ def test_boot_guard_is_inert_on_local_sqlite(monkeypatch):
     main_mod.check_production_safety()
 
 
+def test_boot_guard_refuses_when_production_host_has_no_database_url(monkeypatch):
+    """The deploy target says production, but DATABASE_URL was left unset.
+
+    The URL cannot be the only production signal: it is exactly what is
+    missing in this scenario, so without APP_ENV the app would boot in dev
+    mode on ephemeral SQLite — demo accounts seeded, reset codes logged,
+    every row wiped on redeploy — and no guard would ever fire.
+    """
+    forgot = Settings(app_env="production",
+                      database_url="sqlite:///./gramshiksha.db",  # the default
+                      jwt_secret="x" * 64,
+                      cloudinary_cloud_name="c", cloudinary_api_key="k",
+                      cloudinary_api_secret="s",
+                      allow_ephemeral_uploads=False)
+    assert forgot.is_production
+    monkeypatch.setattr(main_mod, "settings", forgot)
+    with pytest.raises(RuntimeError, match="DATABASE_URL"):
+        main_mod.check_production_safety()
+
+
+def test_production_marker_is_one_way(monkeypatch):
+    """APP_ENV can escalate a dev URL to production, never the reverse.
+
+    A typo like APP_ENV=deveopment must not disarm the guards on a real
+    Postgres instance — de-escalation would be a hole, escalation a safety.
+    """
+    assert Settings(app_env="production", database_url="sqlite:///./x.db").is_production
+    assert Settings(app_env="PROD", database_url="sqlite:///./x.db").is_production
+    # Falls back to URL inference for any other value...
+    assert not Settings(app_env="staging", database_url="sqlite:///./x.db").is_production
+    assert Settings(app_env="", database_url="postgresql+psycopg://u:p@h/db").is_production
+    # ...and never demotes a Postgres URL.
+    assert Settings(app_env="development",
+                    database_url="postgresql+psycopg://u:p@h/db").is_production
+
+
+def test_production_marker_activates_every_production_default(monkeypatch):
+    """A forgotten DATABASE_URL must not leak dev behaviours either."""
+    s = Settings(app_env="production", database_url="sqlite:///./x.db")
+    assert not s.seed_demo_enabled, "demo accounts with published passwords"
+    assert not s.docs_on, "/docs maps the attack surface"
+
+
 def test_production_seed_creates_no_demo_accounts(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path}/fresh.db")
     SQLModel.metadata.create_all(engine)
