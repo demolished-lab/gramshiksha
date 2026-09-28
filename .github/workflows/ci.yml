@@ -1,0 +1,72 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt
+      - run: python -m pytest -q
+        env:
+          DATABASE_URL: sqlite:////tmp/ci.db
+          JWT_SECRET: ci-secret
+
+  # The SQLite job never exercises the Postgres dialect (pooling, DDL, boolean
+  # and datetime handling, joins in _visible_query). This runs the identical
+  # suite against a real Postgres 16 so a dialect bug fails the PR instead of
+  # the first production deploy.
+  backend-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gram
+          POSTGRES_PASSWORD: gram
+          POSTGRES_DB: gramshiksha
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gram"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt
+      - run: python -m pytest -q
+        env:
+          # Postgres ⇒ app.config.Settings.is_production is True, so this job
+          # also proves the boot guard passes on a properly configured prod.
+          DATABASE_URL: postgresql+psycopg://gram:gram@localhost:5432/gramshiksha?sslmode=disable
+          JWT_SECRET: ci-postgres-secret-0123456789abcdef0123456789abcdef0123456789abcdef
+          # No Cloudinary in CI: uploads go to the runner's disk instead.
+          ALLOW_EPHEMERAL_UPLOADS: "true"
+          # The suite logs in as the seeded demo accounts.
+          SEED_DEMO: "true"
+          CORS_ORIGINS: '["http://localhost:5174"]'
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend

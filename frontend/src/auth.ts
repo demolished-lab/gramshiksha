@@ -48,9 +48,42 @@ export function refreshUser(me: Me): void {
   }));
 }
 
+/**
+ * Drop cached `/api` responses from the service worker.
+ *
+ * Cache entries are keyed by request URL, not by user — so on a shared phone
+ * the next account could otherwise read the previous one's cached dashboards
+ * and `/auth/me` while offline. Shell assets are left alone: they contain no
+ * user data.
+ */
+export async function clearCachedApi(): Promise<void> {
+  if (typeof caches === 'undefined') return;
+  try {
+    const names = await caches.keys();
+    for (const name of names) {
+      const cache = await caches.open(name);
+      const requests = await cache.keys();
+      await Promise.all(
+        requests
+          .filter((r) => {
+            try {
+              return new URL(r.url).pathname.startsWith('/api/');
+            } catch {
+              return false;
+            }
+          })
+          .map((r) => cache.delete(r))
+      );
+    }
+  } catch {
+    /* storage unavailable (private mode) — nothing to clear */
+  }
+}
+
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  void clearCachedApi();
 }
 
 /** Offline lesson cache */

@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models import (Bookmark, Doubt, DoubtReply, Lesson, Note, Notification, User, utcnow)
+from ..ratelimit import rate_limit
 from ..security import get_current_user, require_roles
 
 router = APIRouter(tags=["social"])
@@ -19,7 +20,8 @@ class DoubtIn(BaseModel):
     text: str = Field(min_length=5, max_length=2000)
 
 
-@router.post("/doubts", status_code=201)
+@router.post("/doubts", status_code=201,
+             dependencies=[Depends(rate_limit("doubts.create", 30))])
 def ask_doubt(payload: DoubtIn, user=Depends(require_roles("student")),
               session: Session = Depends(get_session)):
     d = Doubt(student_id=user.id, subject_name=payload.subject_name,
@@ -55,7 +57,8 @@ class ReplyIn(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
 
 
-@router.post("/doubts/{doubt_id}/reply", status_code=201)
+@router.post("/doubts/{doubt_id}/reply", status_code=201,
+             dependencies=[Depends(rate_limit("doubts.reply", 60))])
 def reply_doubt(doubt_id: int, payload: ReplyIn,
                 user=Depends(require_roles("teacher", "school_admin", "platform_admin")),
                 session: Session = Depends(get_session)):
@@ -127,7 +130,8 @@ class NoteIn(BaseModel):
     body: str = Field(min_length=1, max_length=5000)
 
 
-@router.post("/notes", status_code=201)
+@router.post("/notes", status_code=201,
+             dependencies=[Depends(rate_limit("notes.create", 60))])
 def add_note(payload: NoteIn, user=Depends(get_current_user),
              session: Session = Depends(get_session)):
     n = Note(user_id=user.id, lesson_id=payload.lesson_id, body=payload.body)

@@ -12,18 +12,27 @@ Demo accounts (password shown / used at login):
 Content: 9 courses (Class 1-12), 20+ chapters, 25+ lessons (rich Marathi & Hindi),
 70-question trilingual bank (mcq/truefalse/multi/fill) across subjects & difficulties,
 official textbook links, demo doubts/notifications/materials.
+
+Demo accounts are DEVELOPMENT-ONLY: they are seeded on a local SQLite DB and
+skipped entirely when DATABASE_URL points at Postgres (production), unless
+SEED_DEMO=true is set explicitly. Course/subject/lesson/question/textbook
+content always seeds — only people and fake activity are gated.
 """
 import json
+import logging
 import random
 
 from sqlmodel import Session, select
 
+from .config import settings
 from .gamification import seed_badges
 from .models import (BadgeDef, Board, Chapter, Course, DailyActivity, Doubt, DoubtReply,
                      Enrollment, Lesson, Notification, Question, Quiz, QuizQuestion, School,
                      Subject, Textbook, User, QuizAttempt, PracticeAttempt, TopicStats)
 from .models import Material
 from .security import hash_password
+
+log = logging.getLogger("gramshiksha")
 
 BOARDS = ["Maharashtra SSC", "Maharashtra HSC", "CBSE"]
 
@@ -52,13 +61,18 @@ SUBJECTS_SECONDARY = [  # 9-10
     ("History", "इतिहास", "इतिहास"),
     ("Geography", "भूगोल", "भूगोल"),
 ]
-SUBJECTS_HSC = [  # 11-12
+SUBJECTS_HSC = [  # 11-12 (science + languages + humanities streams)
     ("Physics", "भौतिक विज्ञान", "भौतिकशास्त्र"),
     ("Chemistry", "रसायन विज्ञान", "रसायनशास्त्र"),
     ("Biology", "जीव विज्ञान", "जीवशास्त्र"),
     ("Mathematics", "गणित", "गणित"),
     ("Computer Science", "कंप्यूटर विज्ञान", "संगणक शास्त्र"),
     ("English", "अंग्रेज़ी", "इंग्रजी"),
+    ("Marathi", "मराठी", "मराठी"),
+    ("Hindi", "हिंदी", "हिंदी"),
+    ("History", "इतिहास", "इतिहास"),
+    ("Geography", "भूगोल", "भूगोल"),
+    ("Civics", "नागरिक शास्त्र", "राज्यशास्त्र"),
 ]
 
 COURSES = [
@@ -90,6 +104,43 @@ COURSES = [
     ("g12-hsc-physics-course", 12, "Maharashtra HSC", "Physics", "en",
      ("Physics — Class 12 (HSC)", "भौतिकी — कक्षा 12 (HSC)", "भौतिकशास्त्र — इयत्ता १२ (एचएससी)"),
      "hard", 400),
+    # --- expansion pack: every grade 1-12 now has courses on some board ---
+    ("g2-ssc-math-course", 2, "Maharashtra SSC", "Mathematics", "mr",
+     ("Math Fun — Class 2", "गणित मज़ेदार — कक्षा 2", "गणित मजेदार — इयत्ता २"),
+     "easy", 90),
+    ("g3-ssc-evs-course", 3, "Maharashtra SSC", "Environmental Studies", "mr",
+     ("Our World — Class 3 (EVS)", "हमारी दुनिया — कक्षा 3", "आपले जग — इयत्ता ३"),
+     "easy", 100),
+    ("g4-ssc-math-course", 4, "Maharashtra SSC", "Mathematics", "mr",
+     ("Mathematics — Class 4 (SSC)", "गणित — कक्षा 4 (SSC)", "गणित — इयत्ता ४ (एसएससी)"),
+     "easy", 130),
+    ("g9-ssc-science-course", 9, "Maharashtra SSC", "Science", "mr",
+     ("Science — Class 9 (SSC)", "विज्ञान — कक्षा 9 (SSC)", "विज्ञान — इयत्ता ९ (एसएससी)"),
+     "medium", 300),
+    ("g9-ssc-math-course", 9, "Maharashtra SSC", "Mathematics", "mr",
+     ("Mathematics — Class 9 (SSC)", "गणित — कक्षा 9 (SSC)", "गणित — इयत्ता ९ (एसएससी)"),
+     "medium", 300),
+    ("g11-hsc-chemistry-course", 11, "Maharashtra HSC", "Chemistry", "en",
+     ("Chemistry — Class 11 (HSC)", "रसायन विज्ञान — कक्षा 11 (HSC)", "रसायनशास्त्र — इयत्ता ११ (एचएससी)"),
+     "medium", 360),
+    ("g11-hsc-biology-course", 11, "Maharashtra HSC", "Biology", "en",
+     ("Biology — Class 11 (HSC)", "जीव विज्ञान — कक्षा 11 (HSC)", "जीवशास्त्र — इयत्ता ११ (एचएससी)"),
+     "medium", 360),
+    ("g2-cbse-english-course", 2, "CBSE", "English", "en",
+     ("English Fun — Class 2 (CBSE)", "अंग्रेज़ी मज़ेदार — कक्षा 2 (CBSE)", "इंग्रजी मजेदार — इयत्ता २ (सीबीएसई)"),
+     "easy", 90),
+    ("g3-cbse-math-course", 3, "CBSE", "Mathematics", "hi",
+     ("Mathematics — Class 3 (CBSE)", "गणित — कक्षा 3 (CBSE)", "गणित — इयत्ता ३ (सीबीएसई)"),
+     "easy", 110),
+    ("g4-cbse-evs-course", 4, "CBSE", "Environmental Studies", "hi",
+     ("Our World — Class 4 (CBSE)", "हमारी दुनिया — कक्षा 4 (CBSE)", "आपले जग — इयत्ता ४ (सीबीएसई)"),
+     "easy", 110),
+    ("g9-cbse-english-course", 9, "CBSE", "English", "en",
+     ("English — Class 9 (CBSE)", "अंग्रेज़ी — कक्षा 9 (CBSE)", "इंग्रजी — इयत्ता ९ (सीबीएसई)"),
+     "medium", 220),
+    ("g11-cbse-physics-course", 11, "CBSE", "Physics", "en",
+     ("Physics — Class 11 (CBSE)", "भौतिकी — कक्षा 11 (CBSE)", "भौतिकशास्त्र — इयत्ता ११ (सीबीएसई)"),
+     "hard", 380),
 ]
 
 # Chapters per course: (title triple, lessons[(title triple, type, minutes, body_en, body_hi, body_mr)])
@@ -276,6 +327,237 @@ COURSE_CONTENT = {
              "Rockets work on the third law.",
              "पहला नियम: वस्तुएँ अपनी अवस्था बनाए रखती हैं जब तक बल न लगे — जड़त्व। दूसरा: F = ma। तीसरा: हर क्रिया की बराबर व विपरीत प्रतिक्रिया। रॉकेट तीसरे नियम पर काम करता है।",
              "पहला नियम: वस्तू स्वतःची अवस्था टिकवून ठेवते जोपर्यंत बल न लागे — जडत्व. दुसरा: F = ma. तिसरा: प्रत्येक क्रियेला समान व विरुद्ध प्रतिक्रिया. रॉकेट तिसऱ्या नियमावर काम करते."),
+        ]),
+    ],
+    "g2-ssc-math-course": [
+        (("Numbers to 100", "100 तक की संख्याएँ", "१०० पर्यंतच्या संख्या"), [
+            (("Tens and Ones", "दहाई और इकाई", "दशक आणि एकक"), "text", 10,
+             "Numbers have tens and ones places. 34 means 3 tens and 4 ones. "
+             "Bundles of 10 sticks make counting big numbers easy!",
+             "संख्याओं में दहाई और इकाई का स्थान होता है। 34 का मतलब 3 दहाई और 4 इकाई। "
+             "10-10 की गड्डियाँ बड़ी संख्याएँ गिनना आसान बनाती हैं!",
+             "संख्यांमध्ये दशक आणि एकक स्थाने असतात. ३४ म्हणजे ३ दशक आणि ४ एकक. "
+             "१०-१० च्या जुड्या मोठ्या संख्या मोजणे सोपे करतात!"),
+            (("Number Line Jumps", "संख्या रेखा पर छलांग", "संख्यारेषेवर उड्या"), "text", 10,
+             "A number line shows numbers in order. Jump forward to add: 5 + 3 means start at 5, "
+             "jump 3 ahead, land on 8. Jump back to subtract!",
+             "संख्या रेखा संख्याएँ क्रम में दिखाती है। जोड़ने के लिए आगे कूदो: 5 + 3 का मतलब 5 से शुरू कर 3 आगे — उत्तर 8। घटाने के लिए पीछे कूदो!",
+             "संख्यारेषा संख्या क्रमाने दाखवते. बेरीज करण्यासाठी पुढे उडी मारा: ५ + ३ म्हणजे ५ पासून सुरू करून ३ पुढे — उत्तर ८. वजाबाकीसाठी मागे उडी मारा!"),
+        ]),
+        (("Shapes and Patterns", "आकृतियाँ और पैटर्न", "आकार आणि नक्षी"), [
+            (("2D Shapes Around Us", "हमारे आस-पास की आकृतियाँ", "आपल्या सभोवतालचे आकार"), "text", 8,
+             "Circle, triangle, square and rectangle are 2D shapes. A chapati is a circle, "
+             "a slate is a rectangle. Find 5 circles in your home today!",
+             "गोला, त्रिकोण, चौकोन और आयत द्विविमीय आकृतियाँ हैं। रोटी गोला है, स्लेट आयत है। आज घर में 5 गोले खोजो!",
+             "वर्तुळ, त्रिकोण, चौकोन आणि आयत या द्विमितीय आकृत्या आहेत. पोळी वर्तुळ आहे, पाटी आयत आहे. आज घरात ५ वर्तुळे शोधा!"),
+        ]),
+    ],
+    "g3-ssc-evs-course": [
+        (("Our Family and Neighbours", "हमारा परिवार और पड़ोसी", "आपले कुटुंब आणि शेजारी"), [
+            (("Types of Families", "परिवारों के प्रकार", "कुटुंबांचे प्रकार"), "text", 10,
+             "A nuclear family has parents and children. A joint family lives with grandparents, "
+             "uncles and cousins. Both give love and support in different ways.",
+             "एकल परिवार में माता-पिता और बच्चे होते हैं। संयुक्त परिवार में दादा-दादी, चाचा-चाची और चचेरे भाई-बहन साथ रहते हैं। दोनों अलग तरीकों से प्यार और सहारा देते हैं।",
+             "विभक्त कुटुंबात आई-वडील आणि मुले असतात. एकत्र कुटुंबात आजी-आजोबा, काका-काकू आणि चुलत भावंडे एकत्र राहतात. दोन्ही वेगवेगळ्या प्रकारे प्रेम आणि आधार देतात."),
+            (("Good Neighbours", "अच्छे पड़ोसी", "चांगले शेजारी"), "text", 8,
+             "Neighbours help in need — during illness, festivals or power cuts. "
+             "Greet them politely, keep shared spaces clean, and share what you can.",
+             "पड़ोसी ज़रूरत में काम आते हैं — बीमारी, त्योहार या बिजली जाने पर। उनसे नम्रता से मिलो, साझा जगह साफ़ रखो, और जो हो सके बाँटो।",
+             "शेजारी गरजेला उपयोगी पडतात — आजारपण, सण किंवा वीज जाण्याच्या वेळी. त्यांना नम्रपणे भेटा, सामायिक जागा स्वच्छ ठेवा आणि जमेल ते वाटा."),
+        ]),
+        (("Water and Cleanliness", "पानी और स्वच्छता", "पाणी आणि स्वच्छता"), [
+            (("Saving Water", "पानी बचाना", "पाणी वाचवणे"), "text", 10,
+             "Water is precious — turn off the tap while brushing. A leaking tap wastes "
+             "a bucket a day! Collect rainwater in vessels for plants.",
+             "पानी अनमोल है — ब्रश करते समय नल बंद करो। टपकता नल रोज़ एक बाल्टी पानी बहाता है! पौधों के लिए बारिश का पानी बर्तनों में इकट्ठा करो।",
+             "पाणी अनमोल आहे — दात घासताना नळ बंद करा. गळका नळ रोज एक बादली पाणी वाया घालवतो! झाडांसाठी पावसाचे पाणी भांड्यांत साठवा."),
+        ]),
+    ],
+    "g4-ssc-math-course": [
+        (("Multiplication Tables", "पहाड़े", "पाढे"), [
+            (("Tables 2 to 5", "2 से 5 तक पहाड़े", "२ ते ५ पाढे"), "text", 12,
+             "Tables are shortcuts for repeated addition. 4 × 3 means 4 three times: 3+3+3+3 = 12. "
+             "Sing the tables daily — speed comes with practice!",
+             "पहाड़े बार-बार जोड़ने का छोटा रास्ता हैं। 4 × 3 का मतलब 4 बार 3: 3+3+3+3 = 12। रोज़ पहाड़े गाओ — अभ्यास से रफ़्तार आएगी!",
+             "पाढे वारंवार बेरजेचा छोटा मार्ग आहेत. ४ × ३ म्हणजे ३ चार वेळा: ३+३+३+३ = १२. रोज पाढे म्हणा — सरावाने गती येईल!"),
+            (("Word Problems", "शाब्दिक प्रश्न", "शाब्दिक उदाहरणे"), "text", 12,
+             "Read the story first, find the numbers, then choose + − × ÷. "
+             "Example: 4 boxes with 6 laddus each = 4 × 6 = 24 laddus. Always write the answer with units!",
+             "पहले कहानी पढ़ो, संख्याएँ खोजो, फिर + − × ÷ चुनो। उदाहरण: 4 डिब्बों में 6-6 लड्डू = 4 × 6 = 24 लड्डू। उत्तर हमेशा इकाई के साथ लिखो!",
+             "आधी गोष्ट वाचा, संख्या शोधा, मग + − × ÷ निवडा. उदाहरण: ४ डब्यांत ६-६ लाडू = ४ × ६ = २४ लाडू. उत्तर नेहमी एककासह लिहा!"),
+        ]),
+        (("Fractions Begin", "भिन्न की शुरुआत", "अपूर्णांकांची सुरुवात"), [
+            (("Half and Quarter", "आधा और चौथाई", "अर्धा आणि पाव"), "text", 12,
+             "Cut a roti into 2 equal parts — each is a half (1/2). Cut into 4 — each is a quarter (1/4). "
+             "Equal parts matter: unequal pieces are not fractions!",
+             "रोटी के 2 बराबर टुकड़े करो — हर टुकड़ा आधा (1/2)। 4 टुकड़े करो — हर टुकड़ा चौथाई (1/4)। बराबर भाग ज़रूरी हैं: असमान टुकड़े भिन्न नहीं!",
+             "पोळीचे २ समान भाग करा — प्रत्येक अर्धा (१/२). ४ भाग करा — प्रत्येक पाव (१/४). समान भाग महत्त्वाचे: असमान तुकडे अपूर्णांक नाहीत!"),
+        ]),
+    ],
+    "g9-ssc-science-course": [
+        (("Motion and Rest", "गति और विराम", "गती आणि विराम"), [
+            (("Speed and Velocity", "चाल और वेग", "चाल आणि वेग"), "text", 15,
+             "Speed = distance ÷ time (m/s). Velocity adds direction: 5 m/s north. "
+             "A bullock cart averages 1 m/s; a bicycle 4 m/s. Uniform motion covers equal distances in equal times.",
+             "चाल = दूरी ÷ समय (m/s)। वेग में दिशा जुड़ती है: 5 m/s उत्तर। बैलगाड़ी औसत 1 m/s; साइकिल 4 m/s। एकसमान गति में समान समय में समान दूरी।",
+             "चाल = अंतर ÷ वेळ (m/s). वेगात दिशा जोडली जाते: ५ m/s उत्तर. बैलगाडी सरासरी १ m/s; सायकल ४ m/s. एकसमान गतीत समान वेळेत समान अंतर."),
+            (("Acceleration", "त्वरण", "त्वरण"), "text", 14,
+             "Acceleration is change of velocity per second (m/s²). A bus starting from rest accelerates; "
+             "braking is negative acceleration (retardation). Free fall: g = 9.8 m/s².",
+             "त्वरण प्रति सेकंड वेग में बदलाव है (m/s²)। रुकी बस चलने पर त्वरित होती है; ब्रेक लगाना ऋणात्मक त्वरण (मंदन) है। मुक्त पतन: g = 9.8 m/s²।",
+             "त्वरण म्हणजे प्रति सेकंद वेगातील बदल (m/s²). थांबलेली बस निघताना त्वरित होते; ब्रेक लावणे ऋण त्वरण (मंदन) आहे. मुक्त पतन: g = ९.८ m/s²."),
+        ]),
+        (("Atoms and Molecules", "परमाणु और अणु", "अणू आणि रेणू"), [
+            (("Dalton to Modern Atom", "डाल्टन से आधुनिक परमाणु", "डाल्टन ते आधुनिक अणू"), "text", 15,
+             "Dalton said atoms are indivisible balls. Thomson found electrons, Rutherford the nucleus, "
+             "Bohr arranged electrons in shells (K, L, M). Models improved as evidence grew!",
+             "डाल्टन ने परमाणु को अविभाज्य गोला कहा। थॉमसन ने इलेक्ट्रॉन, रदरफोर्ड ने नाभिक खोजा, बोहर ने कोश (K, L, M) बनाए। साक्ष्य बढ़ने पर मॉडल सुधरे!",
+             "डाल्टनने अणू अविभाज्य गोळा म्हटले. थॉमसनने इलेक्ट्रॉन, रदरफोर्डने केंद्रक शोधले, बोहरने कवचे (K, L, M) मांडली. पुरावे वाढताच प्रतिकृती सुधारल्या!"),
+        ]),
+    ],
+    "g9-ssc-math-course": [
+        (("Number Systems", "संख्या पद्धति", "संख्या पद्धती"), [
+            (("Rational and Irrational", "परिमेय और अपरिमेय", "परिमेय आणि अपरिमेय"), "text", 16,
+             "Rational numbers = p/q form (1/2, −3, 0.75). Irrational = non-terminating, non-repeating "
+             "decimals like √2 = 1.414… Together they make real numbers.",
+             "परिमेय संख्याएँ = p/q रूप (1/2, −3, 0.75)। अपरिमेय = न खत्म, न दोहराने वाले दशमलव जैसे √2 = 1.414… दोनों मिलकर वास्तविक संख्याएँ।",
+             "परिमेय संख्या = p/q रूप (१/२, −३, ०.७५). अपरिमेय = न संपणारे, न पुनरावृत्त होणारे दशांश जसे √२ = १.४१४… दोन्ही मिळून वास्तव संख्या."),
+        ]),
+        (("Triangles", "त्रिभुज", "त्रिकोण"), [
+            (("Congruence Rules", "सर्वांगसमता नियम", "एकसमता नियम"), "text", 16,
+             "Two triangles are congruent if SSS, SAS, ASA or RHS match. CPCT: corresponding parts of "
+             "congruent triangles are equal — use it to prove sides and angles equal!",
+             "दो त्रिभुज सर्वांगसम हैं यदि SSS, SAS, ASA या RHS मिले। CPCT: सर्वांगसम त्रिभुजों के संगत भाग बराबर — भुजा-कोण सिद्ध करने में काम आता है!",
+             "दोन त्रिकोण एकसम असतात जर SSS, SAS, ASA किंवा RHS जुळे. CPCT: एकसम त्रिकोणांचे संगत भाग समान — बाजू-कोन सिद्ध करण्यासाठी वापरा!"),
+        ]),
+    ],
+    "g11-hsc-chemistry-course": [
+        (("Atomic Structure", "परमाणु संरचना", "अणुरचना"), [
+            (("Quantum Numbers", "क्वांटम संख्याएँ", "क्वांटम संख्या"), "text", 20,
+             "Four quantum numbers address each electron: n (shell), l (subshell s/p/d/f), "
+             "m (orbital), s (spin ±½). No two electrons share all four — Pauli's principle.",
+             "चार क्वांटम संख्याएँ हर इलेक्ट्रॉन का पता देती हैं: n (कोश), l (उपकोश s/p/d/f), "
+             "m (कक्षक), s (चक्रण ±½)। किन्हीं दो में चारों समान नहीं — पाउली सिद्धांत।",
+             "चार क्वांटम संख्या प्रत्येक इलेक्ट्रॉनचा पत्ता देतात: n (कवच), l (उपकवच s/p/d/f), "
+             "m (कक्षा), s (भ्रमण ±½). कोणत्याही दोघांत चारही समान नसतात — पाउली तत्त्व."),
+            (("Electronic Configuration", "इलेक्ट्रॉनिक विन्यास", "इलेक्ट्रॉन मांडणी"), "text", 18,
+             "Fill orbitals by Aufbau order: 1s 2s 2p 3s 3p 4s 3d… Hund's rule: half-fill degenerate "
+             "orbitals first with parallel spins. Example: Fe (26) = [Ar] 4s² 3d⁶.",
+             "ऑफबाउ क्रम से भरो: 1s 2s 2p 3s 3p 4s 3d… हुंड नियम: समभ्रंश कक्षकों में पहले एक-एक समान चक्रण। जैसे: Fe (26) = [Ar] 4s² 3d⁶।",
+             "ऑफबाउ क्रमाने भरा: 1s 2s 2p 3s 3p 4s 3d… हुंड नियम: समभ्रष्ट कक्षांमध्ये आधी एक-एक समान भ्रमण. उदा.: Fe (२६) = [Ar] 4s² 3d⁶."),
+        ]),
+        (("Chemical Bonding", "रासायनिक बंध", "रासायनिक बंध"), [
+            (("Ionic vs Covalent", "आयनिक बनाम सहसंयोजक", "आयनिक विरुद्ध सहसंयुज"), "text", 18,
+             "Ionic bond = electron transfer (Na⁺Cl⁻), hard crystals, conduct when molten. "
+             "Covalent = sharing (H₂, CH₄), low melting points. Electronegativity gap decides!",
+             "आयनिक बंध = इलेक्ट्रॉन स्थानांतरण (Na⁺Cl⁻), कठोर क्रिस्टल, पिघलने पर चालक। सहसंयोजक = साझेदारी (H₂, CH₄), निम्न गलनांक। विद्युतऋणात्मकता अंतर तय करता है!",
+             "आयनिक बंध = इलेक्ट्रॉन हस्तांतरण (Na⁺Cl⁻), कठीण स्फटिक, वितळल्यावर वाहक. सहसंयुज = वाटणी (H₂, CH₄), कमी द्रवणांक. विद्युतऋणता फरक ठरवतो!"),
+        ]),
+    ],
+    "g11-hsc-biology-course": [
+        (("Cell and Biomolecules", "कोशिका और जैव अणु", "पेशी आणि जैव रेणू"), [
+            (("Cell Organelles", "कोशिकांग", "पेशी अंगके"), "text", 20,
+             "Mitochondria release energy (ATP) — powerhouse of the cell. Ribosomes build proteins, "
+             "Golgi packs them, lysosomes digest waste. Each organelle is a division of labour!",
+             "माइटोकॉन्ड्रिया ऊर्जा (ATP) देता है — कोशिका का बिजलीघर। राइबोसोम प्रोटीन बनाते, गॉल्जी पैक करते, लाइसोसोम कचरा पचाते हैं। हर अंगक श्रम विभाजन है!",
+             "तंतुकणिका ऊर्जा (ATP) देतात — पेशीचे वीजघर. रायबोसोम प्रथिने बनवतात, गॉल्जी पॅक करतात, लायसोसोम कचरा पचवतात. प्रत्येक अंगक श्रमविभागणी आहे!"),
+            (("Proteins and Enzymes", "प्रोटीन और एंज़ाइम", "प्रथिने आणि विकरे"), "text", 18,
+             "Proteins are amino-acid chains folded into shapes; shape decides function. "
+             "Enzymes are protein catalysts — they speed reactions without being used up. Heat denatures them!",
+             "प्रोटीन अमीनो अम्लों की मुड़ी श्रृंखलाएँ हैं; आकार कार्य तय करता है। एंज़ाइम प्रोटीन उत्प्रेरक हैं — बिना खर्च हुए अभिक्रिया तेज़ करते हैं। गर्मी विकृत करती है!",
+             "प्रथिने अमीनो आम्लांच्या घड्या घातलेल्या शृंखला; आकार कार्य ठरवतो. विकरे प्रथिन उत्प्रेरक आहेत — न खर्च होता अभिक्रिया वेगवान करतात. उष्णता विकृती आणते!"),
+        ]),
+        (("Plant Physiology", "पादप कार्यिकी", "वनस्पती शरीरक्रिया"), [
+            (("Transpiration Pull", "वाष्पोत्सर्जन खिंचाव", "बाष्पोत्सर्जन ओढ"), "text", 18,
+             "Leaves lose water as vapour (transpiration), pulling the water column up from roots — "
+             "no pump needed! Guard cells open/close stomata to balance water loss and CO₂ intake.",
+             "पत्तियाँ वाष्प के रूप में पानी खोती हैं (वाष्पोत्सर्जन), जड़ों से जल स्तंभ ऊपर खींचता है — पंप नहीं चाहिए! रक्षक कोशिकाएँ रंध्र खोलती-बंद करती हैं।",
+             "पाने बाष्परूपाने पाणी गमावतात (बाष्पोत्सर्जन), मुळांपासून जलस्तंभ वर ओढला जातो — पंप नको! रक्षक पेशी पर्णरंध्रे उघडझाप करतात."),
+        ]),
+    ],
+    "g2-cbse-english-course": [
+        (("Sounds and Words", "ध्वनियाँ और शब्द", "ध्वनी आणि शब्द"), [
+            (("Rhyming Words", "तुकबंदी वाले शब्द", "यमक शब्द"), "text", 8,
+             "Rhyming words end with the same sound: cat–hat, day–play. "
+             "Clap the rhyme in poems and make your own pairs every day!",
+             "तुकबंदी शब्दों का अंत एक जैसा होता है: cat–hat, day–play। कविताओं में तुक पर ताली बजाओ और रोज़ अपने जोड़े बनाओ!",
+             "यमक शब्दांचा शेवट एकसारखा असतो: cat–hat, day–play. कवितांतील यमकावर टाळी वाजवा आणि रोज स्वतःच्या जोड्या बनवा!"),
+            (("Action Words", "क्रिया शब्द", "क्रियापदे"), "text", 8,
+             "Action words tell what someone does: run, jump, eat, read. "
+             "Act them out — learning with your body remembers longer!",
+             "क्रिया शब्द बताते हैं कोई क्या करता है: run, jump, eat, read। इन्हें करके दिखाओ — शरीर से सीखा याद रहता है!",
+             "क्रियापदे कोणी काय करते ते सांगतात: run, jump, eat, read. ती करून दाखवा — कृतीतून शिकलेले लक्षात राहते!"),
+        ]),
+        (("Reading Time", "पढ़ने का समय", "वाचन वेळ"), [
+            (("A Helpful Hen", "मददगार मुर्गी", "मदतगार कोंबडी"), "text", 10,
+             "The red hen found wheat and asked for help — 'Not I,' said all. So she baked alone "
+             "and ate alone. Moral: those who help, share the reward!",
+             "लाल मुर्गी को गेहूँ मिला, मदद माँगी — सब बोले 'मैं नहीं'। उसने अकेले रोटी बनाई, अकेले खाई। सीख: जो मदद करे, वही फल पाए!",
+             "लाल कोंबडीला गहू सापडला, मदत मागितली — सर्व म्हणाले 'मी नाही'. तिने एकटीने भाकर केली, एकटीने खाल्ली. धडा: जो मदत करतो, तोच फळ खातो!"),
+        ]),
+    ],
+    "g3-cbse-math-course": [
+        (("Addition and Subtraction", "जोड़ और घटाव", "बेरीज आणि वजाबाकी"), [
+            (("Carry Over Addition", "हासिल वाला जोड़", "हातच्यासह बेरीज"), "text", 12,
+             "Add ones first. If ones total 10 or more, carry the ten to the tens column. "
+             "Example: 47 + 28 → 7+8=15, write 5 carry 1; 4+2+1=7 → 75.",
+             "पहले इकाई जोड़ो। इकाई 10+ हो तो दहाई में हासिल। उदाहरण: 47 + 28 → 7+8=15, 5 लिखो 1 हासिल; 4+2+1=7 → 75।",
+             "आधी एकक बेरीज करा. एकक १०+ झाल्यास दशकात हातचा. उदाहरण: ४७ + २८ → ७+८=१५, ५ लिहा १ हातचा; ४+२+१=७ → ७५."),
+        ]),
+        (("Money Matters", "पैसे का हिसाब", "पैशांचा हिशेब"), [
+            (("Rupees and Paise", "रुपये और पैसे", "रुपये आणि पैसे"), "text", 10,
+             "100 paise = 1 rupee. Write Rs 25.50 as 25 rupees 50 paise. "
+             "Shop game: price tags, play money, and bills teach exact change!",
+             "100 पैसे = 1 रुपया। Rs 25.50 = 25 रुपये 50 पैसे। दुकान खेल: मूल्य पट्ट, खेल के नोट और बिल छुट्टे सिखाते हैं!",
+             "१०० पैसे = १ रुपया. Rs २५.५० = २५ रुपये ५० पैसे. दुकान खेळ: किमती, खेळाचे नोटा आणि बिले सुट्टे शिकवतात!"),
+        ]),
+    ],
+    "g4-cbse-evs-course": [
+        (("Food We Eat", "हम जो खाते हैं", "आपण जे खातो"), [
+            (("From Farm to Plate", "खेत से थाली तक", "शेतातून ताटात"), "text", 10,
+             "Grains travel: farmer sows → harvests → mandi → shop → home. "
+             "Eating seasonal, local food keeps farmers earning and you healthy!",
+             "अनाज का सफ़र: किसान बोता है → काटता है → मंडी → दुकान → घर। मौसमी, स्थानीय खाना किसान की कमाई और तुम्हारी सेहत दोनों!",
+             "धान्याचा प्रवास: शेतकरी पेरतो → कापतो → बाजार → दुकान → घर. मोसमी, स्थानिक अन्न शेतकऱ्याची कमाई आणि तुमचे आरोग्य दोन्ही!"),
+        ]),
+        (("Animals Around Us", "हमारे आस-पास के जानवर", "आपल्या सभोवतालचे प्राणी"), [
+            (("Homes of Animals", "जानवरों के घर", "प्राण्यांची घरे"), "text", 10,
+             "Birds build nests, rabbits dig burrows, spiders spin webs, bees raise hives. "
+             "Each home suits the animal's body and keeps babies safe.",
+             "पक्षी घोंसले बनाते, खरगोश बिल खोदते, मकड़ी जाले बुनती, मधुमक्खी छत्ते बनाती हैं। हर घर शरीर के अनुकूल और बच्चों के लिए सुरक्षित।",
+             "पक्षी घरटी बांधतात, ससे बिळे खणतात, कोळी जाळी विणतात, मधमाशा पोळी बांधतात. प्रत्येक घर शरीराला साजेसे आणि पिल्लांसाठी सुरक्षित."),
+        ]),
+    ],
+    "g9-cbse-english-course": [
+        (("Prose: The Fun They Had", "गद्य: वह मज़ा जो उन्होंने किया", "गद्य: त्यांनी केलेली मजा"), [
+            (("Schools of Future", "भविष्य के स्कूल", "भविष्यातील शाळा"), "text", 15,
+             "Isaac Asimov imagines 2157: robot teachers, screen books, no classmates. Margie misses "
+             "real schools with friends. Theme: technology cannot replace human warmth in learning.",
+             "असिमोव 2157 की कल्पना: रोबोट शिक्षक, स्क्रीन किताबें, कोई सहपाठी नहीं। मार्गी असली स्कूल याद करती है। भाव: तकनीक सीखने की मानवीय गर्माहट नहीं दे सकती।",
+             "असिमोव २१५७ ची कल्पना: यंत्रशिक्षक, पडदा पुस्तके, वर्गमित्र नाहीत. मार्गीला खरी शाळा आठवते. आशय: तंत्रज्ञान शिकण्यातील मानवी उबेची जागा घेऊ शकत नाही."),
+        ]),
+        (("Grammar: Tenses", "व्याकरण: काल", "व्याकरण: काळ"), [
+            (("Present Perfect", "पूर्ण वर्तमान", "पूर्ण वर्तमानकाळ"), "text", 14,
+             "Present perfect = has/have + past participle: 'I have finished.' Use it for actions "
+             "completed recently or with present effect — not with finished-time words like 'yesterday'.",
+             "पूर्ण वर्तमान = has/have + भूत कृदंत: 'I have finished.' हाल में पूरे काम या वर्तमान प्रभाव के लिए — 'yesterday' जैसे बीते समय के साथ नहीं।",
+             "पूर्ण वर्तमानकाळ = has/have + भूतकृदंत: 'I have finished.' अलीकडे पूर्ण झालेल्या किंवा वर्तमान परिणाम असलेल्या क्रियेसाठी — 'yesterday' सारख्या संपलेल्या वेळेसह नाही."),
+        ]),
+    ],
+    "g11-cbse-physics-course": [
+        (("Kinematics", "शुद्धगतिकी", "गतिशास्त्र"), [
+            (("Motion in a Straight Line", "सरल रेखा में गति", "सरळ रेषेतील गती"), "text", 20,
+             "Position x(t), velocity v = dx/dt, acceleration a = dv/dt. For constant a: v = u + at, "
+             "s = ut + ½at², v² = u² + 2as. Graphs of x–t and v–t reveal the whole story!",
+             "स्थिति x(t), वेग v = dx/dt, त्वरण a = dv/dt। नियत a हेतु: v = u + at, s = ut + ½at², v² = u² + 2as। x–t व v–t ग्राफ़ पूरी कहानी!",
+             "स्थान x(t), वेग v = dx/dt, त्वरण a = dv/dt. स्थिर a साठी: v = u + at, s = ut + ½at², v² = u² + 2as. x–t व v–t आलेख संपूर्ण कथा सांगतात!"),
+        ]),
+        (("Laws of Motion", "गति के नियम", "गतीचे नियम"), [
+            (("Friction Demystified", "घर्षण सरल", "घर्षण सोपे"), "text", 18,
+             "Static friction adjusts up to μs·N and prevents slipping; kinetic friction μk·N opposes "
+             "motion. Friction lets us walk — and stops vehicles. Rolling beats sliding!",
+             "स्थैतिक घर्षण μs·N तक समायोजित हो फिसलन रोकता है; गतिज घर्षण μk·N गति का विरोध करता है। घर्षण से चलते हैं — और गाड़ियाँ रुकती हैं। लुढ़कना फिसलने से बेहतर!",
+             "स्थितिक घर्षण μs·N पर्यंत जुळवून घसरू देत नाही; गतिक घर्षण μk·N गतीला विरोध करते. घर्षणामुळे चालतो — आणि वाहने थांबतात. घसरण्यापेक्षा गडगडणे सोपे!"),
         ]),
     ],
 }
@@ -668,49 +950,89 @@ QUESTIONS = [
      ("The Royal Bengal Tiger is India's national animal.", "रॉयल बंगाल टाइगर भारत का राष्ट्रीय पशु है।", "रॉयल बंगाल वाघ हा भारताचा राष्ट्रीय प्राणी आहे.")),
 ]
 
-TEXTBOOKS = [
-    # Board, class, subject, lang, title, official source URL
-    ("CBSE", 8, "Science", "en", "Science — Textbook for Class 8 (NCERT)",
-     "https://epathshala.nic.in/process.php?id=students&type=eTextbooks&ln=en"),
-    ("CBSE", 8, "Mathematics", "en", "Mathematics — Textbook for Class 8 (NCERT)",
-     "https://epathshala.nic.in/process.php?id=students&type=eTextbooks&ln=en"),
-    ("CBSE", 10, "Science", "hi", "विज्ञान — कक्षा 10 (NCERT)",
-     "https://epathshala.nic.in/process.php?id=students&type=eTextbooks&ln=hi"),
-    ("CBSE", 10, "Mathematics", "hi", "गणित — कक्षा 10 (NCERT)",
-     "https://epathshala.nic.in/process.php?id=students&type=eTextbooks&ln=hi"),
-    ("CBSE", 7, "Science", "en", "Science — Textbook for Class 7 (NCERT)",
-     "https://epathshala.nic.in/process.php?id=students&type=eTextbooks&ln=en"),
-    ("CBSE", 12, "Physics", "en", "Physics Part I — Textbook for Class 12 (NCERT)",
-     "https://epathshala.nic.in/process.php?id=students&type=eTextbooks&ln=en"),
-    ("Maharashtra SSC", 8, "Science", "mr", "सामान्य विज्ञान — इयत्ता ८ (बालभारती)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra SSC", 8, "Mathematics", "mr", "गणित — इयत्ता ८ (बालभारती)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra SSC", 5, "Marathi", "mr", "मराठी — इयत्ता ५ (बालभारती)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra SSC", 6, "Marathi", "mr", "मराठी — इयत्ता ६ (बालभारती)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra SSC", 7, "Hindi", "hi", "हिंदी — इयत्ता ७ (बालभारती)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra SSC", 10, "Science", "mr", "विज्ञान — इयत्ता १० (बालभारती)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra SSC", 10, "Mathematics", "mr", "गणित — इयत्ता १० (बालभारती)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra SSC", 1, "Mathematics", "mr", "गणित — इयत्ता १ (बालभारती)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra HSC", 12, "Physics", "en", "Physics — Std 12 (Balbharati)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra HSC", 12, "Chemistry", "en", "Chemistry — Std 12 (Balbharati)",
-     "https://books.ebalbharati.in"),
-    ("Maharashtra HSC", 12, "Biology", "en", "Biology — Std 12 (Balbharati)",
-     "https://books.ebalbharati.in"),
-]
+PORTAL_URLS = {
+    "CBSE": "https://epathshala.nic.in/process.php?id=students&type=eTextbooks&ln=en",
+    "CBSE_HI": "https://epathshala.nic.in/process.php?id=students&type=eTextbooks&ln=hi",
+    "NCERT": "https://ncert.nic.in/textbook.php",
+    "BALBHARATI": "https://books.ebalbharati.in",
+}
+
+EPATHSHALA_EN = PORTAL_URLS["CBSE"]
+EPATHSHALA_HI = PORTAL_URLS["CBSE_HI"]
+EBALBHARATI = PORTAL_URLS["BALBHARATI"]
+
+
+def _band_for_grade(grade: int):
+    if grade <= 5:
+        return SUBJECTS_PRIMARY
+    if grade <= 8:
+        return SUBJECTS_MIDDLE
+    if grade <= 10:
+        return SUBJECTS_SECONDARY
+    return SUBJECTS_HSC
+
+
+def build_textbooks():
+    """Full coverage: every class 1-12 x every board x every subject.
+
+    Official links only — we never re-host PDFs. CBSE/NCERT -> ePathshala,
+    Maharashtra SSC/HSC -> eBalbharati. Each entry is (board, grade, subject,
+    lang, title, url).
+    """
+    rows: list[tuple] = []
+    for board in BOARDS:
+        for grade in range(1, 13):
+            band = _band_for_grade(grade)
+            for en, _hi, _mr in band:
+                if board == "CBSE":
+                    # English medium default + Hindi medium for core subjects
+                    rows.append((board, grade, en, "en",
+                                 f"{en} — Class {grade} (NCERT)",
+                                 EPATHSHALA_EN))
+                    if en in ("Mathematics", "Science", "Hindi", "English",
+                               "Social Science", "Environmental Studies"):
+                        rows.append((board, grade, en, "hi",
+                                     f"{en} — कक्षा {grade} (NCERT)",
+                                     EPATHSHALA_HI))
+                elif board == "Maharashtra SSC":
+                    # Marathi medium default + English medium alt + Hindi/Urdu
+                    # (eBalbharati publishes all four; verified via portal crawl)
+                    rows.append((board, grade, en, "mr",
+                                 f"{en} — इयत्ता {grade} (बालभारती)",
+                                 EBALBHARATI))
+                    rows.append((board, grade, en, "en",
+                                 f"{en} — Class {grade} (Balbharati)",
+                                 EBALBHARATI))
+                    if grade <= 10 and en in ("Hindi", "Marathi", "English"):
+                        rows.append((board, grade, en, "hi",
+                                     f"{en} — कक्षा {grade} (बालभारती)",
+                                     EBALBHARATI))
+                    rows.append((board, grade, en, "ur",
+                                 f"{en} — جماعت {grade} (بال بھارتی)",
+                                 EBALBHARATI))
+                else:  # Maharashtra HSC
+                    rows.append((board, grade, en, "en",
+                                 f"{en} — Std {grade} (Balbharati)",
+                                 EBALBHARATI))
+                    rows.append((board, grade, en, "mr",
+                                 f"{en} — इयत्ता {grade} (बालभारती)",
+                                 EBALBHARATI))
+    return rows
+
+
+TEXTBOOKS = build_textbooks()
 
 
 def _subject_for_slug(slug: str) -> str:
     """Map a course slug to the question-bank subject name."""
     if "physics" in slug:
         return "Physics"
+    if "chemistry" in slug:
+        return "Chemistry"
+    if "biology" in slug:
+        return "Biology"
+    if "evs" in slug:
+        return "Environmental Studies"
     if "science" in slug:
         return "Science"
     if "math" in slug:
@@ -730,53 +1052,70 @@ def seed(session: Session) -> None:
         for b in BOARDS:
             session.add(Board(name=b))
 
-    school = session.exec(select(School).where(
-        School.name == "Zilla Parishad Prathamik Shala, Rampur")).first()
-    if not school:
-        school = School(name="Zilla Parishad Prathamik Shala, Rampur", village="Rampur")
-        session.add(school)
-        session.flush()
+    # Demo people + fake activity are dev-only (SEED_DEMO / auto by DB type).
+    demo = settings.seed_demo_enabled
 
-    # --- subjects for all classes ---
-    if not session.exec(select(Subject)).first():
-        for grade in range(1, 13):
-            band = (SUBJECTS_PRIMARY if grade <= 5 else
-                    SUBJECTS_MIDDLE if grade <= 8 else
-                    SUBJECTS_SECONDARY if grade <= 10 else SUBJECTS_HSC)
-            for en, hi, mr in band:
-                board = "CBSE" if grade in (10, 12) else "Maharashtra SSC"
-                session.add(Subject(name_en=en, name_hi=hi, name_mr=mr,
-                                    class_grade=grade, board=board))
-
-    # --- users ---
-    demo_users = [
-        ("admin@gramshiksha.in", "Platform Admin", "platform_admin", "Admin@1234", None, None),
-        ("school@gramshiksha.in", "Headmaster Jadhav", "school_admin", "School@1234", 8, "Maharashtra SSC"),
-        ("teacher1@gramshiksha.in", "Sunita Devi", "teacher", "Teach@1234", None, None),
-        ("teacher2@gramshiksha.in", "Rahul Patil", "teacher", "Teach@1234", None, None),
-        ("student1@gramshiksha.in", "Arjun Kumar", "student", "Learn@1234", 8, "Maharashtra SSC"),
-        ("student2@gramshiksha.in", "Priya Sharma", "student", "Learn@1234", 10, "CBSE"),
-        ("parent1@gramshiksha.in", "Ramesh Kumar", "parent", "Parent@1234", None, None),
-    ]
-    users = {}
-    for email, name, role, pwd, grade, board in demo_users:
-        u = session.exec(select(User).where(User.email == email)).first()
-        if not u:
-            u = User(email=email, name=name, role=role, hashed_password=hash_password(pwd),
-                     class_grade=grade, board=board,
-                     lang_pref="mr" if email == "student1@gramshiksha.in" else ("hi" if role != "student" else "en"),
-                     school_id=school.id if role in ("school_admin", "student") else None)
-            session.add(u)
+    school = None
+    if demo:
+        school = session.exec(select(School).where(
+            School.name == "Zilla Parishad Prathamik Shala, Rampur")).first()
+        if not school:
+            school = School(name="Zilla Parishad Prathamik Shala, Rampur", village="Rampur")
+            session.add(school)
             session.flush()
-        users[email] = u
 
-    student1 = users["student1@gramshiksha.in"]
-    student2 = users["student2@gramshiksha.in"]
-    parent1 = users["parent1@gramshiksha.in"]
-    teacher1 = users["teacher1@gramshiksha.in"]
-    teacher2 = users["teacher2@gramshiksha.in"]
-    _ = users.get("admin@gramshiksha.in"), users.get("school@gramshiksha.in")
-    if not student1.parent_of_id:
+    # --- subjects for all classes x all boards (additive) ---
+    for grade in range(1, 13):
+        band = (SUBJECTS_PRIMARY if grade <= 5 else
+                SUBJECTS_MIDDLE if grade <= 8 else
+                SUBJECTS_SECONDARY if grade <= 10 else SUBJECTS_HSC)
+        for board in BOARDS:
+            for en, hi, mr in band:
+                exists = session.exec(select(Subject).where(
+                    Subject.class_grade == grade, Subject.board == board,
+                    Subject.name_en == en)).first()
+                if not exists:
+                    session.add(Subject(name_en=en, name_hi=hi, name_mr=mr,
+                                        class_grade=grade, board=board))
+    session.flush()
+
+    # --- users: demo accounts are dev-only -------------------------------
+    users: dict[str, User] = {}
+    if demo:
+        demo_users = [
+            ("admin@gramshiksha.in", "Platform Admin", "platform_admin", "Admin@1234", None, None),
+            ("school@gramshiksha.in", "Headmaster Jadhav", "school_admin", "School@1234", 8, "Maharashtra SSC"),
+            ("teacher1@gramshiksha.in", "Sunita Devi", "teacher", "Teach@1234", None, None),
+            ("teacher2@gramshiksha.in", "Rahul Patil", "teacher", "Teach@1234", None, None),
+            ("student1@gramshiksha.in", "Arjun Kumar", "student", "Learn@1234", 8, "Maharashtra SSC"),
+            ("student2@gramshiksha.in", "Priya Sharma", "student", "Learn@1234", 10, "CBSE"),
+            ("parent1@gramshiksha.in", "Ramesh Kumar", "parent", "Parent@1234", None, None),
+        ]
+        for email, name, role, pwd, grade, board in demo_users:
+            u = session.exec(select(User).where(User.email == email)).first()
+            if not u:
+                u = User(email=email, name=name, role=role, hashed_password=hash_password(pwd),
+                         class_grade=grade, board=board,
+                         lang_pref="mr" if email == "student1@gramshiksha.in" else ("hi" if role != "student" else "en"),
+                         school_id=school.id if role in ("school_admin", "teacher", "student") else None)
+                session.add(u)
+                session.flush()
+            elif u.school_id is None and role in ("school_admin", "teacher", "student"):
+                # Backfill: teachers/school admins moderate their school's
+                # uploads, so they must carry the school the students belong to
+                # (older seeded DBs predate this rule).
+                u.school_id = school.id
+                session.add(u)
+            users[email] = u
+    else:
+        log.info("SEED_DEMO off — production database gets content but no demo accounts.")
+
+    student1 = users.get("student1@gramshiksha.in")
+    student2 = users.get("student2@gramshiksha.in")
+    parent1 = users.get("parent1@gramshiksha.in")
+    teacher1 = users.get("teacher1@gramshiksha.in")
+    teacher2 = users.get("teacher2@gramshiksha.in")
+    if demo and student1 and not student1.parent_of_id:
         student1.parent_of_id = parent1.id  # child carries link to parent
         session.add(student1)
 
@@ -793,7 +1132,9 @@ def seed(session: Session) -> None:
                        desc_en=f"Complete {subj} course for Class {grade} ({board}) with lessons, practice and quizzes.",
                        desc_hi=f"कक्षा {grade} ({board}) का पूरा {subj} कोर्स — पाठ, अभ्यास और क्विज़ के साथ।",
                        desc_mr=f"इयत्ता {grade} ({board}) साठी संपूर्ण {subj} कोर्स — धडे, सराव आणि क्विझसह.",
-                       teacher_id=teacher1.id if subj in ("Mathematics", "Science", "Physics") else teacher2.id,
+                       # no demo teachers in production → course left unassigned
+                       teacher_id=((teacher1.id if subj in ("Mathematics", "Science", "Physics")
+                                    else teacher2.id) if teacher1 and teacher2 else None),
                        difficulty=diff, duration_min=dur,
                        students_count=random.choice([40, 55, 78, 120, 210]),
                        rating=round(4.2 + random.random() * 0.7, 1))
@@ -868,14 +1209,17 @@ def seed(session: Session) -> None:
                 for i, q in enumerate(related, start=1):
                     session.add(QuizQuestion(quiz_id=quiz.id, question_id=q.id, order=i))
 
-    # --- textbooks ---
-    if not session.exec(select(Textbook)).first():
-        for board, grade, subj, lang, title, url in TEXTBOOKS:
+    # --- textbooks (additive per board/grade/subject/lang so old DBs upgrade) ---
+    for board, grade, subj, lang, title, url in TEXTBOOKS:
+        exists = session.exec(select(Textbook).where(
+            Textbook.board == board, Textbook.class_grade == grade,
+            Textbook.subject_name == subj, Textbook.lang == lang)).first()
+        if not exists:
             session.add(Textbook(board=board, class_grade=grade, subject_name=subj,
                                  lang=lang, title=title, source_url=url, publisher="Official"))
 
-    # --- enrollments & demo activity (only on first ever seed) ---
-    if not session.exec(select(Enrollment)).first():
+    # --- enrollments & demo activity (dev only, and only on first ever seed) ---
+    if demo and student1 and student2 and teacher1 and not session.exec(select(Enrollment)).first():
         session.add(Enrollment(user_id=student1.id, course_id=courses_by_slug["g8-ssc-science-course"].id, progress_pct=12.5))
         session.add(Enrollment(user_id=student1.id, course_id=courses_by_slug["g8-ssc-math-course"].id, progress_pct=0))
         session.add(Enrollment(user_id=student2.id, course_id=courses_by_slug["g10-cbse-science-course"].id, progress_pct=40))

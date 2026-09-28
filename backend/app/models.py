@@ -264,6 +264,13 @@ class Textbook(SQLModel, table=True):
     title: str
     source_url: str  # official portal link only (ePathshala / eBalbharati)
     publisher: str = "NCERT"
+    # Deep link to the actual PDF + cover, filled by scripts/crawl_ebalbharati.py.
+    # Never hand-written: only URLs verified live (HTTP 200, application/pdf).
+    deep_url: str = ""
+    cover_url: str = ""
+    clicks: int = 0  # opened via /textbooks/{id}/open
+    last_checked: Optional[str] = Field(default=None)  # ISO datetime of last HEAD check
+    last_ok: bool = True  # False → /open falls back to source_url
 
 
 class Doubt(SQLModel, table=True):
@@ -348,3 +355,18 @@ class DailyActivity(SQLModel, table=True):
     minutes: int = 0
     lessons_completed: int = 0
     quizzes_taken: int = 0
+
+
+class PasswordResetCode(SQLModel, table=True):
+    """One-time codes for /auth/reset-request + /auth/reset-confirm.
+
+    Stored in the DB rather than process memory so codes survive restarts and
+    work across multiple workers. Only a SHA-256 hash is kept — a leaked DB
+    dump can't be replayed into account takeovers. `expires_at` is an ISO-8601
+    UTC string to stay timezone-safe on both SQLite and Postgres."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(index=True)
+    code_hash: str
+    expires_at: str  # ISO-8601 UTC
+    used_at: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)

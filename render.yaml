@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: gramshiksha-backend
+    runtime: docker
+    plan: free
+    healthCheckPath: /ready
+    envVars:
+      # Boot-time guard (app/main.py: check_production_safety) refuses to start
+      # until DATABASE_URL, JWT_SECRET and Cloudinary are all real — fix those
+      # before the first deploy succeeds.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: '["https://gramshiksha.netlify.app"]'
+      # REQUIRED in production: uploads land on an ephemeral disk otherwise.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      # REQUIRED in production: password-reset codes are emailed over SMTP.
+      # Without these, /auth/reset-request answers 503.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        value: "no-reply@gramshiksha.in"
+      - key: SENTRY_DSN
+        sync: false

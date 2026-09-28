@@ -208,16 +208,40 @@ def admin_reports(user=Depends(require_roles("platform_admin", "school_admin", "
     return out
 
 
+@router.post("/admin/textbooks/recheck")
+def recheck_textbooks(limit: int = Query(50, ge=1, le=200),
+                      only_unchecked: bool = Query(True),
+                      user=Depends(require_roles("platform_admin")),
+                      session: Session = Depends(get_session)):
+    """Link-health pass over textbook deep_urls (sequential + polite, no burst).
+    Updates last_checked/last_ok so /open auto-falls-back on dead PDFs."""
+    from ..models import Textbook, utcnow
+    from ..routers.catalog import check_url
+    q = select(Textbook).where(Textbook.deep_url != "")
+    if only_unchecked:
+        q = q.where(Textbook.last_checked.is_(None))
+    rows = session.exec(q.limit(limit)).all()
+    checked = ok = 0
+    for t in rows:
+        good = check_url(t.deep_url)
+        t.last_ok = good
+        t.last_checked = utcnow().isoformat()
+        session.add(t)
+        checked += 1
+        ok += int(good)
+    session.commit()
+    return {"checked": checked, "ok": ok, "dead": checked - ok}
+
+
 # ---------- Search ----------
 
 @router.get("/search")
-def search(q: str = Query(..., min_length=2), class_grade: Optional[int] = None,
+def search(q: str = Query(..., min_length=2, max_length=100), class_grade: Optional[int] = None,
            board: Optional[str] = None, subject_name: Optional[str] = None,
-           content_type: Optional[str] = None,
+           content_type: Optional[str] = None, limit: int = Query(20, ge=1, le=50),
            session: Session = Depends(get_session),
            user=Depends(get_current_user)):
     results = {"courses": [], "lessons": [], "materials": [], "questions": []}
-    like = f"%{q}%"
     cq = select(Course).where(Course.published == True)  # noqa: E712
     for c in session.exec(cq.limit(200)).all():
         if q.lower() in (c.title_en + c.title_hi + c.title_mr + c.desc_en).lower():
@@ -225,17 +249,25 @@ def search(q: str = Query(..., min_length=2), class_grade: Optional[int] = None,
                 continue
             results["courses"].append({"id": c.id, "title_en": c.title_en,
                                        "title_hi": c.title_hi, "class_grade": c.class_grade})
+            if len(results["courses"]) >= limit:
+                break
     lq = select(Lesson).where(Lesson.published == True)  # noqa: E712
     for l in session.exec(lq.limit(300)).all():
         if q.lower() in (l.title_en + l.title_hi + l.body_en).lower():
             results["lessons"].append({"id": l.id, "title_en": l.title_en, "title_hi": l.title_hi})
+            if len(results["lessons"]) >= limit:
+                break
     mq = select(Material).where(Material.status == "approved")
     for m in session.exec(mq.limit(200)).all():
         if q.lower() in (m.title + m.description).lower():
             results["materials"].append({"id": m.id, "title": m.title, "type": m.type})
+            if len(results["materials"]) >= limit:
+                break
     for qq in session.exec(select(Question).limit(300)).all():
         if q.lower() in (qq.prompt_en + qq.prompt_hi).lower():
             results["questions"].append({"id": qq.id, "prompt_en": qq.prompt_en})
+            if len(results["questions"]) >= limit:
+                break
     if content_type:
         results = {content_type: results.get(content_type, [])}
     return results

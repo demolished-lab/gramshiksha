@@ -4,7 +4,7 @@ import type {
   TodayPlan, WeakTopics, Course,
 } from './types';
 
-const BASE = '/api';
+const BASE = `${(import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL ?? ''}/api`;
 
 async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('gs_token');
@@ -12,6 +12,11 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  if (res.status === 401) {
+    // Token expired/invalid — drop session so the UI falls back to login.
+    localStorage.removeItem('gs_token');
+    localStorage.removeItem('gs_user');
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -24,7 +29,14 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 const post = <T>(path: string, body?: unknown) =>
-  req<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
+  req<T>(path, {
+    method: 'POST',
+    // FormData must be passed through untouched: JSON.stringify(FormData) is
+    // "{}", so material upload would post an empty JSON body and come back
+    // 422 from the multipart parser. req() then also skips the Content-Type
+    // header so the browser can set the boundary.
+    body: body === undefined || body instanceof FormData ? body : JSON.stringify(body),
+  });
 
 // ---------- auth ----------
 export const apiRegister = (payload: Record<string, unknown>) =>
@@ -65,11 +77,15 @@ export const apiCourses = (q: CourseQuery = {}) => {
 export const apiCourse = (id: number) => req<Course>(`/courses/${id}`);
 export const apiEnroll = (id: number) => post<{ ok: boolean }>(`/courses/${id}/enroll`);
 export const apiMyCourses = () => req<(Course & { progress_pct: number })[]>('/my/courses');
-export const apiTextbooks = (classGrade: number, board: string, lang?: string | null) => {
+export const apiTextbooks = (classGrade: number, board: string, lang?: string | null, subjectName?: string | null) => {
   const p = new URLSearchParams({ class_grade: String(classGrade), board });
   if (lang) p.set('lang', lang);
+  if (subjectName) p.set('subject_name', subjectName);
   return req<Textbook[]>(`/textbooks?${p.toString()}`);
 };
+export const apiTextbookPortals = () =>
+  req<{ name: string; url: string; boards: string[]; langs: string[] }[]>('/textbooks/portals');
+export const apiTextbookOpenUrl = (id: number) => `${BASE}/textbooks/${id}/open`;
 
 // ---------- learn ----------
 export const apiLesson = (id: number, lang: Lang) => req<LessonDetail>(`/learn/lessons/${id}?lang=${lang}`);

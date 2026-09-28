@@ -168,6 +168,9 @@ export interface Textbook {
   lang: string;
   source_url: string;
   publisher: string;
+  has_deep_link: boolean;
+  cover_url: string | null;
+  clicks: number;
 }
 
 export interface Doubt {

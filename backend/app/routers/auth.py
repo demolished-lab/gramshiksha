@@ -1,17 +1,28 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import hashlib
+import logging
+import secrets
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 
+from ..config import settings
 from ..db import get_session
 from ..gamification import seed_badges
-from ..models import User
+from ..mailer import send_reset_email
+from ..models import PasswordResetCode, User
+from ..ratelimit import DEFAULT_LIMIT as RATE_LIMIT, DEFAULT_WINDOW_S as RATE_WINDOW_S
+from ..ratelimit import HITS as _RATE, check as _check_rate
 from ..security import create_access_token, get_current_user, hash_password, verify_password
 from pydantic import BaseModel, EmailStr, Field
 
+log = logging.getLogger("gramshiksha")
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+RESET_TTL_MIN = 15  # reset codes live 15 minutes
 
 
 class RegisterIn(BaseModel):
@@ -40,13 +51,24 @@ class ResetRequest(BaseModel):
 
 class ResetConfirm(BaseModel):
     email: EmailStr
+    code: str = Field(min_length=6, max_length=6)
     new_password: str = Field(min_length=8, max_length=72)
 
 
+def _hash_code(email: str, code: str) -> str:
+    # Salted per account so a DB dump can't be rainbow-tabled back to codes.
+    return hashlib.sha256(f"{email.strip().lower()}:{code}".encode()).hexdigest()
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 @router.post("/register", status_code=201)
-def register(payload: RegisterIn, session: Session = Depends(get_session)):
+def register(payload: RegisterIn, request: Request, session: Session = Depends(get_session)):
     from ..models import School
 
+    _check_rate(request, "register")
     if payload.role not in ("student", "teacher", "parent"):
         raise HTTPException(422, "Self-registration allowed for student, teacher, parent only")
     if session.exec(select(User).where(User.email == payload.email)).first():
@@ -81,7 +103,9 @@ def register(payload: RegisterIn, session: Session = Depends(get_session)):
 
 
 @router.post("/token")
-def login(form: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
+def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
+          session: Session = Depends(get_session)):
+    _check_rate(request, "token")
     user = session.exec(select(User).where(User.email == form.username)).first()
     if not user or not verify_password(form.password, user.hashed_password):
         raise HTTPException(401, "Incorrect email or password")
@@ -124,29 +148,79 @@ def update_me(payload: ProfileUpdate, user: User = Depends(get_current_user),
 
 
 @router.post("/reset-request")
-def reset_request(payload: ResetRequest, session: Session = Depends(get_session)):
-    user = session.exec(select(User).where(User.email == payload.email)).first()
-    # Always 200 to avoid account enumeration
-    if user:
-        # v1: dev-friendly OTP-style code (prod: send via email/SMS gateway)
-        code = str(int(datetime.now(timezone.utc).timestamp()))[-6:]
-        user._reset_code = code  # type: ignore[attr-defined]
-        import app.state_reset as rs
-        rs.CODES[payload.email] = (code, datetime.now(timezone.utc) + timedelta(minutes=15))
-    return {"ok": True, "code": rs.CODES.get(payload.email, (None, None))[0] if user else None}
+def reset_request(payload: ResetRequest, request: Request, session: Session = Depends(get_session)):
+    _check_rate(request, "reset-request")
+    # Answer *before* touching the account: if the server can't deliver codes
+    # at all, every address must get the identical response, or the status
+    # code itself would reveal which accounts exist.
+    if settings.is_production and not settings.smtp_enabled:
+        log.error("Password reset unavailable: SMTP not configured "
+                  "(set SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD).")
+        raise HTTPException(503, "Password reset is temporarily unavailable. "
+                                 "Please ask your school administrator to reset your password.")
+
+    # Always the same 200 shape — never reveal whether the account exists
+    # (account enumeration).
+    ok = {"ok": True}
+    if not session.exec(select(User).where(User.email == payload.email)).first():
+        return ok
+
+    # 6 cryptographically-random digits; only a salted hash is persisted.
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    for stale in session.exec(select(PasswordResetCode).where(
+            PasswordResetCode.email == payload.email,
+            PasswordResetCode.used_at.is_(None))).all():
+        session.delete(stale)  # one live code per account
+    session.add(PasswordResetCode(
+        email=payload.email,
+        code_hash=_hash_code(payload.email, code),
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=RESET_TTL_MIN)).isoformat()))
+    session.commit()
+
+    if send_reset_email(payload.email, code):
+        return ok
+
+    # Not delivered. Dev logs the code so local testing works; production
+    # logs the failure (the stored code stays valid, so a retry succeeds
+    # once SMTP is back) but still returns 200 — a 503 here would fire only
+    # for existing accounts and leak their existence.
+    if settings.is_production:
+        log.error("Reset code for %s could not be delivered (SMTP failure); "
+                  "it remains valid for %d minutes.", payload.email, RESET_TTL_MIN)
+    else:
+        log.info("password-reset code for %s: %s (dev SQLite only)", payload.email, code)
+    return ok
 
 
 @router.post("/reset-confirm")
-def reset_confirm(payload: ResetConfirm, session: Session = Depends(get_session)):
-    import app.state_reset as rs
-    entry = rs.CODES.get(payload.email)
-    if not entry or entry[1] < datetime.now(timezone.utc):
+def reset_confirm(payload: ResetConfirm, request: Request, session: Session = Depends(get_session)):
+    _check_rate(request, "reset-confirm")
+    want = _hash_code(payload.email, payload.code)
+    now = datetime.now(timezone.utc)
+
+    live: list[PasswordResetCode] = []
+    for row in session.exec(select(PasswordResetCode).where(
+            PasswordResetCode.email == payload.email,
+            PasswordResetCode.used_at.is_(None))).all():
+        if datetime.fromisoformat(row.expires_at) <= now:
+            session.delete(row)  # housekeeping: expired codes don't linger
+        else:
+            live.append(row)
+
+    match = next((r for r in live if r.code_hash == want), None)
+    if match is None:
         raise HTTPException(400, "Invalid or expired code")
+
     user = session.exec(select(User).where(User.email == payload.email)).first()
     if not user:
         raise HTTPException(404, "User not found")
+
     user.hashed_password = hash_password(payload.new_password)
     session.add(user)
+    match.used_at = _now_iso()
+    session.add(match)
+    for other in live:  # single use: burn every other live code for this account
+        if other.id != match.id:
+            session.delete(other)
     session.commit()
-    del rs.CODES[payload.email]
     return {"ok": True}

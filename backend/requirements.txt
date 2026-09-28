@@ -8,3 +8,9 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.0.1  # passlib 1.7.4 incompatible with bcrypt>=4.1
 python-multipart==0.0.20
 email-validator==2.2.0
+psycopg[binary]==3.2.4  # Postgres driver for production (Neon/Supabase)
+alembic==1.20.0  # schema migrations — the app upgrades to head at boot (see app/db.py)
+httpx==0.28.1  # TestClient + prod health checks
+pytest==8.3.4
+cloudinary==1.46.2  # optional upload storage (only used when CLOUDINARY_* env is set)
+sentry-sdk[fastapi]==2.70.0  # optional error tracking (only active when SENTRY_DSN is set)

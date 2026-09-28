@@ -57,26 +57,101 @@ cd frontend && npm install && npm run dev   # http://localhost:5174 (proxies /ap
 ## Tests
 
 ```bash
-.venv/Scripts/python -m pytest -q        # 13 API tests, all green
-cd frontend && npm run build             # typecheck + production build
+# Backend — 49 tests: API behaviour, password reset, authorization limits,
+# migrations and the production boot gates
+.venv/Scripts/python -m pytest -q
+
+# Frontend — 15 unit tests (request framing, session/offline storage)
+cd frontend && npm test
+npm run build                       # typecheck + production build
 ```
+
+CI (`.github/workflows/ci.yml`) runs all of it on every push, including a
+**Postgres 16** job: the SQLite job alone never exercises the Postgres
+dialect, and Postgres is what production actually runs on.
+
+## Schema changes (Alembic)
+
+The schema is owned by `backend/migrations/`. The server runs `alembic upgrade
+head` during startup, so a deploy picks up new tables and columns without a
+manual step. Databases created before Alembic existed (plain `create_all`) are
+stamped at head first — they already match the models — instead of having
+their tables replayed.
+
+```bash
+cd backend
+.venv/Scripts/python -m alembic revision --autogenerate -m "describe the change"
+.venv/Scripts/python -m alembic upgrade head
+```
+
+`backend/tests/test_migrations.py` fails when `models.py` and the migration
+head drift apart — a model edit without a generated revision breaks the suite,
+not the first production deploy.
 
 ## Deploy free (100% free-tier path)
 
 1. **Database** — create a project at [neon.tech](https://console.neon.tech) or
    [supabase.com](https://supabase.com) (both free). Copy the Postgres URL and
-   add `?ssl=require`. Install the driver: `pip install "psycopg[binary]"`.
-2. **Backend** — deploy `backend/` to [Render](https://render.com) free tier:
+   add `?sslmode=require`. Install the driver: `pip install "psycopg[binary]"` (already in `requirements.txt`).
+2. **Backend** — deploy `backend/` to [Render](https://render.com) free tier (see `render.yaml`, health check: `/ready`):
    - Build: `pip install -r requirements.txt`
-   - Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-   - Env: `DATABASE_URL`, `JWT_SECRET=<random 64 chars>`,
-     `CORS_ORIGINS=["https://your-site.netlify.app"]`
+   - Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers` (see `backend/Dockerfile`)
+   - Env: `DATABASE_URL`, `JWT_SECRET=<random 64 chars>`, `CORS_ORIGINS=["https://your-site.netlify.app"]`
+     (must stay valid JSON), `CLOUDINARY_*` and `SMTP_*` (see below).
+   - **The API refuses to start in production** (`app/main.py: check_production_safety`)
+     while `JWT_SECRET` is the dev default or uploads would hit an ephemeral disk.
+     Fix the reported vars rather than working around them.
+   - The API answers on both `/...` and `/api/...`; the frontend uses `/api/...`.
 3. **Frontend** — deploy `frontend/` to Netlify/Vercel/Cloudflare Pages:
    - Build: `npm run build`, publish `dist/`
-   - Proxy: Netlify `_redirects` → `/api/* https://your-backend.onrender.com/api/:splat 200`
-   - Vercel: `vercel.json` rewrites with the same pattern.
-4. **Uploads** — the free-tier volume works for pilots; for durability move
-   `/uploads` to Supabase Storage or Cloudflare R2 (both free tiers).
+   - Proxy: `public/_redirects` (Netlify) or `vercel.json` rewrites `/api/*` to the backend — replace the placeholder URL.
+   - Env: `VITE_API_URL=https://your-backend.onrender.com` (or empty for same-origin).
+## Textbooks — official links + verified deep PDFs
+
+Textbook rows link to official portals only (never re-hosted — NCERT
+explicitly prohibits redistribution). Each row may also carry a verified
+`deep_url` (direct PDF) + `cover_url`, filled only by the crawler below —
+never hand-written. Students open books via `GET /textbooks/{id}/open`,
+which counts the click and 302s to the deep PDF when healthy, else the portal.
+
+```bash
+# Crawl the official eBalbharati library (polite, 1.5s between requests)
+python backend/scripts/crawl_ebalbharati.py --mediums 301 302 303 304 \
+    --output catalog.json
+# Fill deep_url/cover_url on exact (board, grade, subject, lang) matches
+python backend/scripts/crawl_ebalbharati.py --input catalog.json --apply --board auto
+# Revert assignments if the matcher improves later
+python backend/scripts/crawl_ebalbharati.py --input catalog.json --audit --board auto
+```
+
+Link health: `POST /admin/textbooks/recheck?limit=50` (platform admin)
+HEAD-checks deep URLs; dead ones auto-fall-back in `/open`.
+Status: eBalbharati mapped (605-book crawl, ~120 verified deep PDFs in
+Marathi/Hindi/English/Urdu). CBSE/NCERT: use `backend/scripts/crawl_ncert.py`
+the same way (crawl → `--apply`); it only stores URLs verified live as PDFs
+on ncert.nic.in/epathshala.nic.in. Run it from inside India — both portals
+time out from most foreign networks (verified Sep 2026).
+4. **Uploads** — production writes to Cloudinary (`CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET`),
+   otherwise `backend/uploads/` lives on an ephemeral disk and is wiped on every redeploy.
+   Only if you mounted a real persistent disk at `backend/uploads`, set
+   `ALLOW_EPHEMERAL_UPLOADS=true` to skip that check.
+5. **Password reset** — codes are 6 random digits, stored **hashed** in the DB
+   (works across restarts/workers) and emailed over plain SMTP: set `SMTP_HOST`,
+   `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_USE_TLS`.
+   Without SMTP, `/auth/reset-request` answers `503` in production rather than
+   silently swallowing the request. Local dev (SQLite) logs the code instead.
+   `reset-confirm` verifies the code and allows a single use.
+6. **Demo accounts** — `admin@gramshiksha.in / Admin@1234` and friends are seeded
+   **only on local SQLite**. With a Postgres `DATABASE_URL` they are skipped
+   unless you force `SEED_DEMO=true` (never do that on a real instance); course,
+   chapter, lesson, quiz and textbook content always seeds.
+7. **API reference** — `/docs` and `/openapi.json` are a map of the attack
+   surface, so they're **hidden in production** (set `ENABLE_DOCS=true` to
+   publish them deliberately, `false` to hide them locally too).
+8. **Every response carries `X-Request-ID`**, echoed back in the body of an
+   unexpected 500 (`{"detail": "Internal server error", "request_id": "…"}`).
+   Quote that id when reporting a problem — it matches the log line and the
+   traceback, which are never sent to the client.
 
 ## Copyright & safety
 

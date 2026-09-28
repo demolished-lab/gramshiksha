@@ -1,18 +1,19 @@
 import os
-import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
+from sqlalchemy import and_, or_, true
 from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models import MATERIAL_STATUSES, MATERIAL_TYPES, Material, MaterialReport, User
+from ..ratelimit import rate_limit
 from ..security import get_current_user, require_any, require_roles
+from ..storage import delete_ref, download_target, save_upload
 
 router = APIRouter(prefix="/materials", tags=["materials"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "uploads")
 ALLOWED_EXT = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg",
                ".jpeg": "image/jpeg", ".webp": "image/webp", ".mp3": "audio/mpeg",
                ".m4a": "audio/mp4", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation"}
@@ -20,22 +21,13 @@ MAX_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 def _save_file(file: UploadFile) -> tuple[str, int]:
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in ALLOWED_EXT:
-        raise HTTPException(422, f"File type {ext or '(none)'} not allowed. Allowed: {sorted(ALLOWED_EXT)}")
-    data = file.file.read(MAX_SIZE + 1)
-    if len(data) > MAX_SIZE:
-        raise HTTPException(422, "File too large (max 10 MB)")
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    name = f"{uuid.uuid4().hex}{ext}"
-    path = os.path.join(UPLOAD_DIR, name)
-    with open(path, "wb") as f:
-        f.write(data)
-    return f"uploads/{name}", len(data)
+    # Local disk by default; Cloudinary when CLOUDINARY_* env is set (see storage.py).
+    return save_upload(file, ALLOWED_EXT, MAX_SIZE)
 
 
 @router.post("", status_code=201)
 def upload_material(
+    _rl: None = Depends(rate_limit("materials.upload", 30)),
     title: str = Form(...),
     description: str = Form(""),
     type: str = Form("notes"),
@@ -72,11 +64,35 @@ def upload_material(
     return {"id": m.id, "status": m.status}
 
 
-def _visible_to(user: User) -> list:
-    """Public approved + own uploads + school-scoped if user has a school."""
-    conds = [Material.status == "approved"]
-    # visibility filter applied in python for simplicity of three-way scope
-    return conds
+def _visible_query(user: User):
+    """Approved materials this user may see: public, their own, or their
+    school's. Used by BOTH the list and the download endpoint — previously
+    download only checked `status`, so any authenticated user could pull
+    another teacher's private file by guessing sequential IDs."""
+    clauses = [Material.visibility == "public", Material.uploader_id == user.id]
+    if user.school_id:
+        clauses.append(and_(Material.visibility == "school",
+                            User.school_id == user.school_id))
+    return (select(Material)
+            .join(User, User.id == Material.uploader_id, isouter=True)
+            .where(Material.status == "approved", or_(*clauses)))
+
+
+def _moderation_clause(user: User):
+    """What a reviewer may act on: platform_admin sees everything; a school
+    admin or teacher is confined to their own school (and their own uploads
+    when they belong to no school). Moderation must not leak across schools."""
+    if user.role == "platform_admin":
+        return true()
+    if user.school_id:
+        return or_(Material.uploader_id == user.id, User.school_id == user.school_id)
+    return Material.uploader_id == user.id
+
+
+def _moderation_query(user: User):
+    return (select(Material)
+            .join(User, User.id == Material.uploader_id, isouter=True)
+            .where(Material.status == "pending", _moderation_clause(user)))
 
 
 @router.get("")
@@ -93,38 +109,24 @@ def list_materials(
 ):
     if mine:
         rows = session.exec(select(Material).where(
-            Material.uploader_id == user.id).offset(offset).limit(limit)).all()
+            Material.uploader_id == user.id).order_by(Material.id.desc())
+            .offset(offset).limit(limit)).all()
         return [_material_out(m, user) for m in rows]
-    rows = session.exec(select(Material).where(
-        Material.status == "approved").offset(offset).limit(limit)).all()
-    out = []
-    for m in rows:
-        if m.visibility == "public":
-            ok = True
-        elif m.visibility == "school":
-            ok = m.uploader_id == user.id or (user.school_id and _uploader_school(session, m) == user.school_id)
-        else:  # private
-            ok = m.uploader_id == user.id
-        if not ok:
-            continue
-        item = _material_out(m, user)
-        if class_grade and m.class_grade != class_grade:
-            continue
-        if board and m.board != board:
-            continue
-        if subject_name and m.subject_name != subject_name:
-            continue
-        if type and m.type != type:
-            continue
-        if lang and m.lang != lang:
-            continue
-        out.append(item)
-    return out
-
-
-def _uploader_school(session: Session, m: Material):
-    u = session.get(User, m.uploader_id)
-    return u.school_id if u else None
+    # Visibility is enforced in SQL too, so limit/offset paginate over the rows
+    # the user can actually see (filtering after LIMIT pages over hidden rows).
+    q = _visible_query(user)
+    if class_grade:
+        q = q.where(Material.class_grade == class_grade)
+    if board:
+        q = q.where(Material.board == board)
+    if subject_name:
+        q = q.where(Material.subject_name == subject_name)
+    if type:
+        q = q.where(Material.type == type)
+    if lang:
+        q = q.where(Material.lang == lang)
+    rows = session.exec(q.order_by(Material.id.desc()).offset(offset).limit(limit)).all()
+    return [_material_out(m, user) for m in rows]
 
 
 def _material_out(m: Material, user: User) -> dict:
@@ -139,20 +141,25 @@ def _material_out(m: Material, user: User) -> dict:
 @router.get("/pending")
 def pending_materials(user: User = Depends(require_roles("teacher", "school_admin", "platform_admin")),
                       session: Session = Depends(get_session)):
-    rows = session.exec(select(Material).where(Material.status == "pending")).all()
-    if user.role == "teacher":
-        # teachers review only their school scope or own; simplified: all pending for teachers in v1
-        pass
+    # Scoped: teachers/school admins only see their own school's queue —
+    # never another school's student uploads.
+    rows = session.exec(_moderation_query(user).order_by(Material.id.desc())).all()
     return [_material_out(m, user) for m in rows]
 
 
 @router.post("/{material_id}/review")
 def review_material(material_id: int, decision: str = Form(...), reason: str = Form(""),
+                    _rl: None = Depends(rate_limit("materials.review", 60)),
                     user: User = Depends(require_roles("teacher", "school_admin", "platform_admin")),
                     session: Session = Depends(get_session)):
     if decision not in ("approved", "needs_changes", "rejected"):
         raise HTTPException(422, "decision must be approved|needs_changes|rejected")
-    m = session.get(Material, material_id)
+    # Same scope as the queue: a teacher can't approve another school's
+    # material by posting its ID directly.
+    m = session.exec(select(Material)
+                     .join(User, User.id == Material.uploader_id, isouter=True)
+                     .where(Material.id == material_id,
+                            _moderation_clause(user))).first()
     if not m:
         raise HTTPException(404, "Material not found")
     m.status = decision
@@ -170,26 +177,36 @@ def review_material(material_id: int, decision: str = Form(...), reason: str = F
 @router.get("/{material_id}/download")
 def download_material(material_id: int, user: User = Depends(get_current_user),
                       session: Session = Depends(get_session)):
-    m = session.get(Material, material_id)
-    if not m or m.status != "approved":
+    # Same visibility rule as the list — approval alone is not enough to fetch.
+    m = session.exec(_visible_query(user).where(Material.id == material_id)).first()
+    if not m:
         raise HTTPException(404, "Material not found")
-    full = os.path.join(os.path.dirname(UPLOAD_DIR), m.file_path.replace("/", os.sep))
-    if not os.path.exists(full):
+    kind, target = download_target(m.file_path)
+    if kind == "redirect":
+        # Cloudinary asset: approval/visibility already checked above;
+        # redirect to a short-lived signed URL.
+        m.downloads += 1
+        session.add(m)
+        session.commit()
+        return RedirectResponse(target, status_code=302)
+    if not os.path.exists(target):
         raise HTTPException(404, "File missing")
     m.downloads += 1
     session.add(m)
     session.commit()
     safe_name = f"{m.title[:40].strip()}_{os.path.basename(m.file_path)}"
-    return FileResponse(full, filename= safe_name)
+    return FileResponse(target, filename=safe_name)
 
 
 @router.post("/{material_id}/report", status_code=201)
 def report_material(material_id: int, reason: str = Form(...), detail: str = Form(""),
+                    _rl: None = Depends(rate_limit("materials.report", 10)),
                     user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     from ..models import REPORT_REASONS
     if reason not in REPORT_REASONS:
         raise HTTPException(422, f"reason must be one of {REPORT_REASONS}")
-    if not session.get(Material, material_id):
+    # You can only report what you can see (no probing for private files).
+    if not session.exec(_visible_query(user).where(Material.id == material_id)).first():
         raise HTTPException(404, "Material not found")
     session.add(MaterialReport(material_id=material_id, reporter_id=user.id,
                                reason=reason, detail=detail))
@@ -205,9 +222,7 @@ def delete_material(material_id: int, user: User = Depends(get_current_user),
         raise HTTPException(404, "Material not found")
     if m.uploader_id != user.id and user.role not in ("teacher", "school_admin", "platform_admin"):
         raise HTTPException(403, "Not allowed")
-    full = os.path.join(os.path.dirname(UPLOAD_DIR), m.file_path.replace("/", os.sep))
-    if os.path.exists(full):
-        os.remove(full)
+    delete_ref(m.file_path)  # local unlink or Cloudinary destroy (best-effort)
     session.delete(m)
     session.commit()
     return {"ok": True}

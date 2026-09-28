@@ -1,0 +1,8 @@
+FROM python:3.12-slim
+WORKDIR /app
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir "psycopg[binary]"
+COPY backend ./backend
+RUN mkdir -p backend/uploads
+ENV PORT=8000
+CMD ["sh", "-c", "uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]

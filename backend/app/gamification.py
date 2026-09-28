@@ -105,15 +105,12 @@ def on_quiz(session: Session, user: User, score_pct: float) -> None:
 def on_practice(session: Session, user: User) -> None:
     award_xp(session, user, "practice_answer")
     touch_streak(session, user)
-    count = len(session.exec(
-        select(UserBadge.id).where(UserBadge.user_id == user.id)  # cheap warm-up
-    ).all())
-    _ = count
-    # practice_master check via TopicStats aggregate
+    # practice_master check via PracticeAttempt aggregate (COUNT, not full load)
+    from sqlmodel import func
     from .models import PracticeAttempt
-    n = len(session.exec(
-        select(PracticeAttempt.id).where(PracticeAttempt.user_id == user.id)
-    ).all())
+    n = session.exec(
+        select(func.count()).select_from(PracticeAttempt).where(PracticeAttempt.user_id == user.id)
+    ).one()
     if n >= 100:
         _award_badge(session, user, "practice_master")
 
