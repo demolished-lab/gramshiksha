@@ -1,10 +1,14 @@
 export type Lang = 'en' | 'hi' | 'mr';
 export type Role = 'student' | 'teacher' | 'parent' | 'school_admin' | 'platform_admin';
+/** Approval state — a self-registered teacher is `pending` until a platform
+ * admin approves it; `suspended` is an approval that was withdrawn. */
+export type RoleStatus = 'pending' | 'active' | 'suspended';
 
 export interface LoginResponse {
   access_token: string;
   token_type: string;
   role: Role;
+  role_status?: RoleStatus;
   name: string;
   lang_pref: Lang;
   class_grade: number | null;
@@ -18,6 +22,7 @@ export interface Me {
   email: string;
   name: string;
   role: Role;
+  role_status?: RoleStatus;
   lang_pref: Lang;
   class_grade: number | null;
   board: string | null;

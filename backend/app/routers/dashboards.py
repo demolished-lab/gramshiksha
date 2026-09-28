@@ -194,25 +194,63 @@ def admin_users(role: Optional[str] = None, limit: int = 50, offset: int = 0,
              "class_grade": u.class_grade, "board": u.board, "xp": u.xp} for u in rows]
 
 
-@router.post("/admin/users/{user_id}/approve")
-def approve_user(user_id: int, user=Depends(require_roles("platform_admin")),
-                 session: Session = Depends(get_session)):
-    """Move a user out of `pending` — the step that actually grants the
-    teacher role's privileges.
+def _require_not_self(target: User, actor: User) -> None:
+    """Refuse changing your own approval status.
 
-    Registration gives anyone the `teacher` *string*; publishing lessons,
-    moderating material and reading student rosters are gated on approval.
-    Idempotent: approving an already-active account is a no-op, not an error.
+    The only account that can approve or suspend is a platform admin — so a
+    self-suspend would leave the platform with nobody able to approve at all,
+    requiring manual database surgery to recover.
     """
+    if target.id == actor.id:
+        raise HTTPException(400, "Cannot change your own approval status")
+
+
+def _get_target(user_id: int, session: Session) -> User:
     target = session.get(User, user_id)
     if not target:
         raise HTTPException(404, "User not found")
-    target.role_status = "active"
+    return target
+
+
+def _set_status(target: User, status: str, session: Session) -> dict:
+    target.role_status = status
     session.add(target)
     session.commit()
     session.refresh(target)
     return {"ok": True, "id": target.id, "email": target.email,
             "role": target.role, "role_status": target.role_status}
+
+
+@router.post("/admin/users/{user_id}/approve")
+def approve_user(user_id: int, user=Depends(require_roles("platform_admin")),
+                 session: Session = Depends(get_session)):
+    """Move a user out of `pending` (or back from `suspended`) — the step
+    that actually grants the teacher role's privileges.
+
+    Registration gives anyone the `teacher` *string*; publishing lessons,
+    moderating material and reading student rosters are gated on approval.
+    Idempotent: approving an already-active account is a no-op, not an error.
+    """
+    target = _get_target(user_id, session)
+    _require_not_self(target, user)
+    return _set_status(target, "active", session)
+
+
+@router.post("/admin/users/{user_id}/suspend")
+def suspend_user(user_id: int, user=Depends(require_roles("platform_admin")),
+                 session: Session = Depends(get_session)):
+    """Withdraw privileges without deleting the account.
+
+    The counterweight to approve: approvals that were granted by mistake (or
+    an account that turns out to be abusive) must be revocable, otherwise
+    approval is a permanent grant. A suspended account keeps its login,
+    coursework and uploaded files, but every privilege route refuses it with
+    "Account suspended", and new uploads fall back into the review queue.
+    Restoring is POST .../approve. Idempotent.
+    """
+    target = _get_target(user_id, session)
+    _require_not_self(target, user)
+    return _set_status(target, "suspended", session)
 
 
 @router.get("/admin/reports")

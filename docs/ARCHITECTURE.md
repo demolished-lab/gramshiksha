@@ -13,9 +13,8 @@
                          │ /api/* (JSON; files via multipart)
 ┌────────────────────────▼────────────────────────────────────┐
 │  FastAPI (Python 3.10+)                                     │
-│  routers: auth, catalog, lessons, quiz, practice, materials,│
-│  textbooks, doubts, bookmarks, notifications, gamification, │
-│  parent, school, admin, search, downloads-sync              │
+│  routers: auth, catalog, learn, lessons, materials, progress,│
+│  social, dashboards (teacher/parent/school/admin)           │
 │  security: JWT + role deps; validation via Pydantic         │
 └────────────────────────┬────────────────────────────────────┘
                          │ SQLModel / SQLAlchemy
@@ -28,6 +27,7 @@
 
 ```
 User(role: student|teacher|parent|school_admin|platform_admin,
+     role_status: pending|active|suspended,  # staff approval gate
      class_grade, board, lang_pref, school_id, xp, streak_days, last_active_date,
      parent_of → self-fk for parent-child link)
 School(name, medium)
@@ -59,6 +59,7 @@ Notification(user, type, payload JSON, read)
 BadgeDef(code, title ×3, desc ×3) / UserBadge(user, badge, awarded_at)
 Certificate(user, course, cert_id, issued_at)
 Enrollment(user, course, progress_pct)
+Batch(name, description, teacher, created)   # teacher-owned class groups
 ```
 
 ## 3. Key flows
@@ -77,6 +78,14 @@ Ordered plan with per-item estimate; progress tracked per day.
 approved/needs_changes/rejected + reason; only `approved` appears in public library;
 visibility scopes: private (own students) / school / public.
 
+**Teacher approval:** registration accepts `role=teacher` from anyone, so the
+role string alone confers nothing — the account starts `role_status=pending`
+and every privileged route refuses it (`403 Account pending approval`) until a
+platform admin approves it (`POST /admin/users/{id}/approve`, or the Admin
+dashboard button). `POST /admin/users/{id}/suspend` withdraws an approval
+(`403 Account suspended`); approve restores it. Accounts predating the column
+are `active` by migration default.
+
 **Offline sync:** client queues completed lessons/quiz attempts in localStorage while
 offline; on reconnect POSTs `/sync` batch; server upserts idempotently.
 
@@ -86,7 +95,9 @@ first_quiz, streak_7, streak_30, perfect_score, course_complete, practice_master
 
 ## 4. Security
 
-- bcrypt password hashing; JWT (7d expiry); role dependencies per route group.
+- bcrypt password hashing; JWT (7d expiry); role dependencies per route group,
+  with staff powers additionally gated on `role_status` (teacher approval
+  workflow) — the role alone is not a privilege.
 - Uploads: extension + content-type whitelist (pdf, png, jpg, webp, mp3, m4a), 10 MB cap,
   random filenames under `uploads/`, never executed; private until approved.
 - Input validation via Pydantic schemas everywhere; parameterized queries via SQLModel.

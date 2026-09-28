@@ -1,4 +1,4 @@
-import type { Lang, LoginResponse, Me } from './types';
+import type { Lang, LoginResponse, Me, RoleStatus } from './types';
 
 const TOKEN_KEY = 'gs_token';
 const USER_KEY = 'gs_user';
@@ -17,6 +17,9 @@ export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export interface SessionUser {
   name: string;
   role: string;
+  /** Absent in sessions stored before the approval workflow shipped — an
+   * account of unknown age is treated as approved, never as pending. */
+  role_status?: RoleStatus;
   class_grade: number | null;
   board: string | null;
   xp: number;
@@ -26,8 +29,9 @@ export interface SessionUser {
 export function saveSession(tok: LoginResponse): void {
   localStorage.setItem(TOKEN_KEY, tok.access_token);
   localStorage.setItem(USER_KEY, JSON.stringify({
-    name: tok.name, role: tok.role, class_grade: tok.class_grade,
-    board: tok.board, xp: tok.xp, streak_days: tok.streak_days,
+    name: tok.name, role: tok.role, role_status: tok.role_status,
+    class_grade: tok.class_grade, board: tok.board, xp: tok.xp,
+    streak_days: tok.streak_days,
   } satisfies SessionUser));
   if (tok.lang_pref) setLang(tok.lang_pref);
 }
@@ -43,8 +47,9 @@ export function getUser(): SessionUser | null {
 
 export function refreshUser(me: Me): void {
   localStorage.setItem(USER_KEY, JSON.stringify({
-    name: me.name, role: me.role, class_grade: me.class_grade,
-    board: me.board, xp: me.xp, streak_days: me.streak_days,
+    name: me.name, role: me.role, role_status: me.role_status,
+    class_grade: me.class_grade, board: me.board, xp: me.xp,
+    streak_days: me.streak_days,
   }));
 }
 

@@ -115,8 +115,12 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
     if not user or not verify_password(form.password, user.hashed_password):
         raise HTTPException(401, "Incorrect email or password")
     token = create_access_token(user.email, user.role)
+    # role_status rides on the login response so the UI can render the
+    # pending/suspended notice immediately, without a second /auth/me round
+    # trip that would first show the privileged page and then its 403.
     return {"access_token": token, "token_type": "bearer",
-            "role": user.role, "name": user.name, "lang_pref": user.lang_pref,
+            "role": user.role, "role_status": user.role_status,
+            "name": user.name, "lang_pref": user.lang_pref,
             "class_grade": user.class_grade, "board": user.board, "xp": user.xp,
             "streak_days": user.streak_days}
 

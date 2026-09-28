@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LoginResponse } from '../types';
 import {
   clearCachedApi, clearQueue, enqueue, getDownloads, getQueue, getUser, logout,
-  removeDownload, saveDownload, saveSession,
+  refreshUser, removeDownload, saveDownload, saveSession,
 } from '../auth';
 
 const login: LoginResponse = {
@@ -43,6 +43,32 @@ describe('session', () => {
 
     expect(getUser()).toBeNull();
     expect(localStorage.getItem('gs_token')).toBeNull();
+  });
+
+  it('persists role_status so the UI can show the approval notice right away', () => {
+    saveSession({ ...login, role: 'teacher', role_status: 'pending' });
+    expect(getUser()?.role_status).toBe('pending');
+  });
+
+  it('treats a session stored before the approval workflow as approved', () => {
+    // Old sessions have no role_status at all. Reading it as `pending` would
+    // suddenly lock every existing teacher out of their own dashboard, so an
+    // absent status must mean approved.
+    localStorage.setItem('gs_user', JSON.stringify({ name: 'Asha', role: 'teacher' }));
+    expect(getUser()?.role_status).toBeUndefined();
+  });
+
+  it('refreshUser keeps role_status — the approval re-check depends on it', () => {
+    saveSession(login);
+    // What ApprovalNotice's "Check approval status" button writes back after
+    // /auth/me reports the admin approved the account.
+    refreshUser({
+      id: 1, email: 'teacher@x.in', name: 'Asha', role: 'teacher', role_status: 'active',
+      lang_pref: 'en', class_grade: 8, board: null, school_id: null, xp: 130,
+      streak_days: 4, profile_pic: null,
+    });
+
+    expect(getUser()).toMatchObject({ role: 'teacher', role_status: 'active', xp: 130 });
   });
 
   it('returns null instead of throwing on corrupt stored user json', () => {

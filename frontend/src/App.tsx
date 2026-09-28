@@ -17,6 +17,7 @@ import TeacherDashboard from './pages/TeacherDashboard';
 import ParentDashboard from './pages/ParentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AuthModal from './AuthModal';
+import ApprovalNotice from './ApprovalNotice';
 
 type Route = { page: string; id?: number };
 
@@ -59,6 +60,7 @@ export default function App() {
 
   const switchLang = (l: Lang) => { setLang(l); setLangState(l); };
   const onAuthed = () => { setUser(getUser()); setShowAuth(false); };
+  const refreshSession = () => setUser(getUser());
   const nav = (page: string) => () => go(page);
 
   const isStudent = user?.role === 'student';
@@ -83,6 +85,16 @@ export default function App() {
     ['doubts', '❓', t('doubts', lang)],
   ];
 
+  /**
+   * A pending or suspended account must never reach a privileged page: the
+   * server would 403 every call and the user would see only a generic load
+   * error, with no hint that approval is the reason. Show the reason instead.
+   */
+  const approvalGated = (node: JSX.Element) =>
+    user?.role_status && user.role_status !== 'active'
+      ? <ApprovalNotice lang={lang} status={user.role_status} onRecheck={refreshSession} />
+      : node;
+
   let page: JSX.Element;
   switch (route.page) {
     case 'dashboard': page = <StudentDashboard lang={lang} go={go} />; break;
@@ -95,9 +107,9 @@ export default function App() {
     case 'doubts': page = <Doubts lang={lang} user={user} />; break;
     case 'downloads': page = <Downloads lang={lang} go={go} />; break;
     case 'progress': page = <ProgressPage lang={lang} />; break;
-    case 'teacher': page = <TeacherDashboard lang={lang} />; break;
+    case 'teacher': page = approvalGated(<TeacherDashboard lang={lang} />); break;
     case 'parent': page = <ParentDashboard lang={lang} />; break;
-    case 'admin': page = <AdminDashboard lang={lang} />; break;
+    case 'admin': page = approvalGated(<AdminDashboard lang={lang} />); break;
     default: page = user && isStudent
       ? <StudentDashboard lang={lang} go={go} />
       : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;

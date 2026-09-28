@@ -65,6 +65,21 @@ const S: Record<string, [string, string, string]> = {
   approve: ['Approve', 'स्वीकृत', 'मंजूर'],
   reject: ['Reject', 'अस्वीकृत', 'नाकार'],
   pending: ['Pending review', 'समीक्षा लंबित', 'तपासणी प्रलंबित'],
+  status: ['Status', 'स्थिति', 'स्थिती'],
+  statusPending: ['Pending approval', 'स्वीकृति लंबित', 'मंजुरी प्रलंबित'],
+  statusActive: ['Active', 'सक्रिय', 'सक्रिय'],
+  statusSuspended: ['Suspended', 'निलंबित', 'निलंबित'],
+  suspend: ['Suspend', 'निलंबित करें', 'निलंबित करा'],
+  pendingTitle: ['Awaiting approval', 'स्वीकृति की प्रतीक्षा', 'मंजुरीची प्रतीक्षा'],
+  pendingBody: ['Your teacher account was created, but a platform administrator must approve it before you can publish lessons, moderate material or view student lists. You can keep browsing — anything you upload goes into the review queue.',
+    'आपका शिक्षक खाता बन गया है, लेकिन पाठ प्रकाशित करने, सामग्री की समीक्षा करने या छात्र सूची देखने से पहले प्लेटफ़ॉर्म व्यवस्थापक को इसे स्वीकृत करना होगा। आप ब्राउज़ करते रह सकते हैं — आपकी अपलोड की गई सामग्री समीक्षा कतार में जाएगी।',
+    'तुमचे शिक्षक खाते तयार झाले आहे, पण धडे प्रकाशित करण्यापूर्वी, सामग्रीचे परीक्षण करण्यापूर्वी किंवा विद्यार्थ्यांची यादी पाहण्यापूर्वी प्लॅटफॉर्म प्रशासकाने हे मंजू केले पाहिजे. तुम्ही ब्राउझ करत राहू शकता — तुम्ही अपलोड केलेली सामग्री तपासणीरांगेत जाईल.'],
+  suspendedTitle: ['Account suspended', 'खाता निलंबित', 'खाते निलंबित'],
+  suspendedBody: ['This account has been suspended by a platform administrator. It keeps its login, coursework and uploads, but teacher and admin tools stay refused until it is re-approved. Contact your school or platform administrator if you believe this is a mistake.',
+    'यह खाता प्लेटफ़ॉर्म व्यवस्थापक द्वारा निलंबित किया गया है। इसमें लॉगिन, पाठ्यक्रम और अपलोड सुरक्षित हैं, लेकिन पुनः स्वीकृति तक शिक्षक व व्यवस्थापक उपकरण बंद रहेंगे। यदि आपको लगता है कि यह गलती है तो अपने स्कूल या प्लेटफ़ॉर्म व्यवस्थापक से संपर्क करें।',
+    'हे खाते प्लॅटफॉर्म प्रशासकाने निलंबित केले आहे. लॉगिन, अभ्यासक्रम आणि अपलोड जपण्यात आलेआहेत, पण पुन्हा मंजुरीपर्यंत शिक्षक व प्रशासक साधने बंद राहतील. हे चुकीचे वाटत असल्यास तुमच्या शाळा किंवा प्लॅटफॉर्म प्रशासकाशी संपर्क साधा.'],
+  checkStatus: ['Check approval status', 'स्वीकृति की स्थिति जाँचें', 'मंजुरीची स्थिती तपासा'],
+  checking: ['Checking…', 'जाँच हो रही है…', 'तपासत आहे…'],
 };
 
 export function t(key: keyof typeof S | string, lang: Lang): string {

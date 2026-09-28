@@ -11,6 +11,7 @@ slow internet, shared phones and limited data.
 | Area | Details |
 |---|---|
 | **Roles** | Student, Teacher, Parent, School Admin, Platform Admin (JWT auth) |
+| **Teacher approval** | Self-registered teachers start **pending**: no publish/moderate/roster powers until a platform admin approves them (admin dashboard button or `POST /admin/users/{id}/approve`); approvals can be withdrawn via **suspend** |
 | **Catalog** | Boards → Class 1–12 → Subjects → Courses → Chapters → Lessons |
 | **Learning** | Text/video/audio lessons, mark-complete, bookmarks, personal notes |
 | **Practice** | MCQ · True/False · Multi-answer · Fill-in-the-blank, instant explanations |
@@ -57,14 +58,15 @@ cd frontend && npm install && npm run dev   # http://localhost:5174 (proxies /ap
 ## Tests
 
 ```bash
-# Backend — 78 tests: API behaviour, password reset, authorization limits,
+# Backend — 80 tests: API behaviour, password reset, authorization limits,
 # every registered endpoint, migrations and the production boot gates.
 # test_route_coverage_canary.py fails the build if a route is ever
 # registered without a test calling it, or if the bare and /api mounts
 # of a router drift apart.
 .venv/Scripts/python -m pytest -q
 
-# Frontend — 15 unit tests (request framing, session/offline storage)
+# Frontend — 21 unit tests (request framing, session/offline storage,
+# approval workflow API actions)
 cd frontend && npm test
 npm run build                       # typecheck + production build
 ```
@@ -155,6 +157,13 @@ time out from most foreign networks (verified Sep 2026).
    unexpected 500 (`{"detail": "Internal server error", "request_id": "…"}`).
    Quote that id when reporting a problem — it matches the log line and the
    traceback, which are never sent to the client.
+9. **Teacher approval** — anyone can self-register as `teacher`, so the role
+   alone grants nothing: new teachers are `pending` and every privileged route
+   answers `403 Account pending approval` until a platform admin approves them
+   (`POST /admin/users/{id}/approve`, or the button on the Admin dashboard).
+   `POST /admin/users/{id}/suspend` withdraws an approval again (`403 Account
+   suspended`); both refuse to target your own account, so the last admin
+   cannot lock everybody out.
 
 ## Copyright & safety
 

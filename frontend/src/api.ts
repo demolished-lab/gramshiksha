@@ -1,7 +1,7 @@
 import type {
   Doubt, LessonDetail, Lang, LoginResponse, Material, Me, Notification, ParentChild,
-  ProgressSummary, Question, QuizDetail, QuizResult, TeacherStudent, Textbook,
-  TodayPlan, WeakTopics, Course,
+  ProgressSummary, Question, QuizDetail, QuizResult, RoleStatus, TeacherStudent,
+  Textbook, TodayPlan, WeakTopics, Course,
 } from './types';
 
 const BASE = `${(import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL ?? ''}/api`;
@@ -158,4 +158,17 @@ export const apiTeacherStudents = () => req<TeacherStudent[]>('/teacher/students
 export const apiTeacherOverview = () => req<{ my_courses: { id: number; title_en: string; students: number }[]; pending_material_reviews: number; pending_doubts: number; total_students: number }>('/teacher/overview');
 export const apiParentChildren = () => req<ParentChild[]>('/parent/children');
 export const apiSchoolStats = () => req<{ students: number; teachers: number; lessons_completed_total: number }>('/school/stats');
+
+// ---------- admin (approval workflow) ----------
+export interface AdminUser {
+  id: number; email: string; name: string; role: string; role_status: RoleStatus;
+  class_grade: number | null; board: string | null; xp: number;
+}
+export const apiAdminUsers = (limit = 100) => req<AdminUser[]>(`/admin/users?limit=${limit}`);
+/** Approve = grant (or restore) privileges; suspend = withdraw them. Both are
+ * platform-admin-only and idempotent server-side. */
+export const apiApproveUser = (id: number) =>
+  post<{ ok: boolean; id: number; role_status: RoleStatus }>(`/admin/users/${id}/approve`);
+export const apiSuspendUser = (id: number) =>
+  post<{ ok: boolean; id: number; role_status: RoleStatus }>(`/admin/users/${id}/suspend`);
 export const apiSearch = (q: string) => req<Record<string, { id: number; title_en?: string; title?: string; prompt_en?: string }[]>>(`/search?q=${encodeURIComponent(q)}`);

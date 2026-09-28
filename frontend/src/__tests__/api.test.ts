@@ -5,7 +5,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  apiCourses, apiLogin, apiMaterialUrl, apiMe, apiUploadMaterial,
+  apiAdminUsers, apiApproveUser, apiCourses, apiLogin, apiMaterialUrl, apiMe,
+  apiSuspendUser, apiUploadMaterial,
 } from '../api';
 
 const jsonResponse = (status: number, body: unknown) =>
@@ -119,5 +120,43 @@ describe('query building', () => {
 
   it('builds download URLs against the api prefix', () => {
     expect(apiMaterialUrl(3)).toBe('/api/materials/3/download');
+  });
+});
+
+describe('admin approval actions', () => {
+  it('lists users and posts approve/suspend at the matching admin routes', async () => {
+    localStorage.setItem('gs_token', 'tok-admin');
+    // A fresh Response per call — a Response body can only be read once.
+    fetchMock.mockImplementation(async () => jsonResponse(200, []));
+
+    await apiAdminUsers(50);
+    expect(lastCall().url).toBe('/api/admin/users?limit=50');
+    expect(lastCall().headers.Authorization).toBe('Bearer tok-admin');
+
+    await apiApproveUser(7);
+    expect(lastCall().url).toBe('/api/admin/users/7/approve');
+    expect(lastCall().init.method).toBe('POST');
+
+    await apiSuspendUser(7);
+    expect(lastCall().url).toBe('/api/admin/users/7/suspend');
+    expect(lastCall().init.method).toBe('POST');
+  });
+
+  it('lets a refusal reach the UI verbatim', async () => {
+    // The admin page prints this message. The old hardcoded
+    // "Admin access required" swallowed it, hiding why the API refused.
+    fetchMock.mockResolvedValue(
+      jsonResponse(403, { detail: 'Cannot change your own approval status' }));
+
+    await expect(apiSuspendUser(1)).rejects.toThrow('Cannot change your own approval status');
+  });
+
+  it('keeps role_status on the login response so the session can store it', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { access_token: 'tok', role: 'teacher', role_status: 'pending' }));
+
+    const tok = await apiLogin('newteacher@x.in', 'Secret@123');
+
+    expect(tok.role_status).toBe('pending');
   });
 });

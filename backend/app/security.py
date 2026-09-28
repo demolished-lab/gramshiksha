@@ -61,6 +61,19 @@ def has_role(user: User, *roles: str) -> bool:
     return user.role in roles and user.role_status == "active"
 
 
+def _status_detail(role_status: str) -> str:
+    """Why an account that *passed* the role test is still refused.
+
+    The message must match what actually happened: a fresh teacher signup
+    ("pending") and a withdrawn approval ("suspended") need different
+    operator responses, and one blanket message hides which one it is.
+    """
+    return {
+        "pending": "Account pending approval",
+        "suspended": "Account suspended",
+    }.get(role_status, f"Account status: {role_status}")
+
+
 def require_roles(*roles: str):
     """Route dependency: allow only listed roles (admins inherit teacher powers).
 
@@ -81,7 +94,7 @@ def require_roles(*roles: str):
         if user.role not in effective:
             raise HTTPException(status_code=403, detail=f"Requires role: {', '.join(sorted(allowed))}")
         if user.role_status != "active":
-            raise HTTPException(status_code=403, detail="Account pending approval")
+            raise HTTPException(status_code=403, detail=_status_detail(user.role_status))
         return user
 
     return dep
