@@ -44,7 +44,9 @@ services:
         sync: false
       - key: SMTP_PASSWORD
         sync: false
+      # From-address must be a verified sender on Brevo. We do not own
+      # gramshiksha.in, so send from the account's verified Gmail instead.
       - key: SMTP_FROM
-        value: "no-reply@gramshiksha.in"
+        value: "praveshedu29@gmail.com"
       - key: SENTRY_DSN
         sync: false
