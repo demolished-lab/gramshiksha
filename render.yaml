@@ -2,6 +2,11 @@ services:
   - type: web
     name: gramshiksha-backend
     runtime: docker
+    # The Dockerfile lives in backend/, but its COPY paths
+    # (backend/requirements.txt, backend/) assume the repository root as the
+    # build context — declare both so Render doesn't look for ./Dockerfile.
+    dockerfilePath: backend/Dockerfile
+    dockerDirPath: ./
     plan: free
     healthCheckPath: /ready
     envVars:
