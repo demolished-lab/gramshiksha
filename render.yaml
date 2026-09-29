@@ -4,9 +4,9 @@ services:
     runtime: docker
     # The Dockerfile lives in backend/, but its COPY paths
     # (backend/requirements.txt, backend/) assume the repository root as the
-    # build context — declare both so Render doesn't look for ./Dockerfile.
+    # Docker build context, so declare both explicitly.
     dockerfilePath: backend/Dockerfile
-    dockerDirPath: ./
+    dockerContext: ./
     plan: free
     healthCheckPath: /ready
     envVars:
