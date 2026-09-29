@@ -169,6 +169,10 @@ time out from most foreign networks (verified Sep 2026).
 
 ## Copyright & safety
 
+- **License — proprietary, commercial rights reserved.** View, study and
+  reference this code freely (resume/portfolio use is fine), but *any*
+  money-making use — ads, paid tiers, selling or licensing the code —
+  is reserved **exclusively to Pravesh Kumar**. See [LICENSE](LICENSE).
 - Textbooks section links to **official sources only** (ePathshala, eBalbharati).
 - Student uploads require teacher/admin approval before becoming public.
 - Uploads restricted to PDF/images/audio, 10 MB max, random filenames.
