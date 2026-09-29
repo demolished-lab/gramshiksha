@@ -28,10 +28,10 @@ services:
       # Frontend origin. The Vercel deploy serves the SPA and rewrites
       # /api/* to this service (frontend/vercel.json), so everyday calls are
       # same-origin; this list only matters if the SPA points VITE_API_URL
-      # straight at the API. Change it if the frontend lands on another
-      # host or custom domain.
+      # straight at the API. The apex gramshiksha.vercel.app was owned by
+      # another team, so production alias is gramshiksha-academy.vercel.app.
       - key: CORS_ORIGINS
-        value: '["https://gramshiksha.vercel.app"]'
+        value: '["https://gramshiksha-academy.vercel.app"]'
       # REQUIRED in production: uploads land on an ephemeral disk otherwise.
       - key: CLOUDINARY_CLOUD_NAME
         sync: false

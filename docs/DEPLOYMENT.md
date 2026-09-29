@@ -1,8 +1,10 @@
 # Deploying GramShiksha
 
-> **Status: nothing is deployed yet.** GitHub reports zero deployments and no
-> Render/Vercel integration on the repo — this runbook is the complete path
-> from the repo to a live URL. Backend first, frontend second.
+> **Status: LIVE.** Backend on Render (`https://gramshiksha-backend.onrender.com`),
+> SPA on Vercel (`https://gramshiksha-academy.vercel.app`), Postgres on Neon,
+> uploads on Cloudinary. This runbook is both the record of how it was built
+> and the path to rebuild it. SMTP is the one piece still gated on account
+> verification (see step 1).
 
 ## Topology
 
@@ -40,7 +42,7 @@ Render, so CORS is only a factor if you point `VITE_API_URL` straight at the API
 | `DATABASE_URL` | **you fill it** (`sync: false`) | boot refused: would run on ephemeral SQLite |
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | **you fill them** | boot refused: uploads would die on redeploy |
 | `SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | **you fill them** | boots, but `/auth/reset-request` answers `503` (never silently swallows a request) |
-| `CORS_ORIGINS` | preset `["https://gramshiksha.vercel.app"]` | adjust if your frontend URL differs |
+| `CORS_ORIGINS` | preset `["https://gramshiksha-academy.vercel.app"]` | adjust if your frontend URL differs |
 | `SENTRY_DSN` | optional | error tracking disabled |
 | `SEED_DEMO` | leave unset | `auto` = off on Postgres → demo logins are **never** created |
 | `ENABLE_DOCS` | leave unset | off in production (`/docs` hidden) |
@@ -66,26 +68,41 @@ Verify: `GET https://<service>.onrender.com/ready` → `{"status":"ready"}`,
 ## 3. Create the first platform admin
 
 Demo accounts don't seed on Postgres, so a fresh instance has **nobody** who
-can approve teachers until you mint one. Render → service → **Shell**:
+can approve teachers until you mint one. Render's Shell is **paid-only on the
+Free plan**, so run the bootstrap locally against the production database:
 
 ```sh
-cd /app/backend && python -m app.bootstrap_admin admin@your-school.ac.in 'a-strong-password'
+cd backend && python -m app.bootstrap_admin admin@your-school.ac.in 'a-strong-password'
 ```
 
-Idempotent (re-running resets that account's password and re-promotes it).
+(uses the production `DATABASE_URL` from the secrets store; idempotent —
+re-running resets that account's password and re-promotes it).
 Never set `SEED_DEMO=true` on a public instance — it would create the demo
 logins with the passwords printed in the README.
 
-## 4. Frontend on Vercel
+## 4. Frontend on Vercel (CLI-only, deliberately **not** connected to GitHub)
 
-1. Vercel → **New Project** → import the repo → framework preset **Vite**,
-   **Root Directory: `frontend`** (monorepo — this is where `vercel.json` lives),
-   Node **22**, build `npm run build`, output `dist`.
-2. Leave `VITE_API_URL` empty: `frontend/vercel.json` rewrites `/api/*` to
+The project is linked to the repo owner's account by token, never by the GitHub
+integration — pushes to `main` deploy Render only, and that is intentional
+(the ownership split is documented in `LICENSE`).
+
+1. Project `gramshiksha` exists under the deploy account; the deploy token and
+   IDs live in the operator's secrets store (`VERCEL_TOKEN`, `VERCEL_ORG_ID`,
+   `VERCEL_PROJECT_ID`) — never in the repo.
+2. `VITE_API_URL` stays empty: `frontend/vercel.json` rewrites `/api/*` to
    `https://gramshiksha-backend.onrender.com/api/*`.
-3. Deploy → note the URL (e.g. `https://gramshiksha.vercel.app`). If it isn't
-   the origin listed in `CORS_ORIGINS`, update `render.yaml` (or the Render env
-   directly) and let the backend redeploy.
+3. Ship a frontend change:
+
+   ```sh
+   cd frontend
+   npx vercel deploy --prod --yes --token "$VERCEL_TOKEN"   # with VERCEL_ORG_ID/PROJECT_ID set
+   ```
+
+4. Production URL: `https://gramshiksha-academy.vercel.app` (the apex
+   `gramshiksha.vercel.app` belongs to another team, so the project carries
+   this alias instead). Deployment Protection is **Standard** (public).
+   If the origin ever changes, update `CORS_ORIGINS` in `render.yaml` and let
+   the backend redeploy.
 
 ## 5. Smoke test (the first real test of the environment)
 
@@ -104,9 +121,11 @@ logins with the passwords printed in the README.
 
 ## 6. Day-2 notes
 
-- **Push to `main` = deploy**: Render and Vercel both auto-deploy the connected
-  repo; migrations run at boot, so schema changes ship with the push. CI must be
-  green first (SQLite + Postgres + frontend jobs).
+- **Push to `main` = deploy for Render only**: the blueprint auto-deploys and
+  migrations run at boot, so schema changes ship with the push. CI must be
+  green first (SQLite + Postgres + frontend jobs). **Vercel does not
+  auto-deploy** — no Git integration by design (see step 4); ship frontend
+  changes with the CLI command above.
 - **Rotating `JWT_SECRET`** logs every user out (all tokens are signed with it).
 - **Rate limits are in-process**: they reset on restart and are per-instance —
   fine for a single free instance; move to a shared store before scaling out.
