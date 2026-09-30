@@ -13,8 +13,11 @@ from ..db import get_session
 from ..gamification import seed_badges
 from ..mailer import send_reset_email
 from ..models import PasswordResetCode, User
-from ..ratelimit import DEFAULT_LIMIT as RATE_LIMIT, DEFAULT_WINDOW_S as RATE_WINDOW_S
-from ..ratelimit import HITS as _RATE, check as _check_rate
+# NOT dead code: tests clear the limiter and read its config through this
+# module (auth_router._RATE / auth_router.RATE_LIMIT) — keep the aliases.
+from ..ratelimit import DEFAULT_LIMIT as RATE_LIMIT, DEFAULT_WINDOW_S as RATE_WINDOW_S  # noqa: F401
+from ..ratelimit import HITS as _RATE  # noqa: F401
+from ..ratelimit import check as _check_rate
 from ..security import create_access_token, get_current_user, hash_password, verify_password
 from pydantic import BaseModel, EmailStr, Field
 

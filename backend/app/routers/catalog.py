@@ -109,10 +109,10 @@ def get_course(course_id: int, session: Session = Depends(get_session)):
         chs.append({
             "id": ch.id, "order": ch.order, "title_en": ch.title_en,
             "title_hi": ch.title_hi, "title_mr": ch.title_mr,
-            "lessons": [{"id": l.id, "order": l.order, "type": l.type,
-                         "title_en": l.title_en, "title_hi": l.title_hi,
-                         "title_mr": l.title_mr, "duration_min": l.duration_min,
-                         "estimate_mb": l.estimate_mb} for l in lessons],
+            "lessons": [{"id": les.id, "order": les.order, "type": les.type,
+                         "title_en": les.title_en, "title_hi": les.title_hi,
+                         "title_mr": les.title_mr, "duration_min": les.duration_min,
+                         "estimate_mb": les.estimate_mb} for les in lessons],
         })
     out["chapters"] = chs
     return out

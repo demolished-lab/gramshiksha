@@ -252,16 +252,16 @@ def learning_path(lang: str = "en", user: User = Depends(require_student),
         for ch in chapters:
             lessons = session.exec(select(Lesson).where(
                 Lesson.chapter_id == ch.id).order_by(Lesson.order)).all()
-            for l in lessons:
+            for les in lessons:
                 prog = session.exec(select(Progress).where(
-                    Progress.user_id == user.id, Progress.lesson_id == l.id)).first()
+                    Progress.user_id == user.id, Progress.lesson_id == les.id)).first()
                 if not prog or not prog.completed:
                     continue_item = {
-                        "kind": "lesson", "lesson_id": l.id,
+                        "kind": "lesson", "lesson_id": les.id,
                         "label": f"{_pick(lang, course.title_en, course.title_hi, course.title_mr)} → "
                                  f"{_pick(lang, ch.title_en, ch.title_hi, ch.title_mr)} → "
-                                 f"{_pick(lang, l.title_en, l.title_hi, l.title_mr)}",
-                        "minutes": l.duration_min}
+                                 f"{_pick(lang, les.title_en, les.title_hi, les.title_mr)}",
+                        "minutes": les.duration_min}
                     break
             if continue_item:
                 break

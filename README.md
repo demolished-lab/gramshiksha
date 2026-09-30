@@ -60,20 +60,23 @@ cd frontend && npm install && npm run dev   # http://localhost:5174 (proxies /ap
 ## Tests
 
 ```bash
-# Backend — 86 tests: API behaviour, password reset, authorization limits,
+# Backend — 94 tests: API behaviour, password reset, authorization limits,
 # every registered endpoint, migrations and the production boot gates.
 # test_route_coverage_canary.py fails the build if a route is ever
 # registered without a test calling it, or if the bare and /api mounts
 # of a router drift apart.
 .venv/Scripts/python -m pytest -q
 
-# Frontend — 21 unit tests (request framing, session/offline storage,
-# approval workflow API actions)
+# Frontend — 28 unit tests (request framing, session/offline storage,
+# approval workflow API actions, growth helpers)
 cd frontend && npm test
 npm run build                       # typecheck + production build
+
+ruff check backend/app backend/tests   # lint (also a CI gate)
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of it on every push, including a
+CI (`.github/workflows/ci.yml`) runs all of it on every push — lint, both
+test suites, the frontend build — including a
 **Postgres 16** job: the SQLite job alone never exercises the Postgres
 dialect, and Postgres is what production actually runs on.
 

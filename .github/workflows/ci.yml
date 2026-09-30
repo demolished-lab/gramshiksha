@@ -23,6 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r backend/requirements.txt
+      - run: ruff check backend/app backend/tests
       - run: python -m pytest -q
         env:
           DATABASE_URL: sqlite:////tmp/ci.db

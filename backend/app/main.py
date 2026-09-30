@@ -144,7 +144,6 @@ async def lifespan(_app: FastAPI):
     if settings.sentry_dsn:
         try:
             import sentry_sdk
-            from sentry_sdk.integrations.fastapi import FastApiIntegration
             sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.sentry_env,
                             send_default_pii=False, traces_sample_rate=0.05)
             log.info("Sentry error tracking enabled (env=%s).", settings.sentry_env)

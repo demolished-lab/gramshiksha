@@ -31,9 +31,9 @@ from sqlmodel import Session, select
 
 from .config import settings
 from .gamification import seed_badges
-from .models import (BadgeDef, Board, Chapter, Course, DailyActivity, Doubt, DoubtReply,
+from .models import (Board, Chapter, Course, DailyActivity, Doubt, DoubtReply,
                      Enrollment, Lesson, Notification, Question, Quiz, QuizQuestion, School,
-                     Subject, Textbook, User, QuizAttempt, PracticeAttempt, TopicStats)
+                     Subject, Textbook, User, TopicStats)
 from .models import Material
 from .security import hash_password
 

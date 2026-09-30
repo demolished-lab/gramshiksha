@@ -7,7 +7,7 @@ from sqlalchemy import and_, or_, true
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import MATERIAL_STATUSES, MATERIAL_TYPES, Material, MaterialReport, User
+from ..models import MATERIAL_TYPES, Material, MaterialReport, User
 from ..ratelimit import rate_limit
 from ..security import get_current_user, has_role, require_any, require_roles
 from ..storage import delete_ref, download_target, save_upload

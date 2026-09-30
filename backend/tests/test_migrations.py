@@ -21,7 +21,6 @@ from alembic.script import ScriptDirectory
 from app import config as config_mod
 from app import db as dbmod
 from app.config import Settings
-from app.models import Board
 
 
 def _point_at(tmp_path, monkeypatch, name):

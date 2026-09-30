@@ -1,9 +1,9 @@
 """Gamification: XP, daily streaks, badges. Server-awarded, idempotent badges."""
-from datetime import date, datetime, timezone
+from datetime import date
 
 from sqlmodel import Session, select
 
-from .models import BadgeDef, DailyActivity, Lesson, Notification, User, UserBadge, utcnow
+from .models import BadgeDef, DailyActivity, Notification, User, UserBadge
 
 XP_RULES = {
     "lesson_complete": 10,

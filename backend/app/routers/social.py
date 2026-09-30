@@ -1,11 +1,11 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import (Bookmark, Doubt, DoubtReply, Lesson, Note, Notification, User, utcnow)
+from ..models import (Bookmark, Doubt, DoubtReply, Note, Notification, User)
 from ..ratelimit import rate_limit
 from ..security import get_current_user, has_role, require_roles
 

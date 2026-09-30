@@ -3,13 +3,11 @@ from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import (BadgeDef, Bookmark, Chapter, Course, DailyActivity, Doubt, Enrollment,
-                      Lesson, Material, Note, Notification, PracticeAttempt, Progress, Question,
-                      QuizAttempt, School, TopicStats, User, UserBadge, Certificate)
+from ..models import (BadgeDef, Course, DailyActivity, Doubt, Lesson, Material, Notification, Progress, Question,
+                      QuizAttempt, TopicStats, User, UserBadge, Certificate)
 from ..security import get_current_user, require_roles
 
 router = APIRouter(tags=["dashboards"])
@@ -312,9 +310,9 @@ def search(q: str = Query(..., min_length=2, max_length=100), class_grade: Optio
             if len(results["courses"]) >= limit:
                 break
     lq = select(Lesson).where(Lesson.published == True)  # noqa: E712
-    for l in session.exec(lq.limit(300)).all():
-        if q.lower() in (l.title_en + l.title_hi + l.body_en).lower():
-            results["lessons"].append({"id": l.id, "title_en": l.title_en, "title_hi": l.title_hi})
+    for les in session.exec(lq.limit(300)).all():
+        if q.lower() in (les.title_en + les.title_hi + les.body_en).lower():
+            results["lessons"].append({"id": les.id, "title_en": les.title_en, "title_hi": les.title_hi})
             if len(results["lessons"]) >= limit:
                 break
     mq = select(Material).where(Material.status == "approved")
