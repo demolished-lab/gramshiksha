@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { apiLogin, apiRegister } from './api';
 import { saveSession } from './auth';
+import { getReferral } from './growth';
 import { t } from './i18n';
 import type { Lang } from './types';
 
@@ -29,6 +30,7 @@ export default function AuthModal({ lang, onClose, onAuthed }: {
         await apiRegister({
           email, name, password, role, lang_pref: prefLang,
           class_grade: role === 'student' ? classGrade : null, board: role === 'student' ? board : null,
+          ref: getReferral(),
         });
         saveSession(await apiLogin(email, password));
       }

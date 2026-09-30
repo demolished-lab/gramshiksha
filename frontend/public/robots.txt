@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://gramshiksha-academy.vercel.app/sitemap.xml

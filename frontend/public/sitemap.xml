@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Static sitemap. The SPA is hash-routed (#/courses), so crawlers get one
+     entry per section; logged-in pages (dashboard, progress) are excluded.
+     Dynamic lesson/material URLs are discoverable via /api/feed.xml. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://gramshiksha-academy.vercel.app/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://gramshiksha-academy.vercel.app/#/courses</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://gramshiksha-academy.vercel.app/#/materials</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://gramshiksha-academy.vercel.app/#/textbooks</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://gramshiksha-academy.vercel.app/#/practice</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://gramshiksha-academy.vercel.app/#/doubts</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://gramshiksha-academy.vercel.app/#/downloads</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+</urlset>

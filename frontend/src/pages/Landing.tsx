@@ -1,5 +1,8 @@
 import { t } from '../i18n';
 import type { Lang } from '../types';
+import ShareButtons from '../components/ShareButtons';
+import SupportBar from '../components/SupportBar';
+import AdSlot from '../components/AdSlot';
 
 const FAQS: [string, string][] = [
   ['Is GramShiksha free?', 'Yes — 100% free for students, teachers and parents.'],
@@ -63,8 +66,14 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
         </details>
       ))}
 
+      <AdSlot />
+      <SupportBar />
+
       <footer className="site">
         {t('appName', lang)} · free & open, built for Bharat 🇮🇳
+        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+          <ShareButtons text="GramShiksha — free Class 1-12 lessons, quizzes & textbooks in English, हिंदी and मराठी" />
+        </div>
       </footer>
     </div>
   );

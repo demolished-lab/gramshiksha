@@ -43,6 +43,7 @@ Render, so CORS is only a factor if you point `VITE_API_URL` straight at the API
 | `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | **you fill them** | boot refused: uploads would die on redeploy |
 | `SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` | **you fill them** | boots, but `/auth/reset-request` answers `503` (never silently swallows a request) |
 | `CORS_ORIGINS` | preset `["https://gramshiksha-academy.vercel.app"]` | adjust if your frontend URL differs |
+| `ADSENSE_CLIENT` / `ADSENSE_SLOT`, `DONATE_UPI` / `DONATE_URL`, `AFFILIATE_LINKS`, `SPONSOR_TEXT` / `SPONSOR_URL`, `PREMIUM_URL` | **you fill them** as each stream unlocks (`sync: false`) | empty = that money slot is hidden, site runs identically |
 | `SENTRY_DSN` | optional | error tracking disabled |
 | `SEED_DEMO` | leave unset | `auto` = off on Postgres → demo logins are **never** created |
 | `ENABLE_DOCS` | leave unset | off in production (`/docs` hidden) |

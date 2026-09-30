@@ -172,3 +172,15 @@ export const apiApproveUser = (id: number) =>
 export const apiSuspendUser = (id: number) =>
   post<{ ok: boolean; id: number; role_status: RoleStatus }>(`/admin/users/${id}/suspend`);
 export const apiSearch = (q: string) => req<Record<string, { id: number; title_en?: string; title?: string; prompt_en?: string }[]>>(`/search?q=${encodeURIComponent(q)}`);
+
+// ---------- growth (referrals, money config) ----------
+export const apiGrowthConfig = () => req<{
+  site_url: string; referral_enabled: boolean;
+  ads: { client: string; slot: string } | null;
+  donate: { upi: string | null; url: string | null } | null;
+  affiliates: { name: string; url: string }[];
+  sponsor: { text: string; url: string } | null;
+  premium_url: string | null;
+}>('/growth/config');
+export const apiGrowthMe = () => req<{ referral_code: string; referrals: number }>('/growth/me');
+export const apiLeaderboard = () => req<{ name: string; referrals: number }[]>('/growth/leaderboard');

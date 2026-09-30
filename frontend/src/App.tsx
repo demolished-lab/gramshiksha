@@ -3,6 +3,7 @@ import { dataSaver, getLang, getUser, logout, setDataSaver, setLang, SessionUser
 import { t } from './i18n';
 import type { Lang } from './types';
 import Landing from './pages/Landing';
+import { captureReferral } from './growth';
 import StudentDashboard from './pages/StudentDashboard';
 import Courses from './pages/Courses';
 import CourseDetail from './pages/CourseDetail';
@@ -37,6 +38,7 @@ export default function App() {
   const [notifCount] = useState(0);
 
   useEffect(() => {
+    captureReferral();
     const onHash = () => setRoute(parseHash());
     window.addEventListener('hashchange', onHash);
     const on = () => setOnline(true);
