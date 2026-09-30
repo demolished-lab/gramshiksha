@@ -54,6 +54,9 @@ class User(SQLModel, table=True):
     streak_days: int = 0
     last_active_date: Optional[str] = Field(default=None)  # ISO date
     profile_pic: Optional[str] = None
+    # Referral loop: who invited this account (nullable FK to user.id).
+    # The public code is derived, "GS%06d" % id — no extra column needed.
+    referred_by: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     created_at: datetime = Field(default_factory=utcnow)
 
     courses_taught: list["Course"] = Relationship(back_populates="teacher")

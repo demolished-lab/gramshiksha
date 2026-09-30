@@ -55,3 +55,24 @@ services:
         value: "praveshedu29@gmail.com"
       - key: SENTRY_DSN
         sync: false
+      # --- Growth & monetization (all inbound-cash only, all free-tier) ----
+      # Every key defaults to empty/off in code and the frontend hides any
+      # slot whose key is unset — so leaving these blank changes nothing.
+      # Fill them in the dashboard as each one-time step in docs/GROWTH.md
+      # is done (AdSense approval, UPI id, affiliate JSON, payment link).
+      - key: ADSENSE_CLIENT
+        sync: false
+      - key: ADSENSE_SLOT
+        sync: false
+      - key: DONATE_UPI
+        sync: false
+      - key: DONATE_URL
+        sync: false
+      - key: AFFILIATE_LINKS
+        sync: false
+      - key: SPONSOR_TEXT
+        sync: false
+      - key: SPONSOR_URL
+        sync: false
+      - key: PREMIUM_URL
+        sync: false

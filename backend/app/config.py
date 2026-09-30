@@ -60,6 +60,31 @@ class Settings(BaseSettings):
     smtp_from: str = "no-reply@gramshiksha.in"
     smtp_use_tls: bool = True  # STARTTLS; false for implicit-TLS port 465
 
+    # --- Growth & monetization (all inbound-cash only, all free-tier) -----
+    # Every key defaults to empty/off: the app runs identically without them,
+    # and the frontend renders each money slot ONLY when its key is set — so
+    # there are never broken ad boxes or dead donate buttons. Fill them in
+    # Render (dashboard env) when each one-time account step in
+    # docs/GROWTH.md is done; nothing here can ever charge you.
+    site_url: str = "https://gramshiksha-academy.vercel.app"  # canonical URL
+    # Google AdSense (apply once, free): publisher ID + ad-unit slot.
+    adsense_client: str = ""  # ca-pub-XXXXXXXXXXXXXXXX
+    adsense_slot: str = ""    # numeric ad-unit id
+    # Donations: UPI id (e.g. name@upi) and/or a Ko-fi / BuyMeACoffee URL.
+    donate_upi: str = ""
+    donate_url: str = ""
+    # Affiliate links as JSON: [{"name": "...", "url": "https://..."}].
+    # Only https URLs with a host are ever served back.
+    affiliate_links: str = ""
+    # Sponsor slot: one line of text + link, sold/handled manually.
+    sponsor_text: str = ""
+    sponsor_url: str = ""
+    # Premium tier via a no-code payment link (e.g. Razorpay payment page).
+    premium_url: str = ""
+    # Referral virality loop. No monetary reward is attached (counts + a
+    # leaderboard only), so fake-account farming buys an attacker nothing.
+    referral_enabled: bool = True
+
     @property
     def is_production(self) -> bool:
         """APP_ENV=production forces production; otherwise a non-SQLite

@@ -34,6 +34,9 @@ class RegisterIn(BaseModel):
     class_grade: Optional[int] = Field(default=None, ge=1, le=12)
     board: Optional[str] = None
     school_name: str = ""
+    # Invite code ("GS000123") captured from ?ref= by the frontend. Unknown
+    # or garbage codes are ignored — registration never fails over them.
+    ref: str = ""
 
 
 class ProfileUpdate(BaseModel):
@@ -97,6 +100,11 @@ def register(payload: RegisterIn, request: Request, session: Session = Depends(g
         board=payload.board,
         school_id=school_id,
     )
+    if settings.referral_enabled and payload.ref.strip():
+        from .growth import resolve_referrer
+        referrer = resolve_referrer(payload.ref, session)
+        if referrer is not None:
+            user.referred_by = referrer.id
     session.add(user)
     session.commit()
     session.refresh(user)
