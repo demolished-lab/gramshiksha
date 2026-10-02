@@ -1,0 +1,38 @@
+# Always-warm backend: Render's free instance spins down after ~15 minutes of
+# inactivity and cold starts cost visitors 50+ seconds. This workflow pings the
+# live API every 10 minutes — any HTTP traffic resets Render's idle timer, so
+# the container never sleeps and no visitor ever eats a cold start.
+#
+# Repo is public => Actions minutes are unlimited and this costs $0 forever.
+# Schedule only runs on the default branch (main); GitHub pauses schedules
+# after 60 days without repo activity, so the regular commit loop doubles as
+# the schedule's heartbeat.
+name: keep-warm
+
+on:
+  schedule:
+    - cron: '3/10 * * * *'   # every 10 min at :03, :13, :23... (under Render's 15 min idle cutoff)
+  workflow_dispatch:          # manual kick while testing
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake backend (readiness + real endpoint + database-backed call)
+        run: |
+          base="https://gramshiksha-backend.onrender.com"
+          # /ready warms the process; growth config exercises config + routing;
+          # feed.xml parses the DB-backed RSS — one of each keeps the whole
+          # path (proxy → app → Postgres) hot, not just the socket.
+          for path in /ready /api/growth/config /api/feed.xml; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 120 "$base$path" || echo 000)
+            echo "$path -> $code"
+            # A cold instance answers after the wake-up delay; anything but a
+            # connection failure is a successful wake. Fail loudly on 000 so
+            # the workflow badge shows if the backend ever truly dies.
+            if [ "$code" = "000" ]; then exit 1; fi
+          done
