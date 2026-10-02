@@ -134,6 +134,15 @@ integration — pushes to `main` deploy Render only, and that is intentional
   provider's PITR/snapshots.
 - **Logs ↔ errors**: every response carries `X-Request-ID`; quote it when a 500
   returns `{"detail": "Internal server error", "request_id": "…"}`.
-- **Free-tier realities**: Render sleeps on inactivity (first request after
-  idle is slow) and the disk is ephemeral — both are already accounted for
-  (Cloudinary, boot guards).
+- **Free-tier realities**: Render's free instance sleeps on inactivity (a cold
+  start costs the first visitor 50+ s) and the disk is ephemeral — both are
+  accounted for. `.github/workflows/keep-warm.yml` pings `/ready`,
+  `/api/growth/config` and `/api/feed.xml` every 10 minutes (under Render's
+  ~15 min idle cutoff), so the container never sleeps and no visitor eats a
+  cold start. It costs $0 — the repo is public, so Actions minutes are
+  unlimited — and it keeps the whole path hot (proxy → app → Postgres), not
+  just the socket. `workflow_dispatch` is on it for a manual kick; the
+  Actions tab's `keep-warm` badge is the health signal (if it ever goes red
+  the backend is truly unreachable, since the job fails on connection error).
+  Caveats: GitHub runs schedules only from `main` and pauses them after ~60
+  days without repo activity, so keep committing (the loop already does).
