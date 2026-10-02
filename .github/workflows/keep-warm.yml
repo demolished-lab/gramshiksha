@@ -11,7 +11,10 @@ name: keep-warm
 
 on:
   schedule:
-    - cron: '*/10 * * * *'   # every 10 min (:00, :10, :20…) — under Render's ~15 min idle cutoff
+    # Every 10 min (:00, :10, :20…) — under Render's ~15 min idle cutoff.
+    # Simple */N form on purpose: GitHub re-indexes this cron whenever the
+    # file changes, which also re-registers a schedule that went quiet.
+    - cron: '*/10 * * * *'
   workflow_dispatch:          # manual kick while testing
 
 permissions:
