@@ -208,6 +208,69 @@ class TestApplyCatalog:
             rows = s.exec(select(Textbook).where(Textbook.board == BOARD)).all()
             assert len(rows) == 1
 
+    def test_rerun_heals_labels_and_part_polluted_subjects(self):
+        """Self-heal on the re-run anchor.
+
+        Step 0 is the only branch a plain re-run ever reaches an existing row
+        with, so anything the matcher learned since that row was written has
+        to be fixed there: rows filled before labels existed keep an empty
+        part_label, and a part number left inside the subject splits one book
+        into two filter chips ("…भाग-१" vs "…भाग-२")."""
+        entry = _entry("सायन्स ऍन्ड टेक्नॉलॉजी भाग-१ मराठी",
+                       subject="सायन्स ऍन्ड टेक्नॉलॉजी भाग-१", pdf_id="751")
+        with Session(engine) as s:
+            s.add(Textbook(board=BOARD, class_grade=3,
+                           subject_name="सायन्स ऍन्ड टेक्नॉलॉजी भाग-१", lang="mr",
+                           title="सायन्स ऍन्ड टेक्नॉलॉजी भाग-१ मराठी",
+                           deep_url=entry["pdf"], cover_url=entry["cover"],
+                           source_url="https://example.org",
+                           publisher="Official"))
+            s.commit()
+
+        self._run([entry])   # heal
+        self._run([entry])   # and stay healed on the next run
+
+        with Session(engine) as s:
+            row = s.exec(select(Textbook).where(
+                Textbook.board == BOARD,
+                Textbook.deep_url == entry["pdf"])).one()
+            assert row.part_label == "Part 1"
+            assert row.subject_name == "सायन्स ऍन्ड टेक्नॉलॉजी"
+            assert row.title == "सायन्स ऍन्ड टेक्नॉलॉजी भाग-१ मराठी"  # title untouched
+
+    def test_stored_title_collapses_portal_whitespace(self):
+        """The portal puts literal newlines inside titles; a catalog row must
+        be one line or every chip/list it lands in renders as two."""
+        self._run([_entry("नवीन\nविषय पुस्तक", subject="नवीन विषय",
+                          pdf_id="761")])
+        with Session(engine) as s:
+            row = s.exec(select(Textbook).where(
+                Textbook.board == BOARD,
+                Textbook.deep_url.endswith("/761.pdf"))).one()
+            assert row.title == "नवीन विषय पुस्तक"
+
+    def test_rerun_cleans_whitespace_already_stored_in_a_title(self):
+        """Rows created before the whitespace rule exist too — step 0 fixes
+        their spacing without ever changing the wording."""
+        entry = _entry("पोर्टल\n  शीर्षक मराठी", subject="पोर्टल शीर्षक",
+                       pdf_id="771")
+        with Session(engine) as s:
+            s.add(Textbook(board=BOARD, class_grade=3,
+                           subject_name="पोर्टल शीर्षक", lang="mr",
+                           title="पोर्टल\n  शीर्षक मराठी",
+                           deep_url=entry["pdf"], cover_url=entry["cover"],
+                           source_url="https://example.org",
+                           publisher="Official"))
+            s.commit()
+
+        self._run([entry])
+
+        with Session(engine) as s:
+            row = s.exec(select(Textbook).where(
+                Textbook.board == BOARD,
+                Textbook.deep_url == entry["pdf"])).one()
+            assert row.title == "पोर्टल शीर्षक मराठी"
+
 
 class TestTextbookOut:
     def _row(self, **kw) -> Textbook:

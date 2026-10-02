@@ -5,8 +5,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  apiAdminUsers, apiApproveUser, apiCourses, apiLogin, apiMaterialUrl, apiMe,
-  apiSuspendUser, apiUploadMaterial,
+  apiAdminUsers, apiApproveUser, apiCourses, apiLocate, apiLogin, apiMaterialUrl, apiMe,
+  apiMyRequests, apiSuspendUser, apiTextbookOpenUrl, apiUploadMaterial,
 } from '../api';
 
 const jsonResponse = (status: number, body: unknown) =>
@@ -158,5 +158,41 @@ describe('admin approval actions', () => {
     const tok = await apiLogin('newteacher@x.in', 'Secret@123');
 
     expect(tok.role_status).toBe('pending');
+  });
+});
+
+describe('reader + Smart Book Finder', () => {
+  it('builds the reader URL and its Save / publisher modes', () => {
+    // Same-origin by default: the backend streams the official PDF itself,
+    // so the viewer frame never navigates the student to a portal.
+    expect(apiTextbookOpenUrl(12)).toBe('/api/textbooks/12/open');
+    expect(apiTextbookOpenUrl(12, 'dl')).toBe('/api/textbooks/12/open?dl=1');
+    expect(apiTextbookOpenUrl(12, 'ext')).toBe('/api/textbooks/12/open?ext=1');
+  });
+
+  it('posts the finder query with its class context and reads the ETA back', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, {
+      result: 'queued', position: 2, pending: true, eta_seconds: 10, elapsed_s: 1.2 }));
+
+    const res = await apiLocate('गणित 8', 8, 'Maharashtra SSC', 'mr');
+
+    const { url, init, headers } = lastCall();
+    expect(url).toBe('/api/library/locate');
+    expect(init.method).toBe('POST');
+    expect(headers['Content-Type']).toBe('application/json');
+    expect(JSON.parse(String(init.body))).toEqual({
+      q: 'गणित 8', class_grade: 8, board: 'Maharashtra SSC', lang: 'mr' });
+    expect(res.result).toBe('queued');
+    expect(res.position).toBe(2);
+  });
+
+  it('reads my own queue when signed in', async () => {
+    localStorage.setItem('gs_token', 'tok-1');
+    fetchMock.mockResolvedValue(jsonResponse(200, []));
+
+    await apiMyRequests();
+
+    expect(lastCall().url).toBe('/api/library/requests');
+    expect(lastCall().headers.Authorization).toBe('Bearer tok-1');
   });
 });

@@ -1,5 +1,5 @@
 import type {
-  Availability, Doubt, LessonDetail, Lang, LoginResponse, Material, Me, Notification,
+  Availability, BookAsk, Doubt, LessonDetail, Lang, LocateResult, LoginResponse, Material, Me, Notification,
   ParentChild, ProgressSummary, Question, QuizDetail, QuizResult, RoleStatus,
   TeacherStudent, Textbook, TodayPlan, WeakTopics, Course,
 } from './types';
@@ -113,7 +113,22 @@ export const apiTextbooks = (classGrade: number, board: string, lang?: string | 
 };
 export const apiTextbookPortals = () =>
   req<{ name: string; url: string; boards: string[]; langs: string[] }[]>('/textbooks/portals');
-export const apiTextbookOpenUrl = (id: number) => `${BASE}/textbooks/${id}/open`;
+/** Where a book opens. The backend fetches the official PDF itself and
+ * streams it back from our own origin — the viewer is a plain same-origin
+ * iframe, so nothing visibly redirects to eBalbharati. `mode` switches the
+ * response only: 'dl' saves the file, 'ext' is the opt-in "open on the
+ * publisher's site" escape hatch. */
+export const apiTextbookOpenUrl = (id: number, mode?: 'dl' | 'ext') =>
+  `${BASE}/textbooks/${id}/open${mode ? `?${mode}=1` : ''}`;
+
+// ---------- library (Smart Book Finder) ----------
+/** Tier order server-side: this class's library (ms) → live official portal
+ * scan (seconds) → request queue. Never throws the book away: a miss comes
+ * back as `result: 'queued'` with a queue position, not an error. */
+export const apiLocate = (q: string, classGrade: number | null, board: string, lang: string) =>
+  post<LocateResult>('/library/locate', { q, class_grade: classGrade, board, lang });
+/** The signed-in learner's own asks (401 when anonymous — callers ignore). */
+export const apiMyRequests = () => req<BookAsk[]>('/library/requests');
 
 // ---------- learn ----------
 export const apiLesson = (id: number, lang: Lang) => req<LessonDetail>(`/learn/lessons/${id}?lang=${lang}`);

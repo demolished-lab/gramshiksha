@@ -131,8 +131,9 @@ def crawl(client: httpx.Client, year: str, ftype: str, class_code: str,
 
 # Trailing medium words pollute subject matching (e.g. "समाजशास्त्र मराठी"
 # would false-match Marathi). Strip before guessing — verified live 2026.
+# उर्दू (with nukta) is the spelling titles actually use; उर्दु alone missed it.
 MEDIUM_WORDS = ["मराठी", "हिंदी", "हिन्दी", "इंग्रजी", "इंग्लिश", "english",
-                "उर्दु", "गुजराती", "कन्नड", "सिंधी", "तेलुगु", "तामिळ", "बंगाली"]
+                "उर्दु", "उर्दू", "गुजराती", "कन्नड", "सिंधी", "तेलुगु", "तामिळ", "बंगाली"]
 
 
 def strip_medium(title: str) -> str:
@@ -180,6 +181,12 @@ CLASS_PREFIX_RE = re.compile(
 # "(संपूर्ण)", "...:(संयुक्त)" — edition markers; stripped for SUBJECT identity
 # (so editions collapse onto one row) but kept in the displayed title.
 PAREN_RE = re.compile(r"\s*[:(]\s*[^)]*\)\s*$|\s*\([^)]*\)\s*$")
+# A part number inside a fallback subject ("सायन्स ऍन्ड टेक्नॉलॉजी भाग-१") must
+# go: the part lives in part_label, and every part of a book shares one
+# subject — otherwise each part becomes its own filter chip.
+PART_IN_SUBJECT_RE = re.compile(
+    r"\s*[-–—.]*\s*(?:भाग|part)\s*[-–—.]*\s*[0-9०-९]+\s*", re.IGNORECASE)
+WS_RE = re.compile(r"\s+")  # portal titles carry literal \r\n inside them
 
 
 def parse_part(title: str) -> str:
@@ -200,13 +207,16 @@ def part_key(entry: dict) -> int:
 def subject_fallback(title: str, lang: str = "") -> str:
     """When no keyword matches, the cleaned title IS the subject.
 
-    Class prefix, trailing medium and edition markers go — so the three
-    editions of "संस्कृतम् आमोद" collapse onto one subject while genuinely
+    Class prefix, trailing medium, edition markers and part numbers go —
+    so the three editions of "संस्कृतम् आमोद" collapse onto one subject,
+    "सायन्स ऍन्ड टेक्नॉलॉजी भाग-१/२" share one chip, and genuinely
     different books ("पाली प्रवेशिका" vs "पाली प्रवेश") stay distinct."""
     t = strip_medium(title or "")
     t = PAREN_RE.sub("", t)
     t = CLASS_PREFIX_RE.sub("", t)
-    return t.strip(" -–—:·").strip()
+    t = PART_IN_SUBJECT_RE.sub(" ", t)
+    t = strip_medium(t)  # medium that only followed the part ("...भाग-१ मराठी")
+    return WS_RE.sub(" ", t).strip(" -–—:·").strip()
 
 
 def norm_title(title: str) -> str:
@@ -340,75 +350,128 @@ def apply_catalog(catalog: list[dict], board: str) -> int:
 
     ensure_textbook_columns()
 
-    def _q(s, use_board, c, part, title=None):
-        q = select(Textbook).where(
-            Textbook.board == use_board, Textbook.class_grade == c["grade"],
-            Textbook.subject_name == c["subject_guess"],
-            Textbook.lang == c["lang"],
-            Textbook.part_label == part)
-        if title is not None:
-            q = q.where(Textbook.title == title)
-        return s.exec(q).first()
-
     applied = created = skipped = 0
     entries = sorted((c for c in catalog if c.get("subject_guess")
                       and c.get("grade") and c.get("lang")), key=part_key)
     with Session(engine) as s:
+        # One prefetch, match in memory: production round-trips to Neon cost
+        # ~0.4s each, so per-entry SELECTs turned this into a 20-minute run.
+        by_key: dict[tuple, list[Textbook]] = {}
+        by_pdf: dict[str, Textbook] = {}
+
+        def _index(row: Textbook) -> None:
+            bucket = by_key.setdefault(
+                (row.board, row.class_grade, row.subject_name,
+                 row.lang, row.part_label), [])
+            if not any(r is row for r in bucket):
+                bucket.append(row)
+            if row.deep_url:
+                by_pdf[row.deep_url] = row
+
+        for r in s.exec(select(Textbook)).all():
+            _index(r)
+
+        def _new(c: dict, use_board: str, part: str, title: str) -> Textbook:
+            return Textbook(
+                board=use_board, class_grade=c["grade"],
+                subject_name=c["subject_guess"], lang=c["lang"],
+                part_label=part, title=title, source_url=PORTAL,
+                publisher="Official", deep_url=c["pdf"], cover_url=c["cover"],
+                last_ok=True, last_checked=None)
+
+        def _heal(row: Textbook, part: str) -> None:
+            """Self-heal a row this entry is already anchored to.
+
+            Step 0 is the only branch a re-run ever reaches an existing row
+            with, so anything the matcher learned since that row was written
+            has to be fixed here — otherwise rows filled by an older apply
+            keep an empty `part_label` and a part number inside their subject
+            forever ("सायन्स ऍन्ड टेक्नॉलॉजी भाग-१/२" = two filter chips for
+            one book), and portal titles keep their literal \r\n. Every heal
+            is whitespace-or-matcher-driven and idempotent: a row only ever
+            moves towards what a fresh ingest would have written, and the
+            title's *wording* is never touched (fills keep the seed title).
+            """
+            old_key = (row.board, row.class_grade, row.subject_name,
+                       row.lang, row.part_label)
+            changed = False
+            if part and not row.part_label:
+                row.part_label = part
+                changed = True
+            if PART_IN_SUBJECT_RE.search(row.subject_name or ""):
+                fresh = guess_subject(row.title, row.lang)
+                if fresh and fresh != row.subject_name:
+                    row.subject_name = fresh
+                    changed = True
+            clean = WS_RE.sub(" ", row.title or "").strip()
+            if clean != (row.title or ""):
+                row.title = clean
+                changed = True
+            if not changed:
+                return  # leave the index alone
+            s.add(row)
+            by_key[old_key] = [r for r in by_key.get(old_key, [])
+                               if r is not row]
+            _index(row)
+
         for c in entries:
             part = parse_part(c.get("title", ""))
             use_board = ("Maharashtra HSC" if c["grade"] >= 11
                          else "Maharashtra SSC") if board == "auto" else board
-            title = c["title"].strip()
+            # Portal titles carry literal \r\n between words; store one line.
+            title = WS_RE.sub(" ", c["title"]).strip()
+            nt = norm_title(title)
+            key = (use_board, c["grade"], c["subject_guess"], c["lang"], part)
 
             # 0. already ingested anywhere? PDF ids are stable — this is the
             #    re-run anchor (seed rows keep their own title after a fill).
-            if s.exec(select(Textbook).where(
-                    Textbook.deep_url == c["pdf"])).first() is not None:
+            if c["pdf"] in by_pdf:
+                _heal(by_pdf[c["pdf"]], part)
                 skipped += 1
                 continue
 
             # 1. exact title+part — dedupe within one catalog run
-            row = _q(s, use_board, c, part, title)
-            if row is not None:
-                if row.deep_url:
-                    skipped += 1
-                    continue
-            else:
-                # 2. any row for this exact part
-                row = _q(s, use_board, c, part)
-                # 3. partless stand-in: first part claims the seeded row
-                if row is None and part:
-                    row = _q(s, use_board, c, "")
+            row = next((r for r in by_key.get(key, [])
+                        if norm_title(r.title) == nt), None)
+            # 2. any row for this exact part
+            if row is None:
+                bucket = by_key.get(key)
+                row = bucket[0] if bucket else None
+            # 3. partless stand-in: first part claims the seeded row
+            if row is None and part:
+                bucket = by_key.get(key[:4] + ("",))
+                row = bucket[0] if bucket else None
+
             if row is not None and not row.deep_url:
+                old_key = (row.board, row.class_grade, row.subject_name,
+                           row.lang, row.part_label)
                 row.deep_url = c["pdf"]
                 row.cover_url = c["cover"]
                 row.last_ok = True
                 row.last_checked = None  # recheck endpoint verifies on demand
                 if part and not row.part_label:
                     row.part_label = part
+                    # the row changed buckets (partless -> "Part N")
+                    by_key[old_key] = [r for r in by_key.get(old_key, [])
+                                       if r is not row]
                 s.add(row)
+                _index(row)
                 applied += 1
                 continue
             if row is not None:
                 # occupied: keep only genuinely different books, skip re-lists
-                if norm_title(row.title) == norm_title(title):
+                if norm_title(row.title) == nt:
                     skipped += 1
                     continue
-                s.add(Textbook(
-                    board=use_board, class_grade=c["grade"],
-                    subject_name=c["subject_guess"], lang=c["lang"], part_label=part,
-                    title=title, source_url=PORTAL, publisher="Official",
-                    deep_url=c["pdf"], cover_url=c["cover"],
-                    last_ok=True, last_checked=None))
+                new = _new(c, use_board, part, title)
+                s.add(new)
+                _index(new)
                 created += 1
                 continue
             # 4. nothing matched — dynamic cataloging of an official book
-            s.add(Textbook(
-                board=use_board, class_grade=c["grade"],
-                subject_name=c["subject_guess"], lang=c["lang"], part_label=part,
-                title=title, source_url=PORTAL, publisher="Official",
-                deep_url=c["pdf"], cover_url=c["cover"],
-                last_ok=True, last_checked=None))
+            new = _new(c, use_board, part, title)
+            s.add(new)
+            _index(new)
             created += 1
         s.commit()
     print(f"applied {applied}, created {created}, skipped {skipped} (board={board})")

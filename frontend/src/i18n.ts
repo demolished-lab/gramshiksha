@@ -104,6 +104,23 @@ const S: Record<string, [string, string, string]> = {
     'हे खाते प्लॅटफॉर्म प्रशासकाने निलंबित केले आहे. लॉगिन, अभ्यासक्रम आणि अपलोड जपण्यात आलेआहेत, पण पुन्हा मंजुरीपर्यंत शिक्षक व प्रशासक साधने बंद राहतील. हे चुकीचे वाटत असल्यास तुमच्या शाळा किंवा प्लॅटफॉर्म प्रशासकाशी संपर्क साधा.'],
   checkStatus: ['Check approval status', 'स्वीकृति की स्थिति जाँचें', 'मंजुरीची स्थिती तपासा'],
   checking: ['Checking…', 'जाँच हो रही है…', 'तपासत आहे…'],
+  read: ['Read', 'पढ़ें', 'वाचा'],
+  saveFile: ['Save file', 'फ़ाइल सहेजें', 'फाइल जतन करा'],
+  close: ['Close', 'बंद करें', 'बंद करा'],
+  opening: ['Opening your book…', 'आपकी पुस्तक खुल रही है…', 'तुमची पुस्तक उघडत आहे…'],
+  finder: ['Find any book', 'कोई भी पुस्तक खोजें', 'कोणतीही पुस्तक शोधा'],
+  finderHint: ['Type a title: this class filters as you type, and anything missing is looked up on the official government portal right here — you are never sent to another site.',
+    'शीर्षक लिखें: इस कक्षा की सूची टाइप करते ही छन जाती है, और जो नहीं मिलता उसे हम यहीं सरकारी पोर्टल पर खोजते हैं — आप किसी और साइट पर नहीं भेजे जाते।',
+    'शीर्षक लिहा: या इयत्तेची यादी टाइप करताच छाटली जाते, आणि जे सापडत नाही ते आम्ही इथेच सरकारी पोर्टलवर शोधतो — तुम्हाला दुसऱ्या साइटवर पाठवले जात नाही.'],
+  searchBooks: ['Search book title…', 'पुस्तक का नाम खोजें…', 'पुस्तकाचे नाव शोधा…'],
+  notHere: ['Not here — search the official catalogue', 'यहाँ नहीं — आधिकारिक सूची में खोजें', 'इथे नाही — अधिकृत यादीत शोधा'],
+  scanning: ['Checking the official portal…', 'सरकारी पोर्टल की जाँच हो रही है…', 'सरकारी पोर्टल तपासत आहे…'],
+  foundOfficial: ['Found on the official portal', 'सरकारी पोर्टल पर मिल गया', 'सरकारी पोर्टलवर सापडले'],
+  queuedMsg: ['Not in the official catalogue yet — you are #{n} in line. We rescan every 10 minutes and let you know the moment it arrives.',
+    'अभी आधिकारिक सूची में नहीं है — आप कतार में #{n} हैं। हम हर 10 मिनट में फिर खोजते हैं और आते ही सूचित करेंगे।',
+    'अद्याप अधिकृत यादीत नाही — तुम्ही कतारीत #{n} आहात. आम्ही दर 10 मिनिटांनी पुन्हा शोधतो आणि आल्यावर लगेच कळवतो.'],
+  myRequests: ['Your book requests', 'आपकी पुस्तक अनुरोध', 'तुमची पुस्तक विनंत्या'],
+  bookArrived: ['The book you asked for is here', 'आपने जो पुस्तक माँगी थी वह आ गई', 'तुम्ही मागितलेली पुस्तक आली'],
 };
 
 export function t(key: keyof typeof S | string, lang: Lang): string {

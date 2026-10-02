@@ -5,6 +5,7 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..models import Board, Chapter, Course, Enrollment, Lesson, Subject, Textbook, User
+from ..ratelimit import rate_limit
 from ..security import get_current_user, require_student
 
 router = APIRouter(tags=["catalog"])
@@ -323,20 +324,109 @@ def check_url(url: str, timeout_s: float = 15.0) -> bool:
         return False
 
 
-@router.get("/textbooks/{textbook_id}/open")
-def open_textbook(textbook_id: int, session: Session = Depends(get_session)):
-    """Wrapper redirect: counts the click, then 302s to the verified deep PDF
-    link when healthy, otherwise falls back to the portal page.
+# The proxy never buffers an unbounded body: 60 MB is far above any real
+# textbook (eB books are 3–15 MB) and keeps one bad URL from eating the
+# free-tier instance's 512 MB.
+PDF_MAX_BYTES = 60 * 1024 * 1024
+PDF_TIMEOUT_S = 30.0
+UA = "GramShiksha-book/1.0"
 
-    Note: this does NOT spare the official portal any load — the PDF bytes
-    still download from ePathshala/eBalbharati. It buys click analytics and
-    central dead-link management (see /admin/textbooks/recheck)."""
-    from fastapi.responses import RedirectResponse
+
+def _fetch_pdf(url: str) -> Optional[bytes]:
+    """Download an official PDF server-side, or None when it won't serve one.
+
+    This is the whole point of /open: the student's browser stays on our
+    origin and only ever sees the final result (the PDF), never a visible
+    bounce through books.ebalbharati.in / epathshala.nic.in. `url` comes from
+    a verified `deep_url` row — never from request input — so this cannot be
+    pointed at anything but a link our own crawler HEAD-checked.
+    """
+    import httpx
+    try:
+        with httpx.stream("GET", url, timeout=PDF_TIMEOUT_S, follow_redirects=True,
+                          headers={"User-Agent": UA}) as r:
+            if r.status_code != 200:
+                return None
+            ctype = r.headers.get("content-type", "").lower()
+            # Portals disagree about the header; a .pdf path counts as intent.
+            if "pdf" not in ctype and "octet-stream" not in ctype \
+                    and not url.split("?")[0].lower().endswith(".pdf"):
+                return None
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in r.iter_bytes():
+                total += len(chunk)
+                if total > PDF_MAX_BYTES:
+                    return None  # refuse rather than melt the instance
+                chunks.append(chunk)
+        data = b"".join(chunks)
+        # PDF spec: %PDF lives in the first 1024 bytes. A 200 HTML error page
+        # (soft-404) must never be handed to a viewer as a "PDF".
+        return data if b"%PDF" in data[:1024] else None
+    except Exception:
+        return None
+
+
+def _pdf_disposition(title: str, inline: bool) -> str:
+    """RFC 6266 filename from a Devanagari title: an ASCII fallback for old
+    clients plus `filename*=UTF-8''…` so the saved file keeps its real name."""
+    from urllib.parse import quote
+    import re as _re
+    safe = _re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", title or "").strip() or "textbook"
+    ascii_name = safe.encode("ascii", "ignore").decode() or "textbook"
+    kind = "inline" if inline else "attachment"
+    return (f'{kind}; filename="{ascii_name[:80]}.pdf"; '
+            f"filename*=UTF-8''{quote(safe[:80])}.pdf")
+
+
+@router.get("/textbooks/{textbook_id}/open",
+            dependencies=[Depends(rate_limit("catalog.open", 30, 60.0))])
+def open_textbook(textbook_id: int,
+                  dl: int = Query(0),      # 1 → attachment (Save, not view)
+                  ext: int = Query(0),      # 1 → legacy 302 to the publisher
+                  session: Session = Depends(get_session)):
+    """Open a book **without leaving the site**.
+
+    Default: fetch the verified deep PDF on the server and stream it back
+    from our own origin, so the browser renders the final document in the
+    in-app viewer instead of visibly redirecting to a government portal.
+    Query switches keep every older behaviour reachable:
+      `?dl=1`  same bytes, `Content-Disposition: attachment` (Save file)
+      `?ext=1` explicit "open on the publisher's site" → the old 302
+    Fallbacks still redirect (inside the iframe, so nothing visibly moves):
+    no healthy deep link → the portal page; a proxy failure → the deep URL.
+
+    The click is counted either way — analytics and dead-link management
+    (see /admin/textbooks/recheck) survive the proxy."""
+    from fastapi.responses import RedirectResponse, Response
     t = session.get(Textbook, textbook_id)
     if not t:
         raise HTTPException(404, "Textbook not found")
     t.clicks += 1
     session.add(t)
     session.commit()
-    target = t.deep_url if (t.deep_url and t.last_ok) else t.source_url
-    return RedirectResponse(target, status_code=302)
+    deep = t.deep_url if (t.deep_url and t.last_ok) else None
+    if not deep:
+        # Nothing to proxy: source_url is the portal *page*, not a PDF.
+        return RedirectResponse(t.source_url, status_code=302)
+    if ext:
+        return RedirectResponse(deep, status_code=302)
+    data = _fetch_pdf(deep)
+    if data is None:
+        # Publisher down/slow/changed its mind — fall through to the source,
+        # still inside this frame. Rare by construction (deep links are
+        # re-verified), but a broken button helps nobody.
+        return RedirectResponse(deep, status_code=302)
+    return Response(
+        content=data, media_type="application/pdf",
+        headers={
+            "Content-Disposition": _pdf_disposition(t.title, inline=not dl),
+            # private: student traffic must not be parked in a shared cache.
+            "Cache-Control": "private, max-age=300",
+            "X-Content-Type-Options": "nosniff",
+            # The in-app viewer frames this from our own origin (/api is a
+            # Vercel same-origin rewrite). The global DENY would blank that
+            # frame, so relax it — to same-origin only, never to anybody.
+            "X-Frame-Options": "SAMEORIGIN",
+            "Content-Security-Policy": "frame-ancestors 'self'",
+        })

@@ -123,7 +123,12 @@ Textbook rows link to official portals only (never re-hosted — NCERT
 explicitly prohibits redistribution). Each row may also carry a verified
 `deep_url` (direct PDF) + `cover_url`, filled only by the crawler below —
 never hand-written. Students open books via `GET /textbooks/{id}/open`,
-which counts the click and 302s to the deep PDF when healthy, else the portal.
+which counts the click and **streams the PDF through our own origin**: the
+server fetches the official file and returns `200 application/pdf`, so the
+in-app reader renders it and the browser never visibly bounces to
+books.ebalbharati.in / epathshala. Switches: `?dl=1` saves the file
+(attachment), `?ext=1` opts into the old 302 to the publisher, and a missing
+or failed deep link still falls back to the portal page (inside the frame).
 
 ```bash
 # Crawl the official eBalbharati library (polite, 1.5s between requests)
@@ -137,8 +142,8 @@ python backend/scripts/crawl_ebalbharati.py --input catalog.json --audit --board
 
 Link health: `POST /admin/textbooks/recheck?limit=50` (platform admin)
 HEAD-checks deep URLs; dead ones auto-fall-back in `/open`.
-Status: eBalbharati mapped (707-entry crawl re-run 2026-10-03; 133 Textbook
-rows carry cover_url + deep PDF across Maharashtra SSC/HSC in
+Status: eBalbharati mapped (707-entry crawl re-run 2026-10-03; 603 of 1023
+Textbook rows carry cover_url + deep PDF across Maharashtra SSC/HSC in
 Marathi/Hindi/English/Urdu — all HEAD-verified by the recheck pass, 0 dead).
 CBSE/NCERT: use `backend/scripts/crawl_ncert.py`
 the same way (crawl → `--apply`); it only stores URLs verified live as PDFs

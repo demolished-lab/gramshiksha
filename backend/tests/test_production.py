@@ -118,7 +118,9 @@ def test_open_redirect_counts_click_and_falls_back(client):
     assert client.get("/api/textbooks/999999/open").status_code == 404
 
 
-def test_open_prefers_healthy_deep_link(client):
+def test_open_serves_the_pdf_from_our_own_origin(client, monkeypatch):
+    """The book must appear *here* — no visible bounce to ebalbharati."""
+    import app.routers.catalog as catalog
     from app.db import engine
     from app.models import Textbook
     from sqlmodel import Session, select
@@ -129,10 +131,63 @@ def test_open_prefers_healthy_deep_link(client):
         t.last_ok = True
         s.add(t)
         s.commit()
+
+    seen: list[str] = []
+    monkeypatch.setattr(catalog, "_fetch_pdf",
+                        lambda url: seen.append(url) or b"%PDF-1.7\nfake\n%%EOF")
+    try:
+        r = client.get(f"/textbooks/{tid}/open", follow_redirects=False)
+        assert r.status_code == 200                      # not a 302
+        assert "location" not in r.headers               # nothing to follow
+        assert r.headers["content-type"].startswith("application/pdf")
+        assert r.content.startswith(b"%PDF")
+        assert seen == ["https://ebooks.ebalbharati.in/pdfs/101050001.pdf"]
+        assert r.headers["cache-control"].startswith("private")
+        # framed by the in-app viewer (same origin), never by another site
+        assert r.headers["x-frame-options"] == "SAMEORIGIN"
+        assert "frame-ancestors 'self'" in r.headers["content-security-policy"]
+        # view mode is inline with a real (Devanagari-safe) filename
+        disp = r.headers["content-disposition"]
+        assert disp.startswith("inline; ")
+        assert "filename*=UTF-8''" in disp
+
+        # Save = the same bytes with an attachment disposition
+        d = client.get(f"/textbooks/{tid}/open", params={"dl": 1})
+        assert d.status_code == 200 and d.content == r.content
+        assert d.headers["content-disposition"].startswith("attachment; ")
+
+        # opt-in "open on the publisher's site" keeps the legacy 302
+        e = client.get(f"/textbooks/{tid}/open", params={"ext": 1},
+                       follow_redirects=False)
+        assert e.status_code == 302
+        assert e.headers["location"] == "https://ebooks.ebalbharati.in/pdfs/101050001.pdf"
+    finally:
+        with Session(engine) as s:
+            t = s.get(Textbook, tid)
+            t.deep_url = ""
+            t.last_ok = True
+            s.add(t)
+            s.commit()
+
+
+def test_open_degrades_to_redirect_when_the_proxy_fails(client, monkeypatch):
+    """A dead/slow/HTML-200 source must still open the book, in-frame."""
+    import app.routers.catalog as catalog
+    from app.db import engine
+    from app.models import Textbook
+    from sqlmodel import Session, select
+    with Session(engine) as s:
+        t = s.exec(select(Textbook).limit(1)).one()
+        tid = t.id
+        t.deep_url = "https://ebooks.ebalbharati.in/pdfs/101050009.pdf"
+        t.last_ok = True
+        s.add(t)
+        s.commit()
+    monkeypatch.setattr(catalog, "_fetch_pdf", lambda url: None)
     try:
         r = client.get(f"/textbooks/{tid}/open", follow_redirects=False)
         assert r.status_code == 302
-        assert r.headers["location"] == "https://ebooks.ebalbharati.in/pdfs/101050001.pdf"
+        assert r.headers["location"] == "https://ebooks.ebalbharati.in/pdfs/101050009.pdf"
     finally:
         with Session(engine) as s:
             t = s.get(Textbook, tid)

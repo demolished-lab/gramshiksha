@@ -1,14 +1,26 @@
 import { useEffect, useState } from 'react';
-import { apiAvailability, apiSubjects, apiTextbookOpenUrl, apiTextbookPortals, apiTextbooks } from '../api';
+import { apiAvailability, apiLocate, apiMyRequests, apiSubjects, apiTextbookOpenUrl, apiTextbookPortals, apiTextbooks } from '../api';
 import { booksIn, subjectLabel } from '../catalog';
 import { pick, t } from '../i18n';
 import { takeTextbookPref } from '../prefs';
-import type { Availability, Lang, Subject, Textbook } from '../types';
+import type { Availability, BookAsk, Lang, Subject, Textbook } from '../types';
 
 const BOARDS = ['Maharashtra SSC', 'Maharashtra HSC', 'CBSE'];
 const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
 
 interface Portal { name: string; url: string; boards: string[]; langs: string[] }
+
+/** Smart Book Finder's local state. Only `scanning` ever waits on the
+ * network: local filtering is instant, and everything else is a final
+ * result the panel can render — found (read it now) or queued (you have a
+ * position). The countdown is the honest ETA a scan of this scope takes,
+ * not a spinner that never resolves. */
+type Finder =
+  | { kind: 'idle' }
+  | { kind: 'scanning'; left: number }
+  | { kind: 'found'; books: Textbook[]; official: boolean }
+  | { kind: 'queued'; position: number }
+  | { kind: 'error'; message: string };
 
 /**
  * Every option in the two content filters (medium, subject) is derived from
@@ -28,7 +40,24 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   const [portals, setPortals] = useState<Portal[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Smart Book Finder + in-app viewer
+  const [query, setQuery] = useState('');
+  const [reload, setReload] = useState(0);
+  const [finder, setFinder] = useState<Finder>({ kind: 'idle' });
+  const [asks, setAsks] = useState<BookAsk[]>([]);
+  const [viewer, setViewer] = useState<Textbook | null>(null);
+  const [frameReady, setFrameReady] = useState(false);
+
+  const signedIn = !!user;
+
   useEffect(() => { apiTextbookPortals().then(setPortals).catch(() => setPortals([])); }, []);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    // My earlier asks, so a queued book is still visible after a reload.
+    // Anonymous visitors simply skip this — a 401 here is not an error state.
+    apiMyRequests().then(setAsks).catch(() => setAsks([]));
+  }, [signedIn]);
 
   useEffect(() => {
     let live = true;
@@ -66,7 +95,46 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     apiTextbooks(grade, board, bookLang || null, subject || null)
       .then(setBooks).catch(() => setBooks([]))
       .finally(() => setLoading(false));
-  }, [grade, board, bookLang, subject]);
+  }, [grade, board, bookLang, subject, reload]);
+
+  // ETA countdown while the official portal is being scanned server-side.
+  useEffect(() => {
+    if (finder.kind !== 'scanning') return;
+    const id = window.setInterval(() => {
+      setFinder((f) => (f.kind === 'scanning' ? { ...f, left: Math.max(0, f.left - 1) } : f));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [finder.kind]);
+
+  // Escape closes the viewer — same contract as the login dialog.
+  useEffect(() => {
+    if (!viewer) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setViewer(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [viewer]);
+
+  /** Tier 1+2+3 happens server-side; the UI only ever shows a final state.
+   * A miss is not an error — it is a queue position with an honest ETA. */
+  const runFinder = async () => {
+    const term = query.trim();
+    if (term.length < 2 || finder.kind === 'scanning') return;
+    setFinder({ kind: 'scanning', left: bookLang ? 10 : 30 });
+    try {
+      const res = await apiLocate(term, grade, board, bookLang);
+      if (res.result === 'found') {
+        setFinder({ kind: 'found', books: res.books ?? [], official: res.source === 'official' });
+        if (res.source === 'official') setReload((n) => n + 1); // it is now in this class
+      } else {
+        setFinder({ kind: 'queued', position: res.position ?? 1 });
+        if (signedIn) apiMyRequests().then(setAsks).catch(() => {});
+      }
+    } catch (e) {
+      setFinder({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
+    }
+  };
+
+  const openBook = (b: Textbook) => { setFrameReady(false); setViewer(b); };
 
   const relevantPortals = portals.filter((p) => p.boards.includes(board));
   const totalBooks = avail ? avail.mediums.reduce((n, m) => n + m.books, 0) : null;
@@ -85,10 +153,86 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     ? avail.mediums.map((m) => ({ value: m.lang, label: `${m.label} (${m.books})` }))
     : [{ value: 'en', label: 'English' }, { value: 'hi', label: 'हिंदी' }, { value: 'mr', label: 'मराठी' }];
 
+  // Instant local filter: typing never waits on the network.
+  const term = query.trim().toLowerCase();
+  const shown = term
+    ? books.filter((b) => b.title.toLowerCase().includes(term)
+      || b.subject_name.toLowerCase().includes(term))
+    : books;
+
   return (
     <div>
       <h1>📕 {t('textbooks', lang)}</h1>
-      <p className="muted">Official textbooks only — we link to the government portals; files are not re-hosted here.</p>
+      <p className="muted">Official textbooks only — files stream straight from the government portals into the reader below, never re-hosted here.</p>
+
+      {/* Smart Book Finder: instant filter of this class, then (on request)
+          a background scan of the official portal with an honest ETA. */}
+      <div className="card">
+        <strong>{t('finder', lang)}</strong>
+        <div className="finder">
+          <input value={query} onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void runFinder(); }}
+            placeholder={t('searchBooks', lang)} aria-label={t('searchBooks', lang)} />
+          <button type="button" className="btn" onClick={() => void runFinder()}
+            disabled={query.trim().length < 2 || finder.kind === 'scanning'}>
+            🔎 {t('finder', lang)}
+          </button>
+        </div>
+        <p className="muted" style={{ margin: '8px 0 0' }}>{t('finderHint', lang)}</p>
+
+        {finder.kind === 'scanning' && (
+          <div className="finder-panel">
+            <div className="finder-step">⏳ {t('scanning', lang)}</div>
+            <div className="muted">
+              {finder.left > 0 ? `~${finder.left}s` : t('checking', lang)}
+            </div>
+          </div>
+        )}
+        {finder.kind === 'found' && (
+          <div className="finder-panel">
+            <div className="finder-step">
+              ✅ {finder.official ? t('foundOfficial', lang) : `${finder.books.length} ${t('books', lang)}`}
+            </div>
+            {finder.books.map((b) => (
+              <div className="finder-row" key={b.id}>
+                <span title={b.title}>
+                  {b.title}
+                  <span className="muted"> · {b.subject_name} · {b.lang.toUpperCase()}{b.part_label ? ` · ${b.part_label}` : ''}</span>
+                </span>
+                {b.has_deep_link ? (
+                  <button type="button" className="btn small accent" onClick={() => openBook(b)}>
+                    📖 {t('read', lang)}
+                  </button>
+                ) : (
+                  <a className="btn small ghost" href={b.source_url} target="_blank" rel="noreferrer">
+                    🔗 {b.publisher} source
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {finder.kind === 'queued' && (
+          <div className="finder-panel">
+            <div className="finder-step">
+              🕒 {t('queuedMsg', lang).replace('{n}', String(finder.position))}
+            </div>
+            {!!asks.length && (
+              <div>
+                <div className="muted">{t('myRequests', lang)}</div>
+                {asks.map((a) => (
+                  <div className="finder-row" key={a.id}>
+                    <span title={a.query}>{a.query}</span>
+                    <span className={`badge ${a.status === 'found' ? 'green' : 'gray'}`}>{a.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {finder.kind === 'error' && <p className="error">{finder.message}</p>}
+      </div>
+
       <div className="card" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
         <select value={grade} onChange={(e) => { setGrade(Number(e.target.value)); setSubject(''); }} aria-label="Class">
           {GRADES.map((g) => <option key={g} value={g}>Class {g}</option>)}
@@ -109,26 +253,32 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
 
       {!loading && (
         <p className="muted" style={{ margin: '8px 2px' }}>
-          {books.length} book{books.length === 1 ? '' : 's'} · Class {grade} · {board}
+          {shown.length} book{shown.length === 1 ? '' : 's'} · Class {grade} · {board}
           {subject ? ` · ${subject}` : ''}
+          {term ? ` · “${query.trim()}”` : ''}
         </p>
       )}
 
       {loading && <div><div className="skeleton" /><div className="skeleton" /></div>}
-      {!loading && !books.length && (
+      {!loading && !shown.length && (
         <div className="empty-state">
           <div className="icon">📕</div>
-          <p>No textbooks match this filter — try “All subjects/languages”, or open the official portal below.</p>
+          <p>
+            {term
+              ? `${t('notHere', lang)} — “${query.trim()}”`
+              : 'No textbooks match this filter — try “All subjects/languages”, or open the official portal below.'}
+          </p>
         </div>
       )}
       {/* e-book library grid: full-height cover tiles with a direct action
           per book (mirrors the official portals' layout). Deep-linked books
-          get the orange Download button; the rest fall back to their source
-          portal, visibly de-emphasised. Board/class context lives in the
-          filter bar above — cards stay scannable. */}
-      {!!books.length && (
+          open in the in-app reader — the PDF is proxied by our backend, so
+          the browser never visibly leaves this site. The rest fall back to
+          their source portal, visibly de-emphasised. Board/class context
+          lives in the filter bar above — cards stay scannable. */}
+      {!!shown.length && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14, marginTop: 10 }}>
-          {books.map((b) => (
+          {shown.map((b) => (
             <div className="card" key={b.id} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {b.cover_url ? (
                 <img src={b.cover_url} alt="" loading="lazy" decoding="async" className="cover-shimmer"
@@ -146,11 +296,18 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
               <div className="muted" style={{ fontSize: '.74rem' }}>
                 {b.subject_name} · {b.lang.toUpperCase()}{b.part_label ? ` · ${b.part_label}` : ''}{b.has_deep_link ? ' · 📄' : ''}
               </div>
-              <a className={`btn small ${b.has_deep_link ? 'accent' : 'ghost'}`}
-                href={apiTextbookOpenUrl(b.id)} target="_blank" rel="noreferrer"
-                style={{ justifyContent: 'center', width: '100%' }}>
-                {b.has_deep_link ? `⬇ ${t('download', lang)}` : `🔗 ${b.publisher} source`}
-              </a>
+              {b.has_deep_link ? (
+                <button type="button" className="btn small accent"
+                  onClick={() => openBook(b)}
+                  style={{ justifyContent: 'center', width: '100%' }}>
+                  📖 {t('read', lang)}
+                </button>
+              ) : (
+                <a className="btn small ghost" href={b.source_url} target="_blank" rel="noreferrer"
+                  style={{ justifyContent: 'center', width: '100%' }}>
+                  🔗 {b.publisher} source
+                </a>
+              )}
             </div>
           ))}
         </div>
@@ -162,11 +319,39 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
         <div className="card" key={p.name}>
           <strong>{p.name}</strong>
           <div style={{ margin: '4px 0' }}>
-            {p.boards.map((b) => <span key={b} className="badge">{b}</span>)}
+            {p.boards.map((b) => <span className="badge" key={b}>{b}</span>)}
           </div>
           <a className="btn small" href={p.url} target="_blank" rel="noreferrer">🔗 {p.url}</a>
         </div>
       ))}
+
+      {/* In-app reader: a same-origin frame of /textbooks/{id}/open, which
+          the backend answers with the PDF itself (200, application/pdf). */}
+      {viewer && (
+        <div className="viewer" role="dialog" aria-modal="true" aria-label={viewer.title}
+          onClick={() => setViewer(null)}>
+          <div className="viewer-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="viewer-bar">
+              <strong title={viewer.title}>{viewer.title}</strong>
+              <a className="btn small" href={apiTextbookOpenUrl(viewer.id, 'dl')}>
+                ⬇ {t('saveFile', lang)}
+              </a>
+              <button type="button" className="btn small ghost" onClick={() => setViewer(null)}>
+                ✕ {t('close', lang)}
+              </button>
+            </div>
+            {!frameReady && (
+              <div className="viewer-loading">
+                <div className="skeleton" />
+                <p className="muted">{t('opening', lang)}</p>
+              </div>
+            )}
+            <iframe className="viewer-frame" title={viewer.title}
+              src={apiTextbookOpenUrl(viewer.id)}
+              onLoad={() => setFrameReady(true)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

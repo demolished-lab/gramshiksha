@@ -292,6 +292,28 @@ class Textbook(SQLModel, table=True):
     last_ok: bool = True  # False → /open falls back to source_url
 
 
+class BookRequest(SQLModel, table=True):
+    """A book a learner searched for that the library didn't have yet.
+
+    POST /library/locate records the ask when its live scan comes back empty;
+    keep-warm's POST /library/scan-requests re-scans pendings (library first,
+    then the official portal) and on ingestion flips status to 'found' +
+    notifies — so "cataloged but not here" resolves itself with zero manual
+    work. Only official portals are scanned; a book nobody's portal carries
+    stays pending honestly instead of pointing at a pirated PDF.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    query: str = Field(index=True)  # normalized search text (dedupes identical asks)
+    class_grade: Optional[int] = Field(default=None, index=True)
+    board: str = "Maharashtra SSC"
+    lang: str = ""
+    status: str = "pending"  # pending | found | declined
+    textbook_id: Optional[int] = Field(default=None, foreign_key="textbook.id")
+    created_at: datetime = Field(default_factory=utcnow)
+    found_at: Optional[datetime] = None
+
+
 class Doubt(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     student_id: int = Field(foreign_key="user.id", index=True)

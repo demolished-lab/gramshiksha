@@ -216,3 +216,26 @@ main.container { max-width: 1160px; padding: 24px 20px 96px; } .btn { box-shadow
 @media (max-width: 760px) { .hero-home { padding: 64px 20px 48px; border-radius: 0 0 24px 24px; } .hero-home h1 { font-size: 2.8rem; } .hero-proof { gap: 7px 14px; } .grade-grid { grid-template-columns: repeat(4, 1fr); } .feature-grid, .learning-path { grid-template-columns: 1fr; } .learning-path { padding: 26px 20px; gap: 25px; } .section-heading { align-items: start; flex-direction: column; gap: 4px; } .navbar { justify-content: flex-start; } }
 @media (max-width: 480px) { main.container { padding-left: 14px; padding-right: 14px; } .appbar { padding-left: 12px; padding-right: 12px; gap: 5px; } .appbar .btn.small { padding-left: 8px; padding-right: 8px; } .appbar .brand { font-size: .95rem; } .brand-mark { width: 29px; height: 29px; } .grade-grid { gap: 8px; } .grade-card { min-height: 96px; padding: 11px; border-radius: 12px; font-size: .78rem; } .grade-number { font-size: 1.55rem; } .hero-actions .btn { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+
+/* --- in-app PDF viewer -------------------------------------------------
+   The backend proxies the official PDF and serves it from our own origin,
+   so this frame renders the document directly: no visible bounce through
+   books.ebalbharati.in / epathshala. Same-origin only (frame-ancestors
+   'self' server-side), and it never caches the body client-side. */
+.viewer { position: fixed; inset: 0; z-index: 70; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 14px; }
+.viewer-sheet { position: relative; display: flex; flex-direction: column; width: min(980px, 100%); height: min(92vh, 1100px); background: #fff; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-lg); }
+.viewer-bar { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-bottom: 1px solid var(--border); background: #fff; }
+.viewer-bar strong { flex: 1; min-width: 0; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewer-frame { flex: 1; width: 100%; border: 0; background: #fff; }
+.viewer-loading { position: absolute; inset: 46px 0 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #fff; padding: 20px; text-align: center; }
+.viewer-loading .skeleton { width: min(520px, 80%); }
+
+/* --- Smart Book Finder -------------------------------------------------
+   Local filtering is instant (no request); only "Find this book" talks to
+   the server, and the panel shows its honest ETA, then the final state. */
+.finder { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.finder input { flex: 1 1 220px; min-width: 0; }
+.finder-panel { margin: 10px 0 4px; padding: 13px 14px; border: 1px dashed #c8d8f5; border-radius: 12px; background: #f7faff; display: grid; gap: 9px; }
+.finder-step { display: flex; align-items: center; gap: 9px; font-size: .9rem; color: var(--ink); }
+.finder-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; font-size: .88rem; padding: 7px 9px; border: 1px solid var(--border); border-radius: 9px; background: #fff; }
+.finder-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

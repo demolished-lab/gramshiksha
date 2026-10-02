@@ -12,7 +12,7 @@ import os
 
 from .config import settings
 from .db import create_db_and_tables, engine
-from .routers import auth, catalog, dashboards, growth, learn, materials, progress, social
+from .routers import auth, catalog, dashboards, growth, learn, library, materials, progress, social
 from .routers import lessons
 from .seed import seed
 
@@ -204,6 +204,7 @@ app.include_router(materials.router)
 app.include_router(social.router)
 app.include_router(dashboards.router)
 app.include_router(growth.router)
+app.include_router(library.router)
 # Authored separately from learn.py/dashboards.py; both were long written
 # against the current models but never mounted (see each module's docstring).
 app.include_router(lessons.router)
@@ -217,6 +218,7 @@ app.include_router(materials.router, prefix="/api")
 app.include_router(social.router, prefix="/api")
 app.include_router(dashboards.router, prefix="/api")
 app.include_router(growth.router, prefix="/api")
+app.include_router(library.router, prefix="/api")
 app.include_router(lessons.router, prefix="/api")
 app.include_router(progress.router, prefix="/api")
 

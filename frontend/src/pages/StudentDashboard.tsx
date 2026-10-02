@@ -47,7 +47,14 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
       {notifs.length > 0 && (
         <div className="card" style={{ borderLeft: '4px solid var(--accent)' }}>
           <strong>🔔 {notifs.length}</strong>
-          <div className="muted">{String(notifs[0].payload.title ?? notifs[0].payload.badge ?? notifs[0].type)}</div>
+          {/* A queued book that the keep-warm scan just found carries the book
+              title only — name the event, otherwise the learner reads a bare
+              subject name with no idea why it is here. */}
+          <div className="muted">
+            {notifs[0].type === 'book_available'
+              ? `📖 ${t('bookArrived', lang)} — ${String(notifs[0].payload.title ?? '')}`
+              : String(notifs[0].payload.title ?? notifs[0].payload.badge ?? notifs[0].type)}
+          </div>
         </div>
       )}
 

@@ -27,7 +27,11 @@ self.addEventListener('activate', (e) => {
 });
 
 const putIfOk = (request, res) => {
-  if (res.ok) {
+  // A textbook PDF can be 15 MB — caching it would eat the storage quota of
+  // the shared, low-end phones this app targets, and `private` responses are
+  // deliberately not ours to keep. Everything else caches as before.
+  const type = res.headers.get('content-type') || '';
+  if (res.ok && !type.includes('pdf')) {
     const copy = res.clone();
     caches.open(CACHE).then((c) => c.put(request, copy));
   }

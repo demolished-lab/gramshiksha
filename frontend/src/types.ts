@@ -210,6 +210,31 @@ export interface Textbook {
   clicks: number;
 }
 
+/** POST /library/locate — Smart Book Finder's one honest answer.
+ * `eta_seconds`/`elapsed_s` are both reported so the UI can show what a scan
+ * *should* take and what it actually took, never an optimistic fake. */
+export interface LocateResult {
+  result: 'found' | 'queued';
+  source?: 'library' | 'official';
+  books?: Textbook[];
+  scanned_langs?: string[];
+  position?: number;
+  pending?: boolean;
+  eta_seconds: number;
+  elapsed_s: number;
+}
+
+/** GET /library/requests — one queued ask and where it stands. */
+export interface BookAsk {
+  id: number;
+  query: string;
+  class_grade: number | null;
+  status: 'pending' | 'found' | 'declined';
+  textbook_id: number | null;
+  created_at: string;
+  found_at: string | null;
+}
+
 export interface Doubt {
   id: number;
   text: string;

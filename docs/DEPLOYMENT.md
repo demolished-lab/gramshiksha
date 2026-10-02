@@ -178,7 +178,15 @@ integration — pushes to `main` deploy Render only, and that is intentional
   `forks-last-dispatch.txt`, advances only on HTTP 204; failures retry every
   10 min and appear in `keep-warm.log`). Daily cadence beats the original
   weekly one, so the commercial-rights fork watch is at least as tight as
-  designed. **Every loop audit must verify:** task registered
+  designed. The same script's Job 3 POSTs `/api/library/scan-requests` on
+  the same 10-minute cadence: it re-scans Smart Book Finder's pending asks
+  (library first, official government portal second) and notifies the
+  requester when the book lands, so "not cataloged yet" resolves itself with
+  no manual step. The endpoint holds its own 120 s module cooldown, so
+  back-to-back runs can never become a crawl cannon — `keep-warm.log` shows
+  one `scan 200` per run (a 200 that answered `{"skipped":true}` inside the
+  cooldown is healthy too). **Every loop audit must verify:** task registered
   (`schtasks /Query /TN "GramShiksha Keep Warm"`), `keep-warm.log` advancing
-  with `200` lines, and marker no older than ~48 h — an older marker plus
-  `forks-dispatch` failure lines in the log means the credential or API broke.
+  with `200` and `scan 200` lines, and marker no older than ~48 h — an older
+  marker plus `forks-dispatch` failure lines in the log means the credential
+  or API broke.
