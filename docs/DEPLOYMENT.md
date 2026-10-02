@@ -166,3 +166,9 @@ integration — pushes to `main` deploy Render only, and that is intentional
   silent too, file a GitHub Support ticket with the evidence pack (repo,
   default branch, missed UTC ticks, empty `event=schedule` filter): support
   re-syncs the scheduler server-side.
+  **Interim (active 2026-10-02):** `%USERPROFILE%\.gramshiksha\keep-warm.ps1`
+  runs from Windows Task Scheduler ("GramShiksha Keep Warm", every 10 min
+  while this machine is on) and logs timestamp + HTTP code to
+  `keep-warm.log` — verified waking a cold instance (200 after ~50 s).
+  Independent of GitHub entirely; remove with `schtasks /Delete /TN
+  "GramShiksha Keep Warm" /F` once the cloud schedule is proven.
