@@ -11,7 +11,7 @@ name: keep-warm
 
 on:
   schedule:
-    - cron: '3/10 * * * *'   # every 10 min at :03, :13, :23... (under Render's 15 min idle cutoff)
+    - cron: '*/10 * * * *'   # every 10 min (:00, :10, :20…) — under Render's ~15 min idle cutoff
   workflow_dispatch:          # manual kick while testing
 
 permissions:

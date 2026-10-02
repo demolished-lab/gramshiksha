@@ -4,10 +4,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from ..db import get_session
-from ..models import Board, Course, Enrollment, Subject, Textbook, User
+from ..models import Board, Chapter, Course, Enrollment, Lesson, Subject, Textbook, User
 from ..security import get_current_user, require_student
 
 router = APIRouter(tags=["catalog"])
+
+# Medium label per language code — shown on explore chips so a book's
+# language reads as a real medium name (Marathi-medium, Urdu-medium, …).
+MEDIUM_LABELS = {
+    "en": "English", "hi": "हिंदी", "mr": "मराठी", "ur": "اردو",
+    "gu": "ગુજરાતી", "ta": "தமிழ்", "te": "తెలుగు", "kn": "ಕನ್ನಡ",
+    "ml": "മലയാളം", "bn": "বাংলা", "od": "ଓଡ଼ିଆ", "pa": "ਪੰਜਾਬੀ",
+    "as": "অসমীয়া", "ne": "नेपाली",
+}
 
 
 @router.get("/meta/boards")
@@ -25,6 +34,88 @@ def list_subjects(class_grade: int = Query(..., ge=1, le=12), board: str = Query
         Subject.class_grade == class_grade, Subject.board == board)).all()
     return [{"id": s.id, "name_en": s.name_en, "name_hi": s.name_hi, "name_mr": s.name_mr}
             for s in rows]
+
+
+@router.get("/catalog/availability")
+def catalog_availability(
+    board: str = Query(...),
+    class_grade: int = Query(..., ge=1, le=12),
+    session: Session = Depends(get_session),
+):
+    """Everything that actually exists for one (board, class) in one call.
+
+    The UI renders medium chips, subject cards and every filter option from
+    this response instead of fixed lists, so an offered combination can never
+    be an empty result page: not every class publishes every medium's book in
+    every subject, and this endpoint is where the app stops pretending.
+    """
+    books = session.exec(select(Textbook).where(
+        Textbook.board == board, Textbook.class_grade == class_grade)).all()
+    courses = session.exec(select(Course).where(
+        Course.board == board, Course.class_grade == class_grade,
+        Course.published == True)).all()  # noqa: E712
+
+    subject_rows = session.exec(select(Subject).where(
+        Subject.class_grade == class_grade, Subject.board == board)).all()
+    tr_by_name = {s.name_en: s for s in subject_rows}
+
+    subjects: dict[str, dict] = {}
+    for b in books:
+        row = subjects.setdefault(b.subject_name, {
+            "name": b.subject_name, "name_hi": None, "name_mr": None,
+            "subject_id": None, "books_by_lang": {}, "courses": 0,
+            "lessons": 0, "course_ids": []})
+        row["books_by_lang"][b.lang] = row["books_by_lang"].get(b.lang, 0) + 1
+        tr = tr_by_name.get(b.subject_name)
+        if tr:
+            row["name_hi"], row["name_mr"] = tr.name_hi, tr.name_mr
+            row["subject_id"] = tr.id
+
+    # Courses carry a subject_id; resolve name + count chapters/lessons so a
+    # subject card can honestly say "12 lessons" or show nothing at all.
+    course_ids = [c.id for c in courses if c.id is not None]
+    lesson_by_course: dict[int, int] = {}
+    if course_ids:
+        chapters = session.exec(select(Chapter).where(
+            Chapter.course_id.in_(course_ids))).all()
+        chapter_ids = [c.id for c in chapters if c.id is not None]
+        if chapter_ids:
+            lessons = session.exec(select(Lesson).where(
+                Lesson.chapter_id.in_(chapter_ids),
+                Lesson.published == True)).all()  # noqa: E712
+            chapter_course = {c.id: c.course_id for c in chapters}
+            for les in lessons:
+                cid = chapter_course.get(les.chapter_id)
+                if cid is not None:
+                    lesson_by_course[cid] = lesson_by_course.get(cid, 0) + 1
+    for c in courses:
+        subj = session.get(Subject, c.subject_id)
+        if not subj:
+            continue
+        row = subjects.setdefault(subj.name_en, {
+            "name": subj.name_en, "name_hi": subj.name_hi, "name_mr": subj.name_mr,
+            "subject_id": subj.id, "books_by_lang": {}, "courses": 0,
+            "lessons": 0, "course_ids": []})
+        row["subject_id"] = row["subject_id"] or subj.id
+        row["courses"] += 1
+        row["lessons"] += lesson_by_course.get(c.id, 0)
+        row["course_ids"].append(c.id)
+
+    lang_books: dict[str, int] = {}
+    lang_subjects: dict[str, set] = {}
+    for b in books:
+        lang_books[b.lang] = lang_books.get(b.lang, 0) + 1
+        lang_subjects.setdefault(b.lang, set()).add(b.subject_name)
+    mediums = [{"lang": code, "label": MEDIUM_LABELS.get(code, code.upper()),
+                "books": lang_books[code], "subjects": len(lang_subjects[code])}
+               for code in sorted(lang_books)]
+
+    return {
+        "board": board,
+        "class_grade": class_grade,
+        "mediums": mediums,
+        "subjects": sorted(subjects.values(), key=lambda s: s["name"]),
+    }
 
 
 @router.get("/courses")

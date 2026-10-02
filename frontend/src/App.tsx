@@ -17,6 +17,7 @@ import ProgressPage from './pages/ProgressPage';
 import TeacherDashboard from './pages/TeacherDashboard';
 import ParentDashboard from './pages/ParentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import Explore from './pages/Explore';
 import TeacherLogin from './pages/TeacherLogin';
 import StudentLogin from './pages/StudentLogin';
 import AuthModal from './AuthModal';
@@ -77,7 +78,7 @@ export default function App() {
 
   const navItems: [string, string][] = [
     ['home', t('home', lang)],
-    ['courses', t('courses', lang)],
+    ['explore', t('explore', lang)],
     ['materials', t('materials', lang)],
     ['textbooks', t('textbooks', lang)],
     ['practice', t('practice', lang)],
@@ -86,7 +87,7 @@ export default function App() {
   ];
   const tabs: [string, string, string][] = [
     ['home', '🏠', t('home', lang)],
-    ['courses', '📚', t('courses', lang)],
+    ['explore', '📚', t('explore', lang)],
     ['practice', '✏️', t('practice', lang)],
     ['progress', '📈', t('progress', lang)],
     ['doubts', '❓', t('doubts', lang)],
@@ -112,6 +113,9 @@ export default function App() {
           : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
       break;
     case 'dashboard': page = <StudentDashboard lang={lang} go={go} />; break;
+    case 'explore':
+      page = <Explore lang={lang} go={go} routeGrade={route.id} user={user} />;
+      break;
     case 'courses': page = <Courses lang={lang} go={go} />; break;
     case 'course': page = <CourseDetail lang={lang} go={go} courseId={route.id!} />; break;
     case 'lesson': page = <LessonPage lang={lang} go={go} lessonId={route.id!} />; break;

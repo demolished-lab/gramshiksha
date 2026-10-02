@@ -17,6 +17,36 @@ export interface LoginResponse {
   streak_days: number;
 }
 
+/** One medium (instruction language) that actually has books for a
+ * (board, class) — rendered as an explore chip. */
+export interface AvailabilityMedium {
+  lang: string;
+  label: string;
+  books: number;
+  subjects: number;
+}
+
+/** A subject that actually has rows — books in some medium and/or lessons.
+ * `name_hi`/`name_mr` are null when no translation row exists for this
+ * (board, class); `subject_id` likewise (book-only subject, no Subject row). */
+export interface AvailabilitySubject {
+  name: string;
+  name_hi: string | null;
+  name_mr: string | null;
+  subject_id: number | null;
+  books_by_lang: Record<string, number>;
+  courses: number;
+  lessons: number;
+  course_ids: number[];
+}
+
+export interface Availability {
+  board: string;
+  class_grade: number;
+  mediums: AvailabilityMedium[];
+  subjects: AvailabilitySubject[];
+}
+
 export interface Me {
   id: number;
   email: string;

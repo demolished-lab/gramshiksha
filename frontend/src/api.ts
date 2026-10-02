@@ -1,7 +1,7 @@
 import type {
-  Doubt, LessonDetail, Lang, LoginResponse, Material, Me, Notification, ParentChild,
-  ProgressSummary, Question, QuizDetail, QuizResult, RoleStatus, TeacherStudent,
-  Textbook, TodayPlan, WeakTopics, Course,
+  Availability, Doubt, LessonDetail, Lang, LoginResponse, Material, Me, Notification,
+  ParentChild, ProgressSummary, Question, QuizDetail, QuizResult, RoleStatus,
+  TeacherStudent, Textbook, TodayPlan, WeakTopics, Course,
 } from './types';
 
 const BASE = `${(import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL ?? ''}/api`;
@@ -85,6 +85,11 @@ export const apiBoards = () => req<{ id: number; name: string }[]>('/meta/boards
 export const apiSubjects = (classGrade: number, board: string) =>
   req<{ id: number; name_en: string; name_hi: string; name_mr: string }[]>(
     `/meta/subjects?class_grade=${classGrade}&board=${encodeURIComponent(board)}`);
+/** What actually exists for (board, class): mediums, subjects, book and
+ * lesson counts. Every filter in the app is rendered from this. */
+export const apiAvailability = (board: string, classGrade: number) =>
+  req<Availability>(
+    `/catalog/availability?board=${encodeURIComponent(board)}&class_grade=${classGrade}`);
 export interface CourseQuery {
   class_grade?: number | null; board?: string | null; subject_id?: number | null;
   lang?: string | null; difficulty?: string | null; free_only?: boolean;

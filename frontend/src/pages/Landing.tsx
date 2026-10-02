@@ -19,7 +19,7 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
         <p>{t('tagline', lang)} — Class 1–12 · Maharashtra SSC · HSC · CBSE · English · हिंदी · मराठी</p>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button className="btn accent" onClick={() => onLogin()}>{t('startLearning', lang)}</button>
-          <button className="btn ghost" onClick={() => go('courses')}>{t('exploreCourses', lang)}</button>
+          <button className="btn ghost" onClick={() => go('explore')}>🧭 {t('explore', lang)}</button>
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 10 }}>
           <a className="btn ghost" href="#/login/student">🎒 {t('studentLogin', lang)}</a>
@@ -30,7 +30,7 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
       <h2 className="section-title">{t('classes', lang)} 1–12</h2>
       <div className="grid-cards">
         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((g) => (
-          <div className="card course-card" key={g} style={{ cursor: 'pointer' }} onClick={() => go('courses')}>
+          <div className="card course-card" key={g} style={{ cursor: 'pointer' }} onClick={() => go('explore', g)}>
             <div className="thumb" style={{ background: ['#2563EB', '#16A34A', '#F97316', '#7C3AED', '#DC2626'][g % 5] }}>
               {g}
             </div>

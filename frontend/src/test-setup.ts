@@ -3,7 +3,8 @@
  *
  * `localStorage` does not exist in Node, and auth.ts reads it as soon as a
  * session helper runs — so give the suite an in-memory one instead of pulling
- * in jsdom for two unit-test files.
+ * in jsdom for two unit-test files. `sessionStorage` is missing for the same
+ * reason (prefs.ts filter memory), so both get one.
  */
 class MemoryStorage implements Storage {
   private store = new Map<string, string>();
@@ -34,6 +35,11 @@ class MemoryStorage implements Storage {
 }
 
 Object.defineProperty(globalThis, 'localStorage', {
+  value: new MemoryStorage(),
+  writable: true,
+  configurable: true,
+});
+Object.defineProperty(globalThis, 'sessionStorage', {
   value: new MemoryStorage(),
   writable: true,
   configurable: true,

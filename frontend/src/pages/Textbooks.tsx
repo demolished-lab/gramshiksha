@@ -1,30 +1,54 @@
 import { useEffect, useState } from 'react';
-import { apiSubjects, apiTextbookOpenUrl, apiTextbookPortals, apiTextbooks } from '../api';
-import { pick, t } from '../i18n';
-import type { Lang, Subject, Textbook } from '../types';
+import { apiAvailability, apiTextbookOpenUrl, apiTextbookPortals, apiTextbooks } from '../api';
+import { booksIn, subjectLabel } from '../catalog';
+import { t } from '../i18n';
+import { takeTextbookPref } from '../prefs';
+import type { Availability, Lang, Textbook } from '../types';
 
 const BOARDS = ['Maharashtra SSC', 'Maharashtra HSC', 'CBSE'];
 const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
 
 interface Portal { name: string; url: string; boards: string[]; langs: string[] }
 
+/**
+ * Every option in the two content filters (medium, subject) is derived from
+ * /catalog/availability for the chosen class+board — not from fixed lists —
+ * so this page can never offer a medium or subject that has zero books, and
+ * an explore-hub pick opens it pre-filtered (takeTextbookPref).
+ */
 export default function Textbooks({ lang, user }: { lang: Lang; user: { class_grade: number | null; board: string | null } | null }) {
-  const [grade, setGrade] = useState<number>(user?.class_grade ?? 8);
-  const [board, setBoard] = useState(user?.board ?? 'Maharashtra SSC');
-  const [bookLang, setBookLang] = useState('');
-  const [subject, setSubject] = useState('');
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const pref = takeTextbookPref();
+  const [grade, setGrade] = useState<number>(pref?.grade ?? user?.class_grade ?? 8);
+  const [board, setBoard] = useState<string>(pref?.board ?? user?.board ?? 'Maharashtra SSC');
+  const [bookLang, setBookLang] = useState<string>(pref?.lang ?? '');
+  const [subject, setSubject] = useState<string>(pref?.subject ?? '');
+  const [avail, setAvail] = useState<Availability | null>(null);
   const [books, setBooks] = useState<Textbook[]>([]);
   const [portals, setPortals] = useState<Portal[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    apiTextbookPortals().then(setPortals).catch(() => setPortals([]));
-  }, []);
+  useEffect(() => { apiTextbookPortals().then(setPortals).catch(() => setPortals([])); }, []);
 
   useEffect(() => {
-    apiSubjects(grade, board).then(setSubjects).catch(() => setSubjects([]));
+    let live = true;
+    apiAvailability(board, grade)
+      .then((a) => { if (live) setAvail(a); })
+      .catch(() => { if (live) setAvail(null); });
+    return () => { live = false; };
   }, [grade, board]);
+
+  // Drop filter choices the new combo doesn't have: a medium with no books
+  // here, or a subject with no books in the selected medium.
+  useEffect(() => {
+    if (!avail) return;
+    if (bookLang && !avail.mediums.some((m) => m.lang === bookLang)) setBookLang('');
+  }, [avail, bookLang]);
+  useEffect(() => {
+    if (!avail) return;
+    if (subject && !avail.subjects.some((s) => booksIn(s, bookLang) > 0 && s.name === subject)) {
+      setSubject('');
+    }
+  }, [avail, bookLang, subject]);
 
   useEffect(() => {
     setLoading(true);
@@ -34,6 +58,9 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   }, [grade, board, bookLang, subject]);
 
   const relevantPortals = portals.filter((p) => p.boards.includes(board));
+  const mediumOptions = avail?.mediums ?? [];
+  const subjectOptions = (avail?.subjects ?? []).filter((s) => booksIn(s, bookLang) > 0);
+  const totalBooks = mediumOptions.reduce((n, m) => n + m.books, 0);
 
   return (
     <div>
@@ -46,15 +73,20 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
         <select value={board} onChange={(e) => { setBoard(e.target.value); setSubject(''); }} aria-label="Board">
           {BOARDS.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
-        <select value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject">
-          <option value="">All subjects{subsCount(subjects)}</option>
-          {subjects.map((s) => <option key={s.id} value={s.name_en}>{pick(lang, s.name_en, s.name_hi, s.name_mr)}</option>)}
+        <select value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject"
+          disabled={!subjectOptions.length && !subject}>
+          <option value="">All subjects ({subjectOptions.length})</option>
+          {subjectOptions.map((s) => (
+            <option key={s.name} value={s.name}>
+              {subjectLabel(s, lang)} ({booksIn(s, bookLang)})
+            </option>
+          ))}
         </select>
-        <select value={bookLang} onChange={(e) => setBookLang(e.target.value)} aria-label="Language">
-          <option value="">All languages</option>
-          <option value="en">English</option>
-          <option value="hi">हिंदी</option>
-          <option value="mr">मराठी</option>
+        <select value={bookLang} onChange={(e) => setBookLang(e.target.value)} aria-label="Medium">
+          <option value="">{t('allMediums', lang)} ({totalBooks})</option>
+          {mediumOptions.map((m) => (
+            <option key={m.lang} value={m.lang}>{m.label} ({m.books})</option>
+          ))}
         </select>
       </div>
 
@@ -109,8 +141,4 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
       ))}
     </div>
   );
-}
-
-function subsCount(s: Subject[]): string {
-  return s.length ? ` (${s.length})` : '';
 }

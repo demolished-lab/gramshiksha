@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import { apiBoards, apiCourses, apiSubjects } from '../api';
 import { pick, t } from '../i18n';
+import { takeCoursesPref } from '../prefs';
 import type { Course, Lang, Subject } from '../types';
 
 const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
 
+/** Opens pre-filtered when the explore hub sent a subject here (takeCoursesPref);
+ * otherwise starts at "all of everything" like before. */
 export default function Courses({ lang, go }: { lang: Lang; go: (p: string, id?: number) => void }) {
-  const [grade, setGrade] = useState<number | ''>('');
-  const [board, setBoard] = useState('');
-  const [subjectId, setSubjectId] = useState<number | ''>('');
+  const pref = takeCoursesPref();
+  const [grade, setGrade] = useState<number | ''>(pref?.grade ?? '');
+  const [board, setBoard] = useState<string>(pref?.board ?? '');
+  const [subjectId, setSubjectId] = useState<number | ''>(pref?.subjectId ?? '');
   const [difficulty, setDifficulty] = useState('');
   const [sort, setSort] = useState('popular');
   const [subjects, setSubjects] = useState<Subject[]>([]);
