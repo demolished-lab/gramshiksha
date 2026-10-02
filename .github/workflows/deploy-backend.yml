@@ -1,0 +1,36 @@
+# Permanent auto-deploy for the backend. Render's native GitHub integration
+# stopped delivering webhooks ("we don't have access to your repo"), so pushes
+# never reached Render and every deploy needed a manual click. This workflow
+# POSTs the service's private deploy hook instead — same result as native
+# auto-deploy, $0, and no OAuth repair needed.
+#
+# The hook URL is a credential: it lives in the RENDER_DEPLOY_HOOK Actions
+# secret (encrypted) and only its HTTP status is ever printed.
+name: deploy-backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'render.yaml'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:   # manual trigger to test the wiring
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Render deploy via hook
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "RENDER_DEPLOY_HOOK secret not set"; exit 1; fi
+          # Status code only — never the URL.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 -X POST "$HOOK" || echo 000)
+          echo "render hook -> $code"
+          case "$code" in 200|201|302) ;; *) exit 1 ;; esac
