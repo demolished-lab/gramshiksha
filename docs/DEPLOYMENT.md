@@ -172,3 +172,13 @@ integration — pushes to `main` deploy Render only, and that is intentional
   `keep-warm.log` — verified waking a cold instance (200 after ~50 s).
   Independent of GitHub entirely; remove with `schtasks /Delete /TN
   "GramShiksha Keep Warm" /F` once the cloud schedule is proven.
+  The same task also drives `forks.yml`: that workflow was schedule-only
+  (Mondays 06:00 UTC) and would otherwise never run, so the script dispatches
+  it itself at most once per 24 h via the stored git credential (marker file
+  `forks-last-dispatch.txt`, advances only on HTTP 204; failures retry every
+  10 min and appear in `keep-warm.log`). Daily cadence beats the original
+  weekly one, so the commercial-rights fork watch is at least as tight as
+  designed. **Every loop audit must verify:** task registered
+  (`schtasks /Query /TN "GramShiksha Keep Warm"`), `keep-warm.log` advancing
+  with `200` lines, and marker no older than ~48 h — an older marker plus
+  `forks-dispatch` failure lines in the log means the credential or API broke.
