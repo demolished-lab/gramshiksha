@@ -205,6 +205,8 @@ export interface Textbook {
   publisher: string;
   has_deep_link: boolean;
   cover_url: string | null;
+  /** 'Part 1'/'Part 2' for multi-part subjects; null for whole books. */
+  part_label: string | null;
   clicks: number;
 }
 

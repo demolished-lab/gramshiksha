@@ -277,6 +277,9 @@ class Textbook(SQLModel, table=True):
     class_grade: int = Field(index=True)
     subject_name: str = Field(index=True)
     lang: str = Field(index=True)
+    # "Part 1"/"Part 2" for multi-part subjects (e.g. परिसर अभ्यास भाग-१/२);
+    # set only by the crawler/apply — a partless book leaves it empty.
+    part_label: str = ""
     title: str
     source_url: str  # official portal link only (ePathshala / eBalbharati)
     publisher: str = "NCERT"

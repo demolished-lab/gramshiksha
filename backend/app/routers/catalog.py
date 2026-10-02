@@ -278,11 +278,34 @@ def textbooks(class_grade: int = Query(..., ge=1, le=12), board: str = Query(...
     return [_textbook_out(t) for t in rows]
 
 
+def _cover_cdn(url: str) -> str:
+    """Rewrite an origin cover URL through Cloudinary's transform CDN.
+
+    eBalbharati's BookCovers endpoint sends no Cache-Control and ~0.3s TTFB;
+    a library page pulls a dozen covers at once. f_auto/q_auto/w_360 serves
+    them as edge-cached WebP at a fraction of the size — the first viewer
+    pays the origin fetch, everyone after hits the CDN. Returns the origin
+    URL untouched when Cloudinary isn't configured (local dev / tests)."""
+    if not url or not url.startswith("http"):
+        return url
+    try:
+        from urllib.parse import quote
+        from ..config import settings
+        if not settings.cloudinary_cloud_name:
+            return url
+        return (f"https://res.cloudinary.com/{settings.cloudinary_cloud_name}"
+                f"/image/fetch/f_auto,q_auto,w_360/"
+                f"{quote(url, safe='')}")
+    except Exception:
+        return url
+
+
 def _textbook_out(t: Textbook) -> dict:
     return {"id": t.id, "title": t.title, "board": t.board, "class_grade": t.class_grade,
             "subject_name": t.subject_name, "lang": t.lang, "source_url": t.source_url,
             "publisher": t.publisher, "has_deep_link": bool(t.deep_url and t.last_ok),
-            "cover_url": t.cover_url or None, "clicks": t.clicks}
+            "cover_url": _cover_cdn(t.cover_url) or None,
+            "part_label": t.part_label or None, "clicks": t.clicks}
 
 
 def check_url(url: str, timeout_s: float = 15.0) -> bool:

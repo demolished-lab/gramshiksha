@@ -131,8 +131,8 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
           {books.map((b) => (
             <div className="card" key={b.id} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {b.cover_url ? (
-                <img src={b.cover_url} alt="" loading="lazy"
-                  style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 6, background: '#F8FAFC' }} />
+                <img src={b.cover_url} alt="" loading="lazy" decoding="async" className="cover-shimmer"
+                  style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 6 }} />
               ) : (
                 <div role="img" aria-label={`${b.subject_name} cover`}
                   style={{ aspectRatio: '3 / 4', borderRadius: 6, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44 }}>
@@ -144,7 +144,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
                 {b.title}
               </div>
               <div className="muted" style={{ fontSize: '.74rem' }}>
-                {b.subject_name} · {b.lang.toUpperCase()}{b.has_deep_link ? ' · 📄' : ''}
+                {b.subject_name} · {b.lang.toUpperCase()}{b.part_label ? ` · ${b.part_label}` : ''}{b.has_deep_link ? ' · 📄' : ''}
               </div>
               <a className={`btn small ${b.has_deep_link ? 'accent' : 'ghost'}`}
                 href={apiTextbookOpenUrl(b.id)} target="_blank" rel="noreferrer"

@@ -16,8 +16,10 @@ How it works (verified Sep 2026 against the live site):
 Usage:
   python scripts/crawl_ebalbharati.py --classes 1 2 3 --mediums 301 302 303
       --output catalog.json            # crawl only, no DB writes
-  python scripts/crawl_ebalbharati.py --apply   # + fill deep_url/cover_url
-      # on high-confidence (board, grade, subject, lang) matches only
+  python scripts/crawl_ebalbharati.py --apply   # fill deep_url/cover_url on
+      # exact (board, grade, subject, lang, part) matches; split multi-part
+      # titles onto their own rows; CREATE rows for official books we don't
+      # seed yet (dynamic cataloging). Idempotent — never overwrites.
 
 Needs: httpx (in requirements.txt). Polite by default (1.5s between requests).
 If the postback contract ever breaks, fall back to a headless pass
@@ -62,6 +64,13 @@ SUBJECT_KEYWORDS = [
     ("English", ["इंग्रजी", "इंग्लिश", "english"]),
     ("Hindi", ["हिंदी", "hindi"]),
     ("Marathi", ["मराठी", "marathi", "बालभारती"]),
+    ("Sanskrit", ["संस्कृत"]),
+    ("Social Science", ["सामाजिक विज्ञान", "सामाजिकशास्त्र", "social science"]),
+    ("Economics", ["अर्थशास्त्र", "economics"]),
+    ("Sindhi", ["सिंधुभारती"]),
+    ("Pali", ["पाली प्रवेशिका", "पाली प्रवेश", "पाली"]),
+    ("French", ["फ्रेंच"]),
+    ("German", ["जर्मन"]),
 ]
 
 ID_RE = re.compile(r'SaveToDisk\("https://ebooks\.ebalbharati\.in/pdfs/(\d+)\.pdf"')
@@ -153,7 +162,56 @@ def guess_subject(title: str, lang: str = "") -> str:
     for subj, keys in SUBJECT_KEYWORDS:
         if any(k.lower() in low for k in keys):
             return subj
-    return ""
+    return subject_fallback(t)
+
+
+# --- multi-part books + dynamic cataloging (upgrade Oct 2026) ---------------
+# Real titles from the live portal: "५ वी परिसर अभ्यास भाग-१ मराठी",
+# "History Part 2". Parts must land on SEPARATE Textbook rows; subjects we
+# don't seed ("पाली प्रवेशिका", "संस्कृतम् आमोद") get rows created instead of
+# being dropped — official + verified == cataloged, so learners get access.
+
+DEV_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
+PART_RE = re.compile(r"(?i)\bpart\s*[-–—.]*\s*([0-9]+)|भाग\s*[-–—.]*\s*([0-9०-९]+)")
+# "८ वी ", "Class 8 ", "इयत्ता ८" leftovers polluting a fallback subject.
+CLASS_PREFIX_RE = re.compile(
+    r"^\s*(?:कक्षा|class|इयत्ता)?\s*[0-9०-९]+\s*(?:वी|वीं|इ|इयत्ता|ठी|th)?\s*",
+    re.IGNORECASE)
+# "(संपूर्ण)", "...:(संयुक्त)" — edition markers; stripped for SUBJECT identity
+# (so editions collapse onto one row) but kept in the displayed title.
+PAREN_RE = re.compile(r"\s*[:(]\s*[^)]*\)\s*$|\s*\([^)]*\)\s*$")
+
+
+def parse_part(title: str) -> str:
+    """"परिसर अभ्यास भाग-१" / "History Part 2" -> "Part 1"/"Part 2" ("" if whole)."""
+    m = PART_RE.search(title or "")
+    if not m:
+        return ""
+    num = (m.group(1) or m.group(2) or "").translate(DEV_DIGITS)
+    return f"Part {int(num)}" if num.isdigit() and int(num) > 0 else ""
+
+
+def part_key(entry: dict) -> int:
+    """Sort key so Part 1 fills a partless seed row before Part 2 creates one."""
+    n = parse_part(entry.get("title", ""))
+    return int(n.split()[1]) if n else 0
+
+
+def subject_fallback(title: str, lang: str = "") -> str:
+    """When no keyword matches, the cleaned title IS the subject.
+
+    Class prefix, trailing medium and edition markers go — so the three
+    editions of "संस्कृतम् आमोद" collapse onto one subject while genuinely
+    different books ("पाली प्रवेशिका" vs "पाली प्रवेश") stay distinct."""
+    t = strip_medium(title or "")
+    t = PAREN_RE.sub("", t)
+    t = CLASS_PREFIX_RE.sub("", t)
+    return t.strip(" -–—:·").strip()
+
+
+def norm_title(title: str) -> str:
+    """Duplicate detection: same book re-listed under whitespace/medium noise."""
+    return re.sub(r"\s+", " ", strip_medium(title or "")).lower().strip()
 
 
 def main() -> int:
@@ -264,35 +322,96 @@ def audit_applied(catalog: list[dict]) -> int:
 
 
 def apply_catalog(catalog: list[dict], board: str) -> int:
+    """Map crawl entries onto Textbook rows — fill, split, or create.
+
+    Matching cascade per entry (idempotent; deep_urls are never overwritten):
+      1. exact (board, grade, subject, lang, part, title) row — fill / skip dupe
+      2. same tuple+part row — fill when empty
+      3. partless stand-in (the seeded row) — first part claims it and gets
+         labelled ("Part 1"); later parts become their own rows
+      4. no row at all, or a second distinct book for the same tuple —
+         CREATE a row (dynamic cataloging: official + verified == available).
+    """
     sys.path.insert(0, "backend")
     from sqlmodel import Session, select
     from app.db import engine, ensure_textbook_columns
     from app.models import Textbook
+    PORTAL = "https://books.ebalbharati.in"
 
     ensure_textbook_columns()
-    applied = skipped = 0
+
+    def _q(s, use_board, c, part, title=None):
+        q = select(Textbook).where(
+            Textbook.board == use_board, Textbook.class_grade == c["grade"],
+            Textbook.subject_name == c["subject_guess"],
+            Textbook.lang == c["lang"],
+            Textbook.part_label == part)
+        if title is not None:
+            q = q.where(Textbook.title == title)
+        return s.exec(q).first()
+
+    applied = created = skipped = 0
+    entries = sorted((c for c in catalog if c.get("subject_guess")
+                      and c.get("grade") and c.get("lang")), key=part_key)
     with Session(engine) as s:
-        for c in catalog:
-            if not c["subject_guess"] or not c["grade"] or not c["lang"]:
-                skipped += 1
-                continue
+        for c in entries:
+            part = parse_part(c.get("title", ""))
             use_board = ("Maharashtra HSC" if c["grade"] >= 11
                          else "Maharashtra SSC") if board == "auto" else board
-            row = s.exec(select(Textbook).where(
-                Textbook.board == use_board, Textbook.class_grade == c["grade"],
-                Textbook.subject_name == c["subject_guess"],
-                Textbook.lang == c["lang"])).first()
-            if row is None or row.deep_url:
+            title = c["title"].strip()
+
+            # 0. already ingested anywhere? PDF ids are stable — this is the
+            #    re-run anchor (seed rows keep their own title after a fill).
+            if s.exec(select(Textbook).where(
+                    Textbook.deep_url == c["pdf"])).first() is not None:
                 skipped += 1
                 continue
-            row.deep_url = c["pdf"]
-            row.cover_url = c["cover"]
-            row.last_ok = True
-            row.last_checked = None  # recheck endpoint verifies on demand
-            s.add(row)
-            applied += 1
+
+            # 1. exact title+part — dedupe within one catalog run
+            row = _q(s, use_board, c, part, title)
+            if row is not None:
+                if row.deep_url:
+                    skipped += 1
+                    continue
+            else:
+                # 2. any row for this exact part
+                row = _q(s, use_board, c, part)
+                # 3. partless stand-in: first part claims the seeded row
+                if row is None and part:
+                    row = _q(s, use_board, c, "")
+            if row is not None and not row.deep_url:
+                row.deep_url = c["pdf"]
+                row.cover_url = c["cover"]
+                row.last_ok = True
+                row.last_checked = None  # recheck endpoint verifies on demand
+                if part and not row.part_label:
+                    row.part_label = part
+                s.add(row)
+                applied += 1
+                continue
+            if row is not None:
+                # occupied: keep only genuinely different books, skip re-lists
+                if norm_title(row.title) == norm_title(title):
+                    skipped += 1
+                    continue
+                s.add(Textbook(
+                    board=use_board, class_grade=c["grade"],
+                    subject_name=c["subject_guess"], lang=c["lang"], part_label=part,
+                    title=title, source_url=PORTAL, publisher="Official",
+                    deep_url=c["pdf"], cover_url=c["cover"],
+                    last_ok=True, last_checked=None))
+                created += 1
+                continue
+            # 4. nothing matched — dynamic cataloging of an official book
+            s.add(Textbook(
+                board=use_board, class_grade=c["grade"],
+                subject_name=c["subject_guess"], lang=c["lang"], part_label=part,
+                title=title, source_url=PORTAL, publisher="Official",
+                deep_url=c["pdf"], cover_url=c["cover"],
+                last_ok=True, last_checked=None))
+            created += 1
         s.commit()
-    print(f"applied {applied}, skipped {skipped} (board={board})")
+    print(f"applied {applied}, created {created}, skipped {skipped} (board={board})")
     return 0
 
 

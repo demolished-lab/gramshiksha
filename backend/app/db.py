@@ -99,6 +99,7 @@ def ensure_textbook_columns() -> None:
         ("clicks", "INTEGER NOT NULL DEFAULT 0", "INTEGER NOT NULL DEFAULT 0"),
         ("last_checked", "VARCHAR", "VARCHAR"),
         ("last_ok", "INTEGER NOT NULL DEFAULT 1", "BOOLEAN NOT NULL DEFAULT TRUE"),
+        ("part_label", "TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
     ])
 
 
