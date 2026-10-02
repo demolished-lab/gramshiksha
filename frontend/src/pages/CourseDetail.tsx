@@ -33,7 +33,7 @@ export default function CourseDetail({ lang, go, courseId }: { lang: Lang; go: (
 
   return (
     <div>
-      <button className="btn ghost small" onClick={() => go('courses')}>← {t('back', lang)}</button>
+      <button className="btn ghost small" onClick={() => go('explore')}>← {t('back', lang)}</button>
       <div className="card">
         <h1>{pick(lang, course.title_en, course.title_hi, course.title_mr)}</h1>
         <div style={{ margin: '8px 0' }}>

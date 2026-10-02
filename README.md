@@ -60,15 +60,16 @@ cd frontend && npm install && npm run dev   # http://localhost:5174 (proxies /ap
 ## Tests
 
 ```bash
-# Backend — 94 tests: API behaviour, password reset, authorization limits,
+# Backend — 100 tests: API behaviour, password reset, authorization limits,
 # every registered endpoint, migrations and the production boot gates.
 # test_route_coverage_canary.py fails the build if a route is ever
 # registered without a test calling it, or if the bare and /api mounts
 # of a router drift apart.
 .venv/Scripts/python -m pytest -q
 
-# Frontend — 28 unit tests (request framing, session/offline storage,
-# approval workflow API actions, growth helpers)
+# Frontend — 38 unit tests (request framing, session/offline storage,
+# approval workflow API actions, growth helpers, explore availability
+# filters and cross-page prefs)
 cd frontend && npm test
 npm run build                       # typecheck + production build
 

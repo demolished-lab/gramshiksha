@@ -85,7 +85,7 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
       {courses.length === 0 && (
         <div className="empty-state"><div className="icon">📚</div>
           <p>{t('empty', lang)}</p>
-          <button className="btn" onClick={() => go('courses')}>{t('exploreCourses', lang)}</button>
+          <button className="btn" onClick={() => go('explore')}>{t('exploreCourses', lang)}</button>
         </div>
       )}
       {courses.map((c) => (
