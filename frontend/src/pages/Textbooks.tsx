@@ -121,29 +121,40 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
           <p>No textbooks match this filter — try “All subjects/languages”, or open the official portal below.</p>
         </div>
       )}
-      {books.map((b) => (
-        <div className="card" key={b.id}>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            {b.cover_url && (
-              <img src={b.cover_url} alt="" loading="lazy" width={56}
-                style={{ borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,.2)' }} />
-            )}
-            <div>
-              <strong>{b.title}</strong>
-              <div style={{ margin: '4px 0' }}>
-                <span className="badge">{b.board}</span>
-                <span className="badge gray">Class {b.class_grade}</span>
-                <span className="badge green">{b.subject_name}</span>
-                <span className="badge orange">{b.lang}</span>
-                {b.has_deep_link && <span className="badge">📄 direct PDF</span>}
+      {/* e-book library grid: full-height cover tiles with a direct action
+          per book (mirrors the official portals' layout). Deep-linked books
+          get the orange Download button; the rest fall back to their source
+          portal, visibly de-emphasised. Board/class context lives in the
+          filter bar above — cards stay scannable. */}
+      {!!books.length && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14, marginTop: 10 }}>
+          {books.map((b) => (
+            <div className="card" key={b.id} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {b.cover_url ? (
+                <img src={b.cover_url} alt="" loading="lazy"
+                  style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 6, background: '#F8FAFC' }} />
+              ) : (
+                <div role="img" aria-label={`${b.subject_name} cover`}
+                  style={{ aspectRatio: '3 / 4', borderRadius: 6, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44 }}>
+                  📚
+                </div>
+              )}
+              <div title={b.title}
+                style={{ fontSize: '.86rem', lineHeight: 1.35, fontWeight: 600, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {b.title}
               </div>
-              <a className="btn small" href={apiTextbookOpenUrl(b.id)} target="_blank" rel="noreferrer">
-                🔗 {b.has_deep_link ? 'Open PDF' : `Open at ${b.publisher} source`}
+              <div className="muted" style={{ fontSize: '.74rem' }}>
+                {b.subject_name} · {b.lang.toUpperCase()}{b.has_deep_link ? ' · 📄' : ''}
+              </div>
+              <a className={`btn small ${b.has_deep_link ? 'accent' : 'ghost'}`}
+                href={apiTextbookOpenUrl(b.id)} target="_blank" rel="noreferrer"
+                style={{ justifyContent: 'center', width: '100%' }}>
+                {b.has_deep_link ? `⬇ ${t('download', lang)}` : `🔗 ${b.publisher} source`}
               </a>
             </div>
-          </div>
+          ))}
         </div>
-      ))}
+      )}
 
       <h2 style={{ marginTop: 20 }}>🏛️ Official sources (always available)</h2>
       <p className="muted">If a book link is missing, get it free directly from the government portal:</p>

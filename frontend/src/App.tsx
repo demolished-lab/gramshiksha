@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { dataSaver, getLang, getUser, logout, setDataSaver, setLang, SessionUser } from './auth';
+import { dataSaver, getLang, getUser, landingAfterAuth, logout, setDataSaver, setLang, SessionUser } from './auth';
 import { t } from './i18n';
 import type { Lang } from './types';
 import Landing from './pages/Landing';
@@ -67,7 +67,15 @@ export default function App() {
   };
 
   const switchLang = (l: Lang) => { setLang(l); setLangState(l); };
-  const onAuthed = () => { setUser(getUser()); setShowAuth(false); };
+  const onAuthed = () => {
+    const u = getUser();
+    setUser(u);
+    setShowAuth(false);
+    // Students who just logged in from the landing/login screens open into
+    // the e-book library (auth.ts landingAfterAuth); everyone else stays put.
+    const landing = landingAfterAuth(u?.role, route.page);
+    if (landing) go(landing);
+  };
   const refreshSession = () => setUser(getUser());
   const nav = (page: string) => () => go(page);
 

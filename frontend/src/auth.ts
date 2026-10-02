@@ -54,6 +54,25 @@ export function refreshUser(me: Me): void {
 }
 
 /**
+ * Where a fresh authentication should drop the user (null = don't move).
+ *
+ * Students open straight into the e-book library — cover grid, orange
+ * Download buttons, pre-filtered to their class/board on the page — because
+ * "log in and see the books" is the product requirement. Only a login that
+ * started from the landing/login screens redirects: a student who signs in
+ * mid-browse (say, from #/courses) stays exactly where they were. Every
+ * other role keeps the historical behaviour of no redirect.
+ */
+export function landingAfterAuth(
+  role: string | null | undefined,
+  routePage: string,
+): string | null {
+  return role === 'student' && (routePage === 'home' || routePage === 'login')
+    ? 'textbooks'
+    : null;
+}
+
+/**
  * Drop cached `/api` responses from the service worker.
  *
  * Cache entries are keyed by request URL, not by user — so on a shared phone

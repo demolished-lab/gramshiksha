@@ -13,6 +13,10 @@ dist/
 server*.log
 .env
 uploads/
+# Generated crawler intermediate — recreate with backend/scripts/crawl_ebalbharati.py
+# (passed as --input for --apply / --audit)
+catalog.json
+ebalbharati_catalog.json
 
 # OS junk
 .DS_Store

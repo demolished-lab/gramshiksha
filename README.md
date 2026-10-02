@@ -137,8 +137,10 @@ python backend/scripts/crawl_ebalbharati.py --input catalog.json --audit --board
 
 Link health: `POST /admin/textbooks/recheck?limit=50` (platform admin)
 HEAD-checks deep URLs; dead ones auto-fall-back in `/open`.
-Status: eBalbharati mapped (605-book crawl, ~120 verified deep PDFs in
-Marathi/Hindi/English/Urdu). CBSE/NCERT: use `backend/scripts/crawl_ncert.py`
+Status: eBalbharati mapped (707-entry crawl re-run 2026-10-03; 133 Textbook
+rows carry cover_url + deep PDF across Maharashtra SSC/HSC in
+Marathi/Hindi/English/Urdu — all HEAD-verified by the recheck pass, 0 dead).
+CBSE/NCERT: use `backend/scripts/crawl_ncert.py`
 the same way (crawl → `--apply`); it only stores URLs verified live as PDFs
 on ncert.nic.in/epathshala.nic.in. Run it from inside India — both portals
 time out from most foreign networks (verified Sep 2026).
