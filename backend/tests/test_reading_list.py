@@ -71,6 +71,12 @@ def now_month() -> str:
     return f"{now.year:04d}-{now.month:02d}"
 
 
+def next_month() -> str:
+    now = utcnow()
+    y, m = (now.year + 1, 1) if now.month == 12 else (now.year, now.month + 1)
+    return f"{y:04d}-{m:02d}"
+
+
 def login(client, email, password="Teach@1234"):
     r = client.post("/auth/token", data={"username": email, "password": password})
     assert r.status_code == 200, r.text
@@ -96,6 +102,19 @@ def seed_book(title: str) -> int:
         s.add(row)
         s.commit()
         return row.id
+
+
+def admin_session(client):
+    """An approved platform_admin: registration only ever hands out `teacher`,
+    and approval is what confers privilege, so promote in the DB."""
+    headers, uid = register(client, ADMIN_EMAIL, role="teacher")
+    with Session(engine) as s:
+        user = s.get(User, uid)
+        user.role = "platform_admin"
+        user.role_status = "active"
+        s.add(user)
+        s.commit()
+    return headers
 
 
 def test_reading_list_is_public_windowed_and_newest_first(client):
@@ -224,13 +243,7 @@ def test_delete_is_the_owner_or_an_admin_alone(client):
                          headers=teacher).status_code == 404
 
     # an admin withdraws someone else's pick (the platform must be able to)
-    admin, uid = register(client, ADMIN_EMAIL, role="teacher")
-    with Session(engine) as s:
-        user = s.get(User, uid)
-        user.role = "platform_admin"
-        user.role_status = "active"
-        s.add(user)
-        s.commit()
+    admin = admin_session(client)
     assert client.delete(f"/library/reading/{pick['id']}",
                          headers=admin).status_code == 200
 
@@ -241,3 +254,37 @@ def test_delete_is_the_owner_or_an_admin_alone(client):
                          headers=teacher).status_code == 200
     assert not any(x["id"] == own["id"]
                    for x in client.get("/library/reading").json())
+
+
+def test_admin_inherits_teacher_powers_but_not_a_learners_seat(client):
+    """`require_roles` promises "admins inherit teacher powers", and the
+    teacher dashboard renders the pick form for a platform admin — so POST
+    has to accept it (a regression the live probe hit: the form was there,
+    the API answered 403 "Requires role: teacher"). The inheritance is
+    one-way: a student-only route must still refuse them.
+    """
+    admin = admin_session(client)
+    posted = client.post("/library/reading", json={
+        "month": now_month(), "title": f"{TITLE} Admin Pick"}, headers=admin)
+    assert posted.status_code == 200, posted.text
+    assert client.delete(f"/library/reading/{posted.json()['id']}",
+                         headers=admin).status_code == 200
+    # learner-only territory stays shut for admins …
+    assert client.get("/progress/summary", headers=admin).status_code == 403
+    # … while teacher territory (create a lesson) is theirs to use
+    assert client.post("/lessons", json={"chapter_id": 999999, "title_en": "a",
+                                         "title_hi": "b", "title_mr": "c"},
+                       headers=admin).status_code == 404
+
+
+def test_a_pick_for_next_month_is_visible_immediately(client):
+    """The server clock is UTC and the audience is IST (UTC+5:30), so between
+    00:00 and 05:30 on the 1st "this month" is still last month upstream — and
+    a teacher pre-posting next month's pick is normal. Either way the pick the
+    teacher just published must be on the list at once, not hours later."""
+    teacher = login(client, "teacher1@gramshiksha.in")
+    posted = client.post("/library/reading", json={
+        "month": next_month(), "title": f"{TITLE} Next Month"}, headers=teacher)
+    assert posted.status_code == 200, posted.text
+    assert posted.json()["id"] in [
+        x["id"] for x in client.get("/library/reading").json()]

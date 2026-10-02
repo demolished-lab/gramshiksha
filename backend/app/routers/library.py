@@ -362,13 +362,21 @@ class ReadingIn(BaseModel):
 
 def _recent_months(count: int = _READING_WINDOW) -> list[str]:
     """[this month, previous, …] as ISO strings — the window keeps a stale
-    pick from sitting at the top of the public list forever."""
+    pick from sitting at the top of the public list forever.
+
+    One month of *lead* too (+1 … −(count−1)): the server runs UTC while the
+    audience is IST (UTC+5:30), so a pick posted between 00:00 and 05:30 on
+    the 1st — or pre-posted for next month — would otherwise be invisible for
+    hours even though the teacher just published it.
+    """
     now = utcnow()
     out = []
-    for i in range(count):
-        year, month = now.year, now.month - i
+    for delta in range(1, -count, -1):  # count+1 months: +1, 0, −1, …, −(count−1)
+        year, month = now.year, now.month + delta
         while month <= 0:
             month, year = month + 12, year - 1
+        while month > 12:
+            month, year = month - 12, year + 1
         out.append(f"{year:04d}-{month:02d}")
     return out
 

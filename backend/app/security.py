@@ -82,15 +82,19 @@ def require_roles(*roles: str):
     confers privilege. The distinct message tells a fresh signup why it is
     blocked instead of leaving them with "Requires role: teacher", which would
     be untrue.
+
+    Inheritance is one-way and only into *teacher* gates: the role test must
+    compare against the caller's own role, so an admin was previously refused
+    by every `require_teacher` route (the teacher dashboard happily rendered
+    its forms while the API answered 403). Student/parent-only gates stay shut
+    for admins — they inherit teaching powers, not a learner's seat.
     """
     allowed = set(roles)
 
     def dep(user: User = Depends(get_current_user)) -> User:
         effective = set(roles)
-        if user.role == "platform_admin":
-            effective |= {"teacher", "school_admin"}
-        if user.role == "school_admin" and "teacher" in allowed:
-            effective |= {"teacher"}
+        if "teacher" in allowed and user.role in ("platform_admin", "school_admin"):
+            effective |= {user.role}
         if user.role not in effective:
             raise HTTPException(status_code=403, detail=f"Requires role: {', '.join(sorted(allowed))}")
         if user.role_status != "active":
