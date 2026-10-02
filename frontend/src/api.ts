@@ -1,6 +1,6 @@
 import type {
   Availability, BookAsk, Doubt, LessonDetail, Lang, LocateResult, LoginResponse, Material, Me, Notification,
-  ParentChild, ProgressSummary, Question, QuizDetail, QuizResult, RoleStatus,
+  ParentChild, ProgressSummary, Question, QuizDetail, QuizResult, ReadingPick, RoleStatus,
   TeacherStudent, Textbook, TodayPlan, WeakTopics, Course,
 } from './types';
 
@@ -129,6 +129,19 @@ export const apiLocate = (q: string, classGrade: number | null, board: string, l
   post<LocateResult>('/library/locate', { q, class_grade: classGrade, board, lang });
 /** The signed-in learner's own asks (401 when anonymous — callers ignore). */
 export const apiMyRequests = () => req<BookAsk[]>('/library/requests');
+
+// ---------- library (Monthly Reading List) ----------
+/** Public book-club list: this month and the two before it, newest first.
+ * `mine=1` is the signed-in teacher's own picks (401 otherwise). */
+export const apiReadingList = (mine = false) =>
+  req<ReadingPick[]>(`/library/reading${mine ? '?mine=1' : ''}`);
+/** Approved teachers only (401 anonymous, 403 student/pending). Posting the
+ * same title again in the same month rewrites it instead of duplicating. */
+export const apiSavePick = (payload: Partial<ReadingPick>) =>
+  post<ReadingPick>('/library/reading', payload);
+/** Withdraw a pick: the owner's, or an admin's. */
+export const apiDeletePick = (id: number) =>
+  req<{ deleted: number }>(`/library/reading/${id}`, { method: 'DELETE' });
 
 // ---------- learn ----------
 export const apiLesson = (id: number, lang: Lang) => req<LessonDetail>(`/learn/lessons/${id}?lang=${lang}`);

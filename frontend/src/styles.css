@@ -239,3 +239,20 @@ main.container { max-width: 1160px; padding: 24px 20px 96px; } .btn { box-shadow
 .finder-step { display: flex; align-items: center; gap: 9px; font-size: .9rem; color: var(--ink); }
 .finder-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; font-size: .88rem; padding: 7px 9px; border: 1px solid var(--border); border-radius: 9px; background: #fff; }
 .finder-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Monthly Reading List ------------------------------------------------
+   One row per teacher pick, open to every student (book club): title, who
+   picked it and why, plus exactly one action — "Read now" when the catalog
+   already has a healthy PDF, otherwise "Find this book", which runs the
+   Smart Book Finder. Both stay on this page; neither redirects anywhere. */
+.reading-banner { border-left: 4px solid var(--accent); }
+.reading-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.reading-head .muted { font-size: .82rem; }
+.reading-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--border); }
+.reading-head + .reading-row { border-top: 0; }
+.reading-text { min-width: 0; }
+.reading-title { font-weight: 600; font-size: .93rem; line-height: 1.35; }
+.reading-meta { font-size: .78rem; margin-top: 1px; }
+.reading-note { margin: 4px 0 0; font-size: .85rem; color: var(--muted); }
+.reading-row .btn { flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 480px) { .reading-row { align-items: stretch; flex-direction: column; } .reading-row .btn { justify-content: center; } }

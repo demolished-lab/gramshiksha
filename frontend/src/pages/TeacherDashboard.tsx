@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
-import { apiDoubts, apiReplyDoubt, apiTeacherOverview, apiTeacherStudents } from '../api';
-import { t } from '../i18n';
-import type { Doubt, Lang, TeacherStudent } from '../types';
+import { apiDeletePick, apiDoubts, apiReadingList, apiReplyDoubt, apiSavePick, apiTeacherOverview, apiTeacherStudents } from '../api';
+import { monthLabel, t } from '../i18n';
+import type { Doubt, Lang, ReadingPick, TeacherStudent } from '../types';
+
+/** Current month as the API expects it ("2026-10"), in the teacher's own
+ * timezone — the pick is posted for the month they are actually in. */
+const currentMonth = (): string => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
 
 export default function TeacherDashboard({ lang }: { lang: Lang }) {
   const [overview, setOverview] = useState<Awaited<ReturnType<typeof apiTeacherOverview>> | null>(null);
@@ -11,12 +18,57 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
   const [replyText, setReplyText] = useState('');
   const [error, setError] = useState('');
 
+  // Monthly Reading List: the teacher's own picks (`mine=1`) plus the form.
+  const [picks, setPicks] = useState<ReadingPick[]>([]);
+  const [month, setMonth] = useState(currentMonth);
+  const [title, setTitle] = useState('');
+  const [author, setAuthor] = useState('');
+  const [note, setNote] = useState('');
+  const [saved, setSaved] = useState('');
+  const [formError, setFormError] = useState('');
+
+  const loadPicks = () => {
+    apiReadingList(true).then(setPicks).catch(() => setPicks([]));
+  };
+
   const load = () => {
     Promise.all([apiTeacherOverview(), apiTeacherStudents(), apiDoubts()])
       .then(([ov, st, db]) => { setOverview(ov); setStudents(st); setDoubts(db.filter((d) => d.status === 'pending')); })
       .catch((e) => setError(String(e)));
   };
   useEffect(load, []);
+  // Kept off `load()` on purpose: a reading-list hiccup must not blank the
+  // whole dashboard (load()'s failure is fatal by design).
+  useEffect(loadPicks, []);
+
+  /** Reposting the same title in the same month rewrites it server-side, so
+   * the form never stacks duplicates; a save failure stays on the form. */
+  const savePick = async () => {
+    const clean = title.trim();
+    if (clean.length < 2 || !month) return;
+    setFormError('');
+    setSaved('');
+    try {
+      const row = await apiSavePick({
+        month, title: clean, author: author.trim(), note: note.trim(),
+      });
+      setTitle(''); setAuthor(''); setNote('');
+      setSaved(`${t('saved', lang)} — ${row.title}`);
+      loadPicks();
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const withdraw = async (id: number) => {
+    setFormError('');
+    try {
+      await apiDeletePick(id);
+      loadPicks();
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   if (error) return <p className="error">{t('errorLoad', lang)} — {error}</p>;
 
@@ -32,6 +84,62 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
           <div className="stat"><div className="num">{overview.pending_doubts}</div><div className="lbl">{t('doubts', lang)}</div></div>
         </div>
       )}
+
+      {/* Monthly Reading List: post one pick a month and every student sees
+          it (book club — the audience is all students, not a class). The
+          server links a pick to the catalog when the title is already there,
+          so a posted book is readable in-app the moment it exists. */}
+      <div className="card reading-banner">
+        <div className="reading-head">
+          <strong>📚 {t('readingList', lang)} · {monthLabel(month, lang)}</strong>
+          <span className="muted">{t('readingClubHint', lang)}</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginTop: 8 }}>
+          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
+            aria-label={t('pickMonth', lang)} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)}
+            placeholder={t('pickTitle', lang)} aria-label={t('pickTitle', lang)}
+            style={{ gridColumn: 'span 2' }}
+            onKeyDown={(e) => { if (e.key === 'Enter') void savePick(); }} />
+          <input value={author} onChange={(e) => setAuthor(e.target.value)}
+            placeholder={t('pickAuthor', lang)} aria-label={t('pickAuthor', lang)} />
+          <input value={note} onChange={(e) => setNote(e.target.value)}
+            placeholder={t('pickNote', lang)} aria-label={t('pickNote', lang)} />
+          <button type="button" className="btn accent" onClick={() => void savePick()}
+            disabled={title.trim().length < 2 || !month}>
+            ➕ {t('postPick', lang)}
+          </button>
+        </div>
+        {formError && <p className="error">{formError}</p>}
+        {saved && <p className="success">{saved}</p>}
+
+        {!picks.length && <p className="muted">{t('readingEmpty', lang)}</p>}
+        {!!picks.length && (
+          <div style={{ marginTop: 6 }}>
+            <div className="muted" style={{ fontSize: '.8rem' }}>{t('myPicks', lang)}</div>
+            {picks.map((p) => (
+              <div className="reading-row" key={p.id}>
+                <div className="reading-text">
+                  <div className="reading-title">
+                    {p.title}
+                    {p.author && <span className="muted"> · {p.author}</span>}
+                  </div>
+                  <div className="muted reading-meta">
+                    {monthLabel(p.month, lang)}
+                    {p.subject_name ? ` · ${p.subject_name}` : ''}
+                    {p.readable ? ' · 📄' : ''}
+                  </div>
+                  {p.note && <p className="reading-note">{p.note}</p>}
+                </div>
+                <button type="button" className="btn small ghost" onClick={() => void withdraw(p.id)}>
+                  ✕ {t('withdraw', lang)}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="card">
         <h3>🚨 Students needing help</h3>

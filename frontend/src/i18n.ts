@@ -121,11 +121,40 @@ const S: Record<string, [string, string, string]> = {
     'अद्याप अधिकृत यादीत नाही — तुम्ही कतारीत #{n} आहात. आम्ही दर 10 मिनिटांनी पुन्हा शोधतो आणि आल्यावर लगेच कळवतो.'],
   myRequests: ['Your book requests', 'आपकी पुस्तक अनुरोध', 'तुमची पुस्तक विनंत्या'],
   bookArrived: ['The book you asked for is here', 'आपने जो पुस्तक माँगी थी वह आ गई', 'तुम्ही मागितलेली पुस्तक आली'],
+  readingList: ['Monthly reading list', 'मासिक पठन सूची', 'मासिक वाचन यादी'],
+  readingClubHint: ['Picked by teachers — every student can read along.',
+    'शिक्षकों द्वारा चुनी गई — हर छात्र इसे पढ़ सकता है।',
+    'शिक्षकांनी निवडलेली — प्रत्येक विद्यार्थी ती वाचू शकतो.'],
+  findThisBook: ['Find this book', 'यह पुस्तक खोजें', 'ही पुस्तक शोधा'],
+  readingEmpty: ['No pick here yet — this month\u2019s will appear the moment a teacher posts it.',
+    'अभी कोई पसंद नहीं — शिक्षक डालते ही इस महीने की यहाँ आ जाएगी।',
+    'अद्याप निवड नाही — शिक्षक पोस्ट करताच या महिन्याची इथे येईल.'],
+  postPick: ['Post this month\u2019s pick', 'इस महीने की पसंद पोस्ट करें', 'या महिन्याची निवड पोस्ट करा'],
+  pickTitle: ['Book title', 'पुस्तक का नाम', 'पुस्तकाचे नाव'],
+  pickAuthor: ['Author (optional)', 'लेखक (वैकल्पिक)', 'लेखक (ऐच्छिक)'],
+  pickNote: ['Why this book? (optional)', 'यह पुस्तक क्यों? (वैकल्पिक)', 'ही पुस्तक का? (ऐच्छिक)'],
+  pickMonth: ['Month', 'महीना', 'महिना'],
+  withdraw: ['Withdraw', 'हटाएं', 'काढा'],
+  saved: ['Saved', 'सहेजा गया', 'जतन करले'],
+  myPicks: ['Your picks', 'आपकी पसंदें', 'तुमच्या निवडी'],
 };
 
 export function t(key: keyof typeof S | string, lang: Lang): string {
   const v = S[key as string];
   return v ? (lang === 'hi' ? v[1] : lang === 'mr' ? v[2] : v[0]) : (key as string);
+}
+
+/** "2026-10" → "October 2026" in the reader's own language.
+ * Intl does the month names for all three, so no hand-kept table drifts. */
+export function monthLabel(iso: string, lang: Lang): string {
+  const [y, m] = iso.split('-').map(Number);
+  if (!y || !m || m < 1 || m > 12) return iso;
+  const locale = lang === 'hi' ? 'hi-IN' : lang === 'mr' ? 'mr-IN' : 'en-IN';
+  try {
+    return new Date(y, m - 1, 1).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+  } catch {
+    return iso; // any environment without that locale still shows the ISO month
+  }
 }
 
 export function pick(lang: Lang, en: string, hi: string, mr?: string): string {

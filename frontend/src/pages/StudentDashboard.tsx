@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { apiMyCourses, apiNotifications, apiProgressSummary, apiToday, apiWeakTopics } from '../api';
-import { getToken } from '../auth';
-import { t } from '../i18n';
-import type { Lang, TodayPlan, WeakTopics, ProgressSummary, Notification } from '../types';
+import { apiMyCourses, apiNotifications, apiProgressSummary, apiReadingList, apiToday, apiWeakTopics } from '../api';
+import { getUser, getToken } from '../auth';
+import { monthLabel, t } from '../i18n';
+import { setTextbookPref } from '../prefs';
+import type { Lang, TodayPlan, WeakTopics, ProgressSummary, Notification, ReadingPick } from '../types';
 
 export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: string, id?: number) => void }) {
   const [today, setToday] = useState<TodayPlan | null>(null);
@@ -10,6 +11,7 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
   const [summary, setSummary] = useState<ProgressSummary | null>(null);
   const [courses, setCourses] = useState<{ id: number; title_en: string; progress_pct: number }[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
+  const [picks, setPicks] = useState<ReadingPick[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -29,6 +31,9 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
         setLoading(false);
       }
     })();
+    // The reading list is public, so a failed fetch must never take this
+    // dashboard down with it — it simply stays off the card.
+    apiReadingList().then(setPicks).catch(() => setPicks([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
@@ -38,6 +43,22 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
 
   let user: { name?: string } = {};
   try { user = JSON.parse(localStorage.getItem('gs_user') || '{}') as { name?: string }; } catch { /* use the fallback greeting */ }
+
+  /** Send a pick to the library, prefilled: a readable one lands with the
+   * reader already open, anything else with the search filled and running.
+   * The pick's own class/board/medium travel with it so the portal scan (if
+   * needed) looks in the right place. */
+  const openFromList = (p: ReadingPick) => {
+    const me = getUser();
+    setTextbookPref({
+      grade: p.class_grade ?? me?.class_grade ?? 8,
+      board: p.board || me?.board || 'Maharashtra SSC',
+      lang: p.lang || undefined,
+      q: p.title,
+      open: p.readable && p.textbook_id ? p.textbook_id : undefined,
+    });
+    go('textbooks');
+  };
 
   return (
     <div>
@@ -55,6 +76,38 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
               ? `📖 ${t('bookArrived', lang)} — ${String(notifs[0].payload.title ?? '')}`
               : String(notifs[0].payload.title ?? notifs[0].payload.badge ?? notifs[0].type)}
           </div>
+        </div>
+      )}
+
+      {/* Monthly Reading List — the book club a teacher posts to once a month.
+          One hop to the library either way: a readable pick opens straight in
+          the in-app reader, any other drops its title into the Smart Book
+          Finder. Nothing ever navigates to another site. */}
+      {!!picks.length && (
+        <div className="card reading-banner">
+          <div className="reading-head">
+            <strong>📚 {t('readingList', lang)} · {monthLabel(picks[0].month, lang)}</strong>
+            <span className="muted">{t('readingClubHint', lang)}</span>
+          </div>
+          {picks.slice(0, 2).map((p) => (
+            <div className="reading-row" key={p.id}>
+              <div className="reading-text">
+                <div className="reading-title">
+                  {p.title}
+                  {p.author && <span className="muted"> · {p.author}</span>}
+                </div>
+                <div className="muted reading-meta">
+                  {p.teacher_name}{p.subject_name ? ` · ${p.subject_name}` : ''}
+                </div>
+                {p.note && <p className="reading-note">{p.note}</p>}
+              </div>
+              <button type="button"
+                className={`btn small ${p.readable && p.textbook_id ? 'accent' : ''}`}
+                onClick={() => openFromList(p)}>
+                {p.readable && p.textbook_id ? `📖 ${t('read', lang)}` : `🔎 ${t('findThisBook', lang)}`}
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

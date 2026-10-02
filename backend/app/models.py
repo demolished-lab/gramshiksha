@@ -314,6 +314,33 @@ class BookRequest(SQLModel, table=True):
     found_at: Optional[datetime] = None
 
 
+class ReadingPick(SQLModel, table=True):
+    """One teacher's pick for the monthly reading list ("Rich Dad Poor Dad").
+
+    Audience decision: a book club, not an assignment — every student sees
+    every teacher's pick, so GET /library/reading is public and never
+    filtered by class. A row points at a catalog Textbook when one exists,
+    so "Read now" opens the in-app reader on the spot; when it does not,
+    the student gets "Find this book", which drops the title into the Smart
+    Book Finder (instant → official scan → request queue) instead of a dead
+    end. Only approved teachers may post (require_teacher), and repeating
+    the same title in the same month updates the note instead of stacking
+    duplicates.
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    teacher_id: int = Field(foreign_key="user.id", index=True)
+    month: str = Field(index=True)   # ISO "2026-10" — the pick's month
+    title: str = Field(index=True)
+    author: str = ""
+    note: str = ""                   # why this book, what to watch for
+    lang: str = ""
+    subject_name: str = ""
+    class_grade: Optional[int] = Field(default=None, index=True)  # null = whole school
+    board: str = ""
+    textbook_id: Optional[int] = Field(default=None, foreign_key="textbook.id")
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class Doubt(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     student_id: int = Field(foreign_key="user.id", index=True)

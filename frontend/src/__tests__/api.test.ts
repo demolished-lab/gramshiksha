@@ -5,8 +5,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  apiAdminUsers, apiApproveUser, apiCourses, apiLocate, apiLogin, apiMaterialUrl, apiMe,
-  apiMyRequests, apiSuspendUser, apiTextbookOpenUrl, apiUploadMaterial,
+  apiAdminUsers, apiApproveUser, apiCourses, apiDeletePick, apiLocate, apiLogin, apiMaterialUrl, apiMe,
+  apiMyRequests, apiReadingList, apiSavePick, apiSuspendUser, apiTextbookOpenUrl, apiUploadMaterial,
 } from '../api';
 
 const jsonResponse = (status: number, body: unknown) =>
@@ -194,5 +194,44 @@ describe('reader + Smart Book Finder', () => {
 
     expect(lastCall().url).toBe('/api/library/requests');
     expect(lastCall().headers.Authorization).toBe('Bearer tok-1');
+  });
+});
+
+describe('Monthly Reading List', () => {
+  it('reads the public list without a session (book club: everyone sees it)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, []));
+
+    await apiReadingList();
+
+    expect(lastCall().url).toBe('/api/library/reading');
+    expect(lastCall().headers.Authorization).toBeUndefined();
+  });
+
+  it("narrows to the teacher's own picks with mine=1, still bearer-authed", async () => {
+    localStorage.setItem('gs_token', 'tok-t');
+    fetchMock.mockResolvedValue(jsonResponse(200, []));
+
+    await apiReadingList(true);
+
+    expect(lastCall().url).toBe('/api/library/reading?mine=1');
+    expect(lastCall().headers.Authorization).toBe('Bearer tok-t');
+  });
+
+  it('posts a pick as JSON and withdraws it with DELETE', async () => {
+    localStorage.setItem('gs_token', 'tok-t');
+    fetchMock.mockImplementation(async () => jsonResponse(200, { id: 4, created: true }));
+
+    await apiSavePick({ month: '2026-10', title: 'Rich Dad Poor Dad', note: 'Chapter 1' });
+    const posted = lastCall();
+    expect(posted.url).toBe('/api/library/reading');
+    expect(posted.init.method).toBe('POST');
+    expect(JSON.parse(String(posted.init.body))).toEqual({
+      month: '2026-10', title: 'Rich Dad Poor Dad', note: 'Chapter 1' });
+
+    await apiDeletePick(4);
+    const gone = lastCall();
+    expect(gone.url).toBe('/api/library/reading/4');
+    expect(gone.init.method).toBe('DELETE');
+    expect(gone.headers.Authorization).toBe('Bearer tok-t');
   });
 });

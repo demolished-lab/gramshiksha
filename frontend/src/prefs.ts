@@ -11,6 +11,13 @@ export interface TextbookPref {
   board: string;
   subject?: string;
   lang?: string;
+  /** A title to hand straight to the Smart Book Finder — set by "Find this
+   * book" on a Monthly Reading List pick so the student lands on the page
+   * with the search already filled and running. */
+  q?: string;
+  /** A reading-list pick whose catalog row is readable: land on the library
+   * with that book already open in the in-app reader. */
+  open?: number;
 }
 
 export interface CoursesPref {

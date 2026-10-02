@@ -30,9 +30,9 @@ from sqlmodel import Session, select
 
 from ..config import settings
 from ..db import get_session
-from ..models import BookRequest, Notification, Textbook, User, utcnow
+from ..models import BookRequest, Notification, ReadingPick, Textbook, User, utcnow
 from ..ratelimit import rate_limit
-from ..security import get_current_user
+from ..security import get_current_user, require_teacher
 from .catalog import _textbook_out, check_url
 
 # scripts/ is a sibling of app/ — put the backend root on sys.path so the
@@ -335,3 +335,162 @@ def my_requests(user: User = Depends(get_current_user),
          "found_at": r.found_at.isoformat() if r.found_at else None}
         for r in rows
     ]
+
+
+# ---------- Monthly Reading List (book club) ------------------------------
+# "Rich Dad Poor Dad" and friends: a teacher posts one pick a month, every
+# student sees it — book club, not homework. Each pick links to the catalog
+# when it can ("Read now" opens the in-app reader) and to the Smart Book
+# Finder when it cannot, so an un-cataloged pick queues itself instead of
+# becoming a dead end.
+
+_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+_READING_WINDOW = 3  # months returned: this one and the two before it
+
+
+class ReadingIn(BaseModel):
+    month: str = Field(min_length=7, max_length=7)   # "2026-10"
+    title: str = Field(min_length=2, max_length=160)
+    author: str = Field(default="", max_length=80)
+    note: str = Field(default="", max_length=600)
+    lang: str = Field(default="", max_length=8)
+    subject_name: str = Field(default="", max_length=80)
+    class_grade: Optional[int] = Field(default=None, ge=1, le=12)
+    board: str = Field(default="", max_length=40)
+    textbook_id: Optional[int] = Field(default=None, ge=1)
+
+
+def _recent_months(count: int = _READING_WINDOW) -> list[str]:
+    """[this month, previous, …] as ISO strings — the window keeps a stale
+    pick from sitting at the top of the public list forever."""
+    now = utcnow()
+    out = []
+    for i in range(count):
+        year, month = now.year, now.month - i
+        while month <= 0:
+            month, year = month + 12, year - 1
+        out.append(f"{year:04d}-{month:02d}")
+    return out
+
+
+def _pick_out(p: ReadingPick, teacher_name: str, readable: bool) -> dict:
+    return {
+        "id": p.id, "month": p.month, "title": p.title, "author": p.author,
+        "note": p.note, "lang": p.lang, "subject_name": p.subject_name,
+        "class_grade": p.class_grade, "board": p.board,
+        "textbook_id": p.textbook_id, "readable": readable,
+        "teacher_name": teacher_name, "created_at": p.created_at.isoformat(),
+    }
+
+
+@router.get("/library/reading")
+def reading_list(mine: bool = False,
+                 user: Optional[User] = Depends(_optional_user),
+                 session: Session = Depends(get_session)) -> list[dict]:
+    """This month's reading list — public by decision (any student, any class).
+
+    Newest first, and readable means the pick already has a healthy deep PDF
+    in the catalog (so the UI can offer "Read now" honestly). Teachers and
+    books are prefetched in one query each: per-row round-trips to Neon cost
+    ~0.4 s, which would turn this into a slow public page.
+
+    `mine=1` narrows the answer to the signed-in teacher's own picks — that
+    is the management view behind the dashboard's withdraw button, and it
+    needs no teacher_id in the public payload.
+    """
+    rows = session.exec(
+        select(ReadingPick).where(ReadingPick.month.in_(_recent_months()))
+        .order_by(ReadingPick.month.desc(), ReadingPick.id.desc())
+        .limit(60)).all()
+    if mine:
+        if user is None:
+            raise HTTPException(401, "Sign in to see your own reading picks")
+        rows = [r for r in rows if r.teacher_id == user.id]
+    if not rows:
+        return []
+    teacher_ids = {r.teacher_id for r in rows}
+    book_ids = {r.textbook_id for r in rows if r.textbook_id}
+    teachers = {u.id: (u.name or u.email.split("@")[0]) for u in session.exec(
+        select(User).where(User.id.in_(teacher_ids))).all()}
+    books = {b.id: b for b in session.exec(
+        select(Textbook).where(Textbook.id.in_(book_ids))).all()} if book_ids else {}
+    return [
+        _pick_out(r, teachers.get(r.teacher_id, ""),
+                  bool(r.textbook_id and books.get(r.textbook_id)
+                       and books[r.textbook_id].deep_url
+                       and books[r.textbook_id].last_ok))
+        for r in rows
+    ]
+
+
+@router.post("/library/reading",
+             dependencies=[Depends(rate_limit("library.reading", 12, 60.0))])
+def create_reading(payload: ReadingIn,
+                   teacher: User = Depends(require_teacher),
+                   session: Session = Depends(get_session)) -> dict:
+    """Post (or update) this month's pick.
+
+    Only an approved teacher may post; re-posting the same title in the same
+    month rewrites the note instead of stacking duplicates; and the pick is
+    linked to the catalog automatically when the title already resolves there
+    — otherwise the student gets "Find this book", which queues it for the
+    finder. An unknown textbook_id is refused rather than accepted as a dead
+    "Read now".
+    """
+    if not _MONTH_RE.match(payload.month):
+        raise HTTPException(422, "month must be YYYY-MM")
+    book = None
+    if payload.textbook_id:
+        book = session.get(Textbook, payload.textbook_id)
+        if book is None:
+            raise HTTPException(422, "textbook_id does not exist")
+    title = WS_RE.sub(" ", payload.title).strip()
+
+    same_month = session.exec(select(ReadingPick).where(
+        ReadingPick.teacher_id == teacher.id,
+        ReadingPick.month == payload.month)).all()
+    row = next((r for r in same_month if _norm(r.title) == _norm(title)), None)
+
+    if book is None:
+        # Link it only if this really is that book — a fuzzy near-miss would
+        # hand every student the wrong "Read now".
+        hit = search_library(session, _norm(title), limit=1)
+        if hit and fuzzy_match(title, hit[0].title):
+            book = hit[0]
+
+    created = row is None
+    if row is None:
+        row = ReadingPick(teacher_id=teacher.id, month=payload.month, title=title)
+    row.author = payload.author
+    row.note = payload.note
+    row.lang = payload.lang
+    row.subject_name = payload.subject_name
+    row.class_grade = payload.class_grade
+    row.board = payload.board
+    if book is not None:
+        row.textbook_id = book.id
+    # else: a new pick has no link (the student gets "Find this book"), and an
+    # edited one keeps the link it already had — the row was matched on the
+    # title, so it is still that same book.
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return _pick_out(row, teacher.name or teacher.email.split("@")[0],
+                     bool(book and book.deep_url and book.last_ok)) | {"created": created}
+
+
+@router.delete("/library/reading/{pick_id}")
+def delete_reading(pick_id: int, user: User = Depends(get_current_user),
+                   session: Session = Depends(get_session)) -> dict:
+    """A teacher withdraws their own pick; admins can withdraw any (an
+    inappropriate or mistaken pick has to be removable by the platform, not
+    only by whoever posted it)."""
+    row = session.get(ReadingPick, pick_id)
+    if row is None:
+        raise HTTPException(404, "Reading pick not found")
+    if row.teacher_id != user.id and user.role not in ("school_admin",
+                                                       "platform_admin"):
+        raise HTTPException(403, "Not your pick")
+    session.delete(row)
+    session.commit()
+    return {"deleted": pick_id}

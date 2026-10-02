@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { apiAvailability, apiLocate, apiMyRequests, apiSubjects, apiTextbookOpenUrl, apiTextbookPortals, apiTextbooks } from '../api';
+import { apiAvailability, apiLocate, apiMyRequests, apiReadingList, apiSubjects, apiTextbookOpenUrl, apiTextbookPortals, apiTextbooks } from '../api';
 import { booksIn, subjectLabel } from '../catalog';
-import { pick, t } from '../i18n';
+import { monthLabel, pick, t } from '../i18n';
 import { takeTextbookPref } from '../prefs';
-import type { Availability, BookAsk, Lang, Subject, Textbook } from '../types';
+import type { Availability, BookAsk, Lang, ReadingPick, Subject, Textbook } from '../types';
 
 const BOARDS = ['Maharashtra SSC', 'Maharashtra HSC', 'CBSE'];
 const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -41,16 +41,25 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   const [loading, setLoading] = useState(false);
 
   // Smart Book Finder + in-app viewer
-  const [query, setQuery] = useState('');
+  // `pref.q` seeds the box: "Find this book" on a reading-list pick lands here
+  // with the title already chosen (and runs once, below).
+  const [query, setQuery] = useState(pref?.q ?? '');
   const [reload, setReload] = useState(0);
   const [finder, setFinder] = useState<Finder>({ kind: 'idle' });
   const [asks, setAsks] = useState<BookAsk[]>([]);
-  const [viewer, setViewer] = useState<Textbook | null>(null);
+  const [picks, setPicks] = useState<ReadingPick[]>([]);
+  // The reader needs only what it shows: an id for the frame and a title for
+  // the bar. A reading-list pick carries both, so it can open without first
+  // re-fetching a whole Textbook row.
+  const [viewer, setViewer] = useState<{ id: number; title: string } | null>(null);
   const [frameReady, setFrameReady] = useState(false);
 
   const signedIn = !!user;
 
   useEffect(() => { apiTextbookPortals().then(setPortals).catch(() => setPortals([])); }, []);
+
+  // The Monthly Reading List is public (book club), so a visitor sees it too.
+  useEffect(() => { apiReadingList().then(setPicks).catch(() => setPicks([])); }, []);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -115,13 +124,18 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   }, [viewer]);
 
   /** Tier 1+2+3 happens server-side; the UI only ever shows a final state.
-   * A miss is not an error — it is a queue position with an honest ETA. */
-  const runFinder = async () => {
-    const term = query.trim();
+   * A miss is not an error — it is a queue position with an honest ETA.
+   * `termIn`/`scope` come from "Find this book", where the title and class
+   * belong to a reading-list pick rather than to this page's filters. */
+  const runFinder = async (termIn?: string, scope?: { grade: number; board: string; lang: string }) => {
+    const term = (termIn ?? query).trim();
     if (term.length < 2 || finder.kind === 'scanning') return;
-    setFinder({ kind: 'scanning', left: bookLang ? 10 : 30 });
+    const g = scope?.grade ?? grade;
+    const b = scope?.board ?? board;
+    const l = scope?.lang ?? bookLang;
+    setFinder({ kind: 'scanning', left: l ? 10 : 30 });
     try {
-      const res = await apiLocate(term, grade, board, bookLang);
+      const res = await apiLocate(term, g, b, l);
       if (res.result === 'found') {
         setFinder({ kind: 'found', books: res.books ?? [], official: res.source === 'official' });
         if (res.source === 'official') setReload((n) => n + 1); // it is now in this class
@@ -134,7 +148,51 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     }
   };
 
+  // Arrived from "Read"/"Find this book" on a reading-list pick (the
+  // dashboard card): open the book, or seed and run the search once, then
+  // bring the panel into view. The box is already seeded (useState above).
+  useEffect(() => {
+    if (pref?.open) {
+      setFrameReady(false);
+      setViewer({ id: pref.open, title: pref.q ?? '' });
+      return;
+    }
+    if (!pref?.q) return;
+    void runFinder(pref.q, {
+      grade: pref.grade ?? grade,
+      board: pref.board || board,
+      lang: pref.lang ?? '',
+    });
+    document.getElementById('finder')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openBook = (b: Textbook) => { setFrameReady(false); setViewer(b); };
+
+  /** "Read now" on a pick whose catalog row has a healthy PDF. */
+  const openPick = (p: ReadingPick) => {
+    if (!p.textbook_id) return;
+    setFrameReady(false);
+    setViewer({ id: p.textbook_id, title: p.title });
+  };
+
+  /** "Find this book" on a pick: adopt the pick's class/board/medium so the
+   * portal scan (tier 2) looks in the right place, then search right here —
+   * never a redirect, only a final result in the panel below. */
+  const findThisBook = (p: ReadingPick) => {
+    const scope = {
+      grade: p.class_grade ?? grade,
+      board: p.board || board,
+      lang: p.lang || bookLang,
+    };
+    setGrade(scope.grade);
+    setBoard(scope.board);
+    setBookLang(scope.lang);
+    setQuery(p.title);
+    setFinder({ kind: 'idle' });
+    void runFinder(p.title, scope);
+    document.getElementById('finder')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const relevantPortals = portals.filter((p) => p.boards.includes(board));
   const totalBooks = avail ? avail.mediums.reduce((n, m) => n + m.books, 0) : null;
@@ -165,9 +223,48 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
       <h1>📕 {t('textbooks', lang)}</h1>
       <p className="muted">Official textbooks only — files stream straight from the government portals into the reader below, never re-hosted here.</p>
 
+      {/* Monthly Reading List — a book club, not homework: every student sees
+          every teacher's pick. A pick that is already in the catalog opens the
+          in-app reader; one that isn't hands its title to the Smart Book
+          Finder below (never a dead end, never a redirect). */}
+      {!!picks.length && (
+        <div className="card reading-banner">
+          <div className="reading-head">
+            <strong>📚 {t('readingList', lang)} · {monthLabel(picks[0].month, lang)}</strong>
+            <span className="muted">{t('readingClubHint', lang)}</span>
+          </div>
+          {picks.slice(0, 4).map((p) => (
+            <div className="reading-row" key={p.id}>
+              <div className="reading-text">
+                <div className="reading-title">
+                  {p.title}
+                  {p.author && <span className="muted"> · {p.author}</span>}
+                </div>
+                <div className="muted reading-meta">
+                  {p.teacher_name}
+                  {p.subject_name ? ` · ${p.subject_name}` : ''}
+                  {p.lang ? ` · ${p.lang.toUpperCase()}` : ''}
+                  {p.month !== picks[0].month ? ` · ${monthLabel(p.month, lang)}` : ''}
+                </div>
+                {p.note && <p className="reading-note">{p.note}</p>}
+              </div>
+              {p.readable && p.textbook_id ? (
+                <button type="button" className="btn small accent" onClick={() => openPick(p)}>
+                  📖 {t('read', lang)}
+                </button>
+              ) : (
+                <button type="button" className="btn small" onClick={() => findThisBook(p)}>
+                  🔎 {t('findThisBook', lang)}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Smart Book Finder: instant filter of this class, then (on request)
           a background scan of the official portal with an honest ETA. */}
-      <div className="card">
+      <div className="card" id="finder">
         <strong>{t('finder', lang)}</strong>
         <div className="finder">
           <input value={query} onChange={(e) => setQuery(e.target.value)}

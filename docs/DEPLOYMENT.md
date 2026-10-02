@@ -172,6 +172,14 @@ integration — pushes to `main` deploy Render only, and that is intentional
   `keep-warm.log` — verified waking a cold instance (200 after ~50 s).
   Independent of GitHub entirely; remove with `schtasks /Delete /TN
   "GramShiksha Keep Warm" /F` once the cloud schedule is proven.
+  **Power condition matters:** Task Scheduler's default is "do not start on
+  batteries", and that silently skipped **14 runs** on 2026-10-03 (02:37 →
+  04:57, `NumberOfMissedRuns = 14`) the moment the laptop was unplugged —
+  the instance went cold and no log line appeared at all. The task is now set
+  with `DisallowStartIfOnBatteries = False`, `StopIfGoingOnBatteries = False`
+  and `StartWhenAvailable = True`; the audit below reads them back from
+  `(Get-ScheduledTask -TaskName "GramShiksha Keep Warm").Settings` and flags a
+  non-zero `NumberOfMissedRuns`.
   The same task also drives `forks.yml`: that workflow was schedule-only
   (Mondays 06:00 UTC) and would otherwise never run, so the script dispatches
   it itself at most once per 24 h via the stored git credential (marker file
@@ -186,7 +194,8 @@ integration — pushes to `main` deploy Render only, and that is intentional
   back-to-back runs can never become a crawl cannon — `keep-warm.log` shows
   one `scan 200` per run (a 200 that answered `{"skipped":true}` inside the
   cooldown is healthy too). **Every loop audit must verify:** task registered
-  (`schtasks /Query /TN "GramShiksha Keep Warm"`), `keep-warm.log` advancing
+  (`schtasks /Query /TN "GramShiksha Keep Warm"`), its settings still allow
+  battery starts with `NumberOfMissedRuns = 0`, `keep-warm.log` advancing
   with `200` and `scan 200` lines, and marker no older than ~48 h — an older
   marker plus `forks-dispatch` failure lines in the log means the credential
   or API broke.

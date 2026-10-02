@@ -235,6 +235,28 @@ export interface BookAsk {
   found_at: string | null;
 }
 
+/** GET /library/reading — the Monthly Reading List. A book club, not an
+ * assignment: every student sees every teacher's pick, newest month first.
+ * `readable` means the pick's catalog row has a healthy PDF, so the UI can
+ * offer "Read now" honestly; otherwise it offers "Find this book", which
+ * hands the title to the Smart Book Finder. `created` is POST-only. */
+export interface ReadingPick {
+  id: number;
+  month: string;
+  title: string;
+  author: string;
+  note: string;
+  lang: string;
+  subject_name: string;
+  class_grade: number | null;
+  board: string;
+  textbook_id: number | null;
+  readable: boolean;
+  teacher_name: string;
+  created_at: string;
+  created?: boolean;
+}
+
 export interface Doubt {
   id: number;
   text: string;

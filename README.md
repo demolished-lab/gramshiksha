@@ -20,7 +20,9 @@ slow internet, shared phones and limited data.
 | **Today's Learning** | Personalized daily plan: continue → practice quiz → revision |
 | **Gamification** | XP, daily streaks, 7 server-awarded badges, certificates (GS-XXXX IDs) |
 | **Materials** | Uploads → **approval workflow** (pending → approved/needs_changes/rejected): students and *unapproved* teachers always land in review, approved teachers publish immediately + reporting |
-| **Textbooks** | Official links only (ePathshala/NCERT, eBalbharati) — no re-hosting |
+| **Textbooks** | Official links only (ePathshala/NCERT, eBalbharati) — no re-hosting; PDFs stream through our own origin into an in-app reader |
+| **Smart Book Finder** | One search box: instant library match → live official-portal scan with an honest ETA → request queue that fills itself (keep-warm) |
+| **Reading list** | Monthly Reading List — a teacher posts one pick a month, **every** student sees it (book club): "Read now" in the reader, or "Find this book" into the finder |
 | **Doubts** | Ask → teacher replies → resolve, with notifications |
 | **Dashboards** | Student, Teacher (monitor + doubts), Parent (weekly child summary), School, Admin |
 | **Rural-first** | Data Saver mode, offline service worker, My Downloads, offline sync queue, <65 KB gzip JS |
@@ -149,6 +151,27 @@ CBSE/NCERT: use `backend/scripts/crawl_ncert.py`
 the same way (crawl → `--apply`); it only stores URLs verified live as PDFs
 on ncert.nic.in/epathshala.nic.in. Run it from inside India — both portals
 time out from most foreign networks (verified Sep 2026).
+
+## Smart Book Finder & Monthly Reading List
+
+**Finder** (`POST /library/locate`) resolves any title in three tiers,
+cheapest first: this class's catalog (milliseconds) → a live scan of the
+official portal for that class (reported as `eta_seconds` *and* the real
+`elapsed_s`) → a request queue. A miss is a queue position, not an error:
+keep-warm's Job 3 POSTs `/api/library/scan-requests` every 10 minutes, so a
+queued book that turns up in the catalog fills itself and notifies the
+requester (`book_available`). Everything renders inside the page — no visible
+redirect, only the final result.
+
+**Monthly Reading List** (`POST/GET/DELETE /library/reading`) — any *approved*
+teacher posts one pick a month; **every** student sees every pick, newest
+month first (audience decision: a book club, not an assignment). A pick whose
+title already resolves in the catalog is linked automatically and reads in the
+in-app reader; anything else gives the student "Find this book", which hands
+the title to the finder. Re-posting the same title in the same month rewrites
+it instead of duplicating, `GET /library/reading?mine=1` is the teacher's own
+list behind the dashboard's withdraw button, and only the owner or an admin
+can withdraw a pick.
 4. **Uploads** — production writes to Cloudinary (`CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET`),
    otherwise `backend/uploads/` lives on an ephemeral disk and is wiped on every redeploy.
    Only if you mounted a real persistent disk at `backend/uploads`, set
