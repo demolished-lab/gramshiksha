@@ -43,7 +43,7 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
         <div className="grade-grid">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((g) => (
             <button className={`grade-card grade-${(g - 1) % 5}`} key={g} onClick={() => go('explore', g)}>
-              <span className="grade-number">{g}</span><span>Class {g}</span><small>SSC · CBSE</small>
+              <span className="grade-number">{g}</span><span>Class {g}</span><small>{g <= 10 ? 'SSC · CBSE' : 'HSC · CBSE'}</small>
             </button>
           ))}
         </div>

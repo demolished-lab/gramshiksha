@@ -64,9 +64,12 @@ export default function App() {
       course: 'Course details', lesson: 'Lesson', practice: 'Practice', materials: 'Study materials',
       textbooks: 'Textbooks', doubts: 'Ask a doubt', downloads: 'My downloads', progress: 'My progress',
       dashboard: 'Today’s learning', teacher: 'Teacher dashboard', parent: 'Parent dashboard', admin: 'Admin dashboard',
+      // #/login carries its audience in the sub slot (parseHash) — name it.
+      'login.student': 'Student login', 'login.teacher': 'Teacher login', login: 'Log in',
     };
-    document.title = `${pageTitles[route.page] ?? 'Learn without limits'} · GramShiksha`;
-  }, [route.page]);
+    const key = route.sub ? `${route.page}.${route.sub}` : route.page;
+    document.title = `${pageTitles[key] ?? pageTitles[route.page] ?? 'Learn without limits'} · GramShiksha`;
+  }, [route.page, route.sub]);
 
   useEffect(() => {
     document.body.classList.toggle('data-saver', saver);
