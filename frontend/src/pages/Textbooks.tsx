@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { apiAvailability, apiTextbookOpenUrl, apiTextbookPortals, apiTextbooks } from '../api';
+import { apiAvailability, apiSubjects, apiTextbookOpenUrl, apiTextbookPortals, apiTextbooks } from '../api';
 import { booksIn, subjectLabel } from '../catalog';
-import { t } from '../i18n';
+import { pick, t } from '../i18n';
 import { takeTextbookPref } from '../prefs';
-import type { Availability, Lang, Textbook } from '../types';
+import type { Availability, Lang, Subject, Textbook } from '../types';
 
 const BOARDS = ['Maharashtra SSC', 'Maharashtra HSC', 'CBSE'];
 const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -23,6 +23,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   const [bookLang, setBookLang] = useState<string>(pref?.lang ?? '');
   const [subject, setSubject] = useState<string>(pref?.subject ?? '');
   const [avail, setAvail] = useState<Availability | null>(null);
+  const [legacy, setLegacy] = useState<Subject[] | null>(null);
   const [books, setBooks] = useState<Textbook[]>([]);
   const [portals, setPortals] = useState<Portal[]>([]);
   const [loading, setLoading] = useState(false);
@@ -31,9 +32,19 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
 
   useEffect(() => {
     let live = true;
+    setAvail(null);
+    setLegacy(null);
     apiAvailability(board, grade)
       .then((a) => { if (live) setAvail(a); })
-      .catch(() => { if (live) setAvail(null); });
+      .catch(() => {
+        // Availability unreachable (old backend mid-deploy, network blip) —
+        // fall back to the legacy generic filters rather than render empty,
+        // disabled dropdowns. The book list below still loads either way.
+        if (!live) return;
+        apiSubjects(grade, board)
+          .then((rows) => { if (live) setLegacy(rows); })
+          .catch(() => { if (live) setLegacy([]); });
+      });
     return () => { live = false; };
   }, [grade, board]);
 
@@ -58,9 +69,21 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   }, [grade, board, bookLang, subject]);
 
   const relevantPortals = portals.filter((p) => p.boards.includes(board));
-  const mediumOptions = avail?.mediums ?? [];
-  const subjectOptions = (avail?.subjects ?? []).filter((s) => booksIn(s, bookLang) > 0);
-  const totalBooks = mediumOptions.reduce((n, m) => n + m.books, 0);
+  const totalBooks = avail ? avail.mediums.reduce((n, m) => n + m.books, 0) : null;
+  // Availability mode: only combinations with real books. Legacy fallback
+  // (availability unreachable): the original generic lists, never empty.
+  const subjectRows: { value: string; label: string }[] = avail
+    ? avail.subjects.filter((s) => booksIn(s, bookLang) > 0).map((s) => ({
+        value: s.name,
+        label: `${subjectLabel(s, lang)} (${booksIn(s, bookLang)})`,
+      }))
+    : (legacy ?? []).map((s) => ({
+        value: s.name_en,
+        label: pick(lang, s.name_en, s.name_hi, s.name_mr),
+      }));
+  const mediumRows: { value: string; label: string }[] = avail
+    ? avail.mediums.map((m) => ({ value: m.lang, label: `${m.label} (${m.books})` }))
+    : [{ value: 'en', label: 'English' }, { value: 'hi', label: 'हिंदी' }, { value: 'mr', label: 'मराठी' }];
 
   return (
     <div>
@@ -74,19 +97,13 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
           {BOARDS.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
         <select value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject"
-          disabled={!subjectOptions.length && !subject}>
-          <option value="">All subjects ({subjectOptions.length})</option>
-          {subjectOptions.map((s) => (
-            <option key={s.name} value={s.name}>
-              {subjectLabel(s, lang)} ({booksIn(s, bookLang)})
-            </option>
-          ))}
+          disabled={!subjectRows.length && !subject}>
+          <option value="">All subjects ({subjectRows.length})</option>
+          {subjectRows.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         <select value={bookLang} onChange={(e) => setBookLang(e.target.value)} aria-label="Medium">
-          <option value="">{t('allMediums', lang)} ({totalBooks})</option>
-          {mediumOptions.map((m) => (
-            <option key={m.lang} value={m.lang}>{m.label} ({m.books})</option>
-          ))}
+          <option value="">{t('allMediums', lang)}{totalBooks !== null ? ` (${totalBooks})` : ''}</option>
+          {mediumRows.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </div>
 

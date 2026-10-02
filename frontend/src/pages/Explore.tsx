@@ -30,6 +30,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
   const [data, setData] = useState<Availability | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
 
   // A deep link (#/explore/7 from a class card) wins over session memory.
   useEffect(() => { if (routeGrade) setGrade(routeGrade); }, [routeGrade]);
@@ -52,7 +53,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
       .catch(() => { if (live) setError(t('errorLoad', lang)); })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [grade, board, lang]);
+  }, [grade, board, lang, reload]);
 
   const pickGrade = (g: number) => { setGrade(g); location.hash = `/explore/${g}`; };
 
@@ -105,7 +106,14 @@ export default function Explore({ lang, go, routeGrade, user }: {
       )}
 
       {loading && <div><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>}
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error">
+          {error}{' '}
+          <button className="btn small ghost" onClick={() => setReload((r) => r + 1)}>
+            {t('retry', lang)}
+          </button>
+        </p>
+      )}
 
       {!loading && !error && data && (
         subjects.length === 0 ? (
