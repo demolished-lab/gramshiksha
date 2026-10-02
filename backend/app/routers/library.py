@@ -116,7 +116,7 @@ def scan_official(q: str, grade: int, pref_langs: list[str],
     import httpx
 
     codes = {lang: code for code, lang in MEDIUM_LANG.items()}
-    order = [codes[l] for l in pref_langs if l in codes]
+    order = [codes[lc] for lc in pref_langs if lc in codes]
     order += [code for code in codes.values() if code not in order]
     class_code = str(200 + grade)  # 201..212 == 1st..12th (portal contract)
     scanned: list[str] = []
