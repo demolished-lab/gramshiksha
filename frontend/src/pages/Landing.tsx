@@ -21,6 +21,10 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
           <button className="btn accent" onClick={() => onLogin()}>{t('startLearning', lang)}</button>
           <button className="btn ghost" onClick={() => go('courses')}>{t('exploreCourses', lang)}</button>
         </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+          <a className="btn ghost" href="#/login/student">🎒 {t('studentLogin', lang)}</a>
+          <a className="btn ghost" href="#/login/teacher">👩‍🏫 {t('teacherLogin', lang)}</a>
+        </div>
       </section>
 
       <h2 className="section-title">{t('classes', lang)} 1–12</h2>

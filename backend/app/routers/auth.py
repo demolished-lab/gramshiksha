@@ -125,6 +125,10 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
     user = session.exec(select(User).where(User.email == form.username)).first()
     if not user or not verify_password(form.password, user.hashed_password):
         raise HTTPException(401, "Incorrect email or password")
+    return _login_payload(user)
+
+
+def _login_payload(user: User) -> dict:
     token = create_access_token(user.email, user.role)
     # role_status rides on the login response so the UI can render the
     # pending/suspended notice immediately, without a second /auth/me round
@@ -134,6 +138,36 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
             "name": user.name, "lang_pref": user.lang_pref,
             "class_grade": user.class_grade, "board": user.board, "xp": user.xp,
             "streak_days": user.streak_days}
+
+
+def _role_login(request: Request, form: OAuth2PasswordRequestForm,
+                session: Session, role: str, rate_key: str) -> dict:
+    """Designated login for one role only (teacher / student pages).
+
+    Wrong password (or unknown email) is always 401 with no role hint — the
+    403 names the expected role only after the password verified, at which
+    point the caller already owns the credential and /token would have told
+    them the role anyway."""
+    _check_rate(request, rate_key)
+    user = session.exec(select(User).where(User.email == form.username)).first()
+    if not user or not verify_password(form.password, user.hashed_password):
+        raise HTTPException(401, "Incorrect email or password")
+    if user.role != role:
+        raise HTTPException(
+            403, f"This login page is for {role}s — this account is a {user.role}")
+    return _login_payload(user)
+
+
+@router.post("/token/teacher")
+def login_teacher(request: Request, form: OAuth2PasswordRequestForm = Depends(),
+                  session: Session = Depends(get_session)):
+    return _role_login(request, form, session, "teacher", "token.teacher")
+
+
+@router.post("/token/student")
+def login_student(request: Request, form: OAuth2PasswordRequestForm = Depends(),
+                  session: Session = Depends(get_session)):
+    return _role_login(request, form, session, "student", "token.student")
 
 
 @router.get("/me")

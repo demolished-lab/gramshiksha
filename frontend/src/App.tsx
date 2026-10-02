@@ -17,15 +17,20 @@ import ProgressPage from './pages/ProgressPage';
 import TeacherDashboard from './pages/TeacherDashboard';
 import ParentDashboard from './pages/ParentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import TeacherLogin from './pages/TeacherLogin';
+import StudentLogin from './pages/StudentLogin';
 import AuthModal from './AuthModal';
 import ApprovalNotice from './ApprovalNotice';
 
-type Route = { page: string; id?: number };
+type Route = { page: string; sub?: string; id?: number };
 
 function parseHash(): Route {
   const h = location.hash.replace(/^#\/?/, '');
-  const [page, idStr] = h.split('/');
-  return { page: page || 'home', id: idStr ? Number(idStr) : undefined };
+  const [page, second] = h.split('/');
+  // #/login/teacher and #/login/student carry the role in the second slot,
+  // where course/lesson carry a numeric id — never mix the two.
+  if (page === 'login') return { page, sub: second };
+  return { page: page || 'home', id: second ? Number(second) : undefined };
 }
 
 export default function App() {
@@ -99,6 +104,13 @@ export default function App() {
 
   let page: JSX.Element;
   switch (route.page) {
+    case 'login':
+      page = route.sub === 'teacher'
+        ? <TeacherLogin lang={lang} go={go} onAuthed={onAuthed} />
+        : route.sub === 'student'
+          ? <StudentLogin lang={lang} go={go} onAuthed={onAuthed} />
+          : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
+      break;
     case 'dashboard': page = <StudentDashboard lang={lang} go={go} />; break;
     case 'courses': page = <Courses lang={lang} go={go} />; break;
     case 'course': page = <CourseDetail lang={lang} go={go} courseId={route.id!} />; break;

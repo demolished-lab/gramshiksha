@@ -10,4 +10,6 @@
   <url><loc>https://gramshiksha-academy.vercel.app/#/practice</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
   <url><loc>https://gramshiksha-academy.vercel.app/#/doubts</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
   <url><loc>https://gramshiksha-academy.vercel.app/#/downloads</loc><changefreq>monthly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://gramshiksha-academy.vercel.app/#/login/student</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://gramshiksha-academy.vercel.app/#/login/teacher</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
 </urlset>

@@ -57,6 +57,29 @@ export const apiMe = () => req<Me>('/auth/me');
 export const apiUpdateMe = (payload: Record<string, unknown>) =>
   req<{ ok: boolean }>('/auth/me', { method: 'PATCH', body: JSON.stringify(payload) });
 
+/** Designated logins: the teacher page only yields teacher sessions, the
+ * student page only student sessions (server returns 403 on role mismatch).
+ * Parents and admins keep using the generic apiLogin. */
+const apiRoleLogin = async (
+  path: '/auth/token/teacher' | '/auth/token/student',
+  email: string, password: string,
+): Promise<LoginResponse> => {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ username: email, password }).toString(),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(typeof j.detail === 'string' ? j.detail : 'Login failed');
+  }
+  return res.json();
+};
+export const apiTeacherLogin = (email: string, password: string) =>
+  apiRoleLogin('/auth/token/teacher', email, password);
+export const apiStudentLogin = (email: string, password: string) =>
+  apiRoleLogin('/auth/token/student', email, password);
+
 // ---------- catalog ----------
 export const apiBoards = () => req<{ id: number; name: string }[]>('/meta/boards');
 export const apiSubjects = (classGrade: number, board: string) =>
