@@ -59,6 +59,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const pageTitles: Record<string, string> = {
+      home: 'Learn without limits', explore: 'Explore courses', courses: 'Courses',
+      course: 'Course details', lesson: 'Lesson', practice: 'Practice', materials: 'Study materials',
+      textbooks: 'Textbooks', doubts: 'Ask a doubt', downloads: 'My downloads', progress: 'My progress',
+      dashboard: 'Today’s learning', teacher: 'Teacher dashboard', parent: 'Parent dashboard', admin: 'Admin dashboard',
+    };
+    document.title = `${pageTitles[route.page] ?? 'Learn without limits'} · GramShiksha`;
+  }, [route.page]);
+
+  useEffect(() => {
     document.body.classList.toggle('data-saver', saver);
   }, [saver]);
 
@@ -143,11 +153,13 @@ export default function App() {
 
   return (
     <>
-      {!online && <div className="banner-offline">📴 {t('offlineNote', lang)}</div>}
+      <a className="skip-link" href="#main-content">Skip to main content</a>
+      {!online && <div className="banner-offline" role="status">📴 {t('offlineNote', lang)} <span>Cached lessons remain available.</span></div>}
       <header className="appbar">
-        <span className="brand" style={{ cursor: 'pointer' }} onClick={nav('home')}>
+        <a className="brand" href="#/home" aria-label="GramShiksha home">
+          <span className="brand-mark" aria-hidden="true">G</span>
           {t('appName', lang)}
-        </span>
+        </a>
         <span className="spacer" />
         <button className="btn small" aria-pressed={saver}
           onClick={() => { const v = !saver; setSaver(v); setDataSaver(v); }}>
@@ -170,22 +182,22 @@ export default function App() {
         )}
       </header>
 
-      <nav className="navbar" aria-label="Main">
+      <nav className="navbar" aria-label="Main navigation">
         {navItems.map(([p, label]) => (
-          <a key={p} href={`#/${p}`} className={route.page === p ? 'active' : ''}>{label}</a>
+          <a key={p} href={`#/${p}`} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}>{label}</a>
         ))}
-        {isStudent && <a href="#/dashboard" className={route.page === 'dashboard' ? 'active' : ''}>{t('todaysLearning', lang)}</a>}
-        {isStudent && <a href="#/progress" className={route.page === 'progress' ? 'active' : ''}>{t('progress', lang)}</a>}
-        {isTeacher && <a href="#/teacher" className={route.page === 'teacher' ? 'active' : ''}>{t('teacher', lang)} ✦</a>}
-        {isParent && <a href="#/parent" className={route.page === 'parent' ? 'active' : ''}>{t('parent', lang)} ✦</a>}
-        {isAdmin && <a href="#/admin" className={route.page === 'admin' ? 'active' : ''}>Admin ✦</a>}
+        {isStudent && <a href="#/dashboard" className={route.page === 'dashboard' ? 'active' : ''} aria-current={route.page === 'dashboard' ? 'page' : undefined}>{t('todaysLearning', lang)}</a>}
+        {isStudent && <a href="#/progress" className={route.page === 'progress' ? 'active' : ''} aria-current={route.page === 'progress' ? 'page' : undefined}>{t('progress', lang)}</a>}
+        {isTeacher && <a href="#/teacher" className={route.page === 'teacher' ? 'active' : ''} aria-current={route.page === 'teacher' ? 'page' : undefined}>{t('teacher', lang)} <span className="nav-role">✦</span></a>}
+        {isParent && <a href="#/parent" className={route.page === 'parent' ? 'active' : ''} aria-current={route.page === 'parent' ? 'page' : undefined}>{t('parent', lang)} <span className="nav-role">✦</span></a>}
+        {isAdmin && <a href="#/admin" className={route.page === 'admin' ? 'active' : ''} aria-current={route.page === 'admin' ? 'page' : undefined}>Admin <span className="nav-role">✦</span></a>}
       </nav>
 
-      <main className="container">{page}</main>
+      <main id="main-content" className="container">{page}</main>
 
       <nav className="tabbar" aria-label="Quick">
         {tabs.map(([p, ic, label]) => (
-          <a key={p} href={`#/${p}`} className={route.page === p ? 'active' : ''}>
+          <a key={p} href={`#/${p}`} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}>
             <span className="ic">{ic}</span>{label}
           </a>
         ))}

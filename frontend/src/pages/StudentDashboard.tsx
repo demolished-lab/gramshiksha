@@ -11,9 +11,12 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
   const [courses, setCourses] = useState<{ id: number; title_en: string; progress_pct: number }[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!getToken()) { go('home'); return; }
+    setLoading(true);
+    setError('');
     (async () => {
       try {
         const [td, wk, sm, mc, nf] = await Promise.all([
@@ -21,22 +24,25 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
         ]);
         setToday(td); setWeak(wk); setSummary(sm); setCourses(mc); setNotifs(nf.filter((n) => !n.read));
       } catch (e) {
-        setError(String(e));
+        setError(e instanceof Error ? e.message : 'Unable to load your learning plan');
+      } finally {
+        setLoading(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
   if (!getToken()) return null;
-  if (error) return <p className="error">{t('errorLoad', lang)} — {error}</p>;
-  if (!today) return <div><div className="skeleton" style={{ width: '60%' }} /><div className="skeleton" /><div className="skeleton" style={{ width: '80%' }} /></div>;
+  if (error) return <div className="error-state"><div className="empty-state"><div className="icon">📡</div><h2>{t('errorLoad', lang)}</h2><p className="muted">{error}</p><button className="btn" onClick={() => window.location.reload()}>Try again</button></div></div>;
+  if (loading || !today) return <div aria-busy="true" aria-label="Loading your learning plan"><div className="skeleton skeleton-title" /><div className="skeleton skeleton-panel" /><div className="skeleton skeleton-panel" /></div>;
 
-  const user = JSON.parse(localStorage.getItem('gs_user') || '{}');
+  let user: { name?: string } = {};
+  try { user = JSON.parse(localStorage.getItem('gs_user') || '{}') as { name?: string }; } catch { /* use the fallback greeting */ }
 
   return (
     <div>
-      <h1>👋 {user.name}</h1>
-      <p className="muted">{t('todaysLearning', lang)} · 🔥 {today.streak_days} {t('streak', lang)} · ⚡ {today.xp} {t('xp', lang)}</p>
+      <div className="page-intro"><div><span className="eyebrow eyebrow-muted">Your learning space</span><h1>👋 {user.name || 'Learner'}</h1><p className="muted">{t('todaysLearning', lang)} · Keep your momentum going.</p></div><div className="streak-pill">🔥 <strong>{today.streak_days}</strong> {t('streak', lang)}</div></div>
+      <div className="dashboard-meta"><span>⚡ {today.xp} {t('xp', lang)}</span><span>⏱️ {today.study_minutes_today} min studied today</span></div>
 
       {notifs.length > 0 && (
         <div className="card" style={{ borderLeft: '4px solid var(--accent)' }}>

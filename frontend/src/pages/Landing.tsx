@@ -11,74 +11,59 @@ const FAQS: [string, string][] = [
   ['Which languages?', 'English, हिंदी and मराठी — switch anytime from the top bar.'],
 ];
 
+const FEATURES = [
+  ['📶', 'Built for real connections', 'Save data, keep learning on slow networks, and revisit cached lessons offline.'],
+  ['🎯', 'Practice that adapts', 'Get instant explanations and focused revision for the topics you find difficult.'],
+  ['🏆', 'Progress you can feel', 'Build streaks, earn badges, and see your learning journey grow over time.'],
+];
+
 export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: string, id?: number) => void; onLogin: () => void }) {
   return (
-    <div>
-      <section className="hero">
-        <h1>{t('appName', lang)}</h1>
-        <p>{t('tagline', lang)} — Class 1–12 · Maharashtra SSC · HSC · CBSE · English · हिंदी · मराठी</p>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button className="btn accent" onClick={() => onLogin()}>{t('startLearning', lang)}</button>
-          <button className="btn ghost" onClick={() => go('explore')}>🧭 {t('explore', lang)}</button>
+    <div className="landing-page">
+      <section className="hero hero-home">
+        <div className="hero-glow" aria-hidden="true" />
+        <div className="eyebrow"><span className="eyebrow-dot" /> Free learning for every learner</div>
+        <h1>Learn with confidence.<br /><span>Grow at your pace.</span></h1>
+        <p className="hero-copy">{t('tagline', lang)} — a friendly, low-data learning space for Classes 1–12, built for Bharat.</p>
+        <div className="hero-actions">
+          <button className="btn accent btn-lg" onClick={onLogin}>{t('startLearning', lang)} <span aria-hidden="true">→</span></button>
+          <button className="btn ghost btn-lg" onClick={() => go('explore')}>🧭 {t('explore', lang)}</button>
         </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 10 }}>
-          <a className="btn ghost" href="#/login/student">🎒 {t('studentLogin', lang)}</a>
-          <a className="btn ghost" href="#/login/teacher">👩‍🏫 {t('teacherLogin', lang)}</a>
+        <div className="quick-entry" aria-label="Quick sign in options">
+          <span>Already learning with us?</span>
+          <a href="#/login/student">Student login</a>
+          <span className="quick-divider" aria-hidden="true">·</span>
+          <a href="#/login/teacher">Teacher login</a>
+        </div>
+        <div className="hero-proof"><span>✓</span> SSC · HSC · CBSE <span>✓</span> English · हिंदी · मराठी <span>✓</span> Always free</div>
+      </section>
+
+      <section className="section-block" aria-labelledby="classes-heading">
+        <div className="section-heading"><div><span className="eyebrow eyebrow-muted">Start here</span><h2 id="classes-heading">Choose your class</h2></div><button className="text-link" onClick={() => go('explore')}>Browse all courses <span aria-hidden="true">→</span></button></div>
+        <div className="grade-grid">
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((g) => (
+            <button className={`grade-card grade-${(g - 1) % 5}`} key={g} onClick={() => go('explore', g)}>
+              <span className="grade-number">{g}</span><span>Class {g}</span><small>SSC · CBSE</small>
+            </button>
+          ))}
         </div>
       </section>
 
-      <h2 className="section-title">{t('classes', lang)} 1–12</h2>
-      <div className="grid-cards">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((g) => (
-          <div className="card course-card" key={g} style={{ cursor: 'pointer' }} onClick={() => go('explore', g)}>
-            <div className="thumb" style={{ background: ['#2563EB', '#16A34A', '#F97316', '#7C3AED', '#DC2626'][g % 5] }}>
-              {g}
-            </div>
-            <strong>Class {g}</strong>
-            <div className="muted">SSC · HSC · CBSE</div>
-          </div>
-        ))}
-      </div>
+      <section className="feature-grid" aria-label="Why GramShiksha">
+        {FEATURES.map(([icon, title, body]) => <article className="feature-card" key={title}><div className="feature-icon" aria-hidden="true">{icon}</div><h3>{title}</h3><p>{body}</p></article>)}
+      </section>
 
-      <h2 className="section-title">Why {t('appName', lang)}</h2>
-      <div className="stat-row">
-        <div className="stat"><div className="num">📶</div><div className="lbl">Low-data mode</div></div>
-        <div className="stat"><div className="num">📴</div><div className="lbl">Works offline</div></div>
-        <div className="stat"><div className="num">🗣️</div><div className="lbl">3 languages</div></div>
-        <div className="stat"><div className="num">🎯</div><div className="lbl">Weak-topic detection</div></div>
-        <div className="stat"><div className="num">🏆</div><div className="lbl">Badges & streaks</div></div>
-        <div className="stat"><div className="num">₹0</div><div className="lbl">Always free</div></div>
-      </div>
-
-      <h2 className="section-title">Learn → Practice → Test → Improve</h2>
-      <div className="card">
-        <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 2 }}>
-          <li>Pick your class, board and language</li>
-          <li>Learn with text, video and audio lessons</li>
-          <li>Practice with instant feedback</li>
-          <li>Take quizzes — see what went wrong</li>
-          <li>Revise weak topics the app detects for you</li>
-          <li>Earn certificates when you finish a course</li>
+      <section className="section-block learning-path" aria-labelledby="path-heading">
+        <div className="path-copy"><span className="eyebrow eyebrow-muted">A simple way to improve</span><h2 id="path-heading">Learn → Practice → Test → Improve</h2><p className="muted">Everything you need to make steady progress, without the pressure.</p><button className="btn" onClick={onLogin}>Create your free account <span aria-hidden="true">→</span></button></div>
+        <ol className="path-list">
+          {['Pick your class, board and language', 'Learn with text, video and audio lessons', 'Practice with instant feedback', 'Take quizzes and understand mistakes', 'Revise weak topics we detect for you'].map((item, i) => <li key={item}><span>{i + 1}</span>{item}</li>)}
         </ol>
-      </div>
+      </section>
 
-      <h2 className="section-title">FAQ</h2>
-      {FAQS.map(([q, a]) => (
-        <details className="card" key={q}>
-          <summary style={{ fontWeight: 700, cursor: 'pointer' }}>{q}</summary>
-          <p className="muted" style={{ marginBottom: 0 }}>{a}</p>
-        </details>
-      ))}
+      <section className="section-block faq-block" aria-labelledby="faq-heading"><div className="section-heading"><div><span className="eyebrow eyebrow-muted">Good to know</span><h2 id="faq-heading">Frequently asked questions</h2></div></div>{FAQS.map(([q, a]) => <details className="faq-item" key={q}><summary>{q}<span aria-hidden="true">+</span></summary><p>{a}</p></details>)}</section>
 
-      <AdSlot />
-      <SupportBar />
-
-      <footer className="site">
-        {t('appName', lang)} · free & open, built for Bharat 🇮🇳
-        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
-          <ShareButtons text="GramShiksha — free Class 1-12 lessons, quizzes & textbooks in English, हिंदी and मराठी" />
-        </div>
-      </footer>
+      <AdSlot /><SupportBar />
+      <footer className="site">{t('appName', lang)} · free & open, built for Bharat 🇮🇳<div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}><ShareButtons text="GramShiksha — free Class 1-12 lessons, quizzes & textbooks in English, हिंदी and मराठी" /></div></footer>
     </div>
   );
 }
