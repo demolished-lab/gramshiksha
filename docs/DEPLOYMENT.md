@@ -122,11 +122,20 @@ integration — pushes to `main` deploy Render only, and that is intentional
 
 ## 6. Day-2 notes
 
-- **Push to `main` = deploy for Render only**: the blueprint auto-deploys and
-  migrations run at boot, so schema changes ship with the push. CI must be
-  green first (SQLite + Postgres + frontend jobs). **Vercel does not
-  auto-deploy** — no Git integration by design (see step 4); ship frontend
-  changes with the CLI command above.
+- **Push to `main` = backend deploy (via deploy hook)**: Render's native
+  GitHub integration lost repo access ("we don't have access to your repo"),
+  so push webhooks stopped arriving and every deploy needed a manual
+  dashboard click. `.github/workflows/deploy-backend.yml` now POSTs the
+  service's private Render **deploy hook** on any push touching `backend/**`,
+  `render.yaml`, or itself — same effect as native auto-deploy, $0, no
+  OAuth repair. The hook URL lives in the `RENDER_DEPLOY_HOOK` Actions
+  secret (sealed-box encrypted by `scripts/register_render_hook_secret.py`,
+  source of truth `~/.gramshiksha/secrets.env`); only HTTP status codes
+  reach logs. Migrations run at boot, so schema changes ship with the push.
+  CI must be green first (SQLite + Postgres + frontend jobs). **Vercel does
+  not auto-deploy** — no Git integration by design (see step 4); ship
+  frontend changes with the CLI command above. Manual fallback remains:
+  dashboard → Deploys → Manual Deploy → Deploy latest commit.
 - **Rotating `JWT_SECRET`** logs every user out (all tokens are signed with it).
 - **Rate limits are in-process**: they reset on restart and are per-instance —
   fine for a single free instance; move to a shared store before scaling out.
@@ -146,3 +155,14 @@ integration — pushes to `main` deploy Render only, and that is intentional
   the backend is truly unreachable, since the job fails on connection error).
   Caveats: GitHub runs schedules only from `main` and pauses them after ~60
   days without repo activity, so keep committing (the loop already does).
+  **Known bug (2026-10-02):** this repo's `schedule` event has never fired
+  since creation — `workflow_dispatch` and CI run fine, but
+  `runs?event=schedule` stays `total_count: 0` across missed ticks, two cron
+  expressions and workflow-file touches, while other repositories' schedules
+  fire on the same minutes (community discussion 202602: the scheduler's
+  cron binding gets stuck on brand-new repos and no YAML change re-registers
+  it). `.github/workflows/warm-ping.yml` is the one remaining self-serve
+  fix — a brand-new workflow path with its own `*/5` schedule. If it stays
+  silent too, file a GitHub Support ticket with the evidence pack (repo,
+  default branch, missed UTC ticks, empty `event=schedule` filter): support
+  re-syncs the scheduler server-side.
