@@ -300,3 +300,56 @@ main.container { max-width: 1160px; padding: 24px 20px 96px; } .btn { box-shadow
 }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .is-authenticated .sidebar, .drawer-backdrop { transition: none; animation: none; } }
+
+/* --- mockup cards: dashboard hero, stat tiles, course cards, covers ------
+   Thumbnails and cover tiles are pure CSS — no remote images, so there is
+   nothing slow to load and nothing that can break on a bad network. */
+:root { --hero-1: #2f6bed; --hero-2: #1b3fa0; }
+.dash-hero {
+  background: linear-gradient(135deg, var(--hero-1), var(--hero-2));
+  color: #fff; border-radius: 20px; padding: 24px;
+  box-shadow: var(--shadow-lg); margin: 12px 0;
+}
+.dash-hero h1 { margin: 6px 0 0; color: #fff; }
+.dash-hero .muted { color: #c9d8f7; }
+.dash-hero .progressbar { background: rgba(255, 255, 255, .28); margin-top: 12px; }
+.dash-hero .progressbar > div { background: #fff; }
+.dash-hero-row { display: flex; align-items: end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.dash-hero .streak-pill { border-color: transparent; }
+.stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 12px 0; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 16px; box-shadow: var(--shadow);
+}
+.stat-card .num { font-size: 1.6rem; font-weight: 800; color: var(--ink); }
+.stat-card .lbl { color: var(--muted); font-size: .75rem; font-weight: 600; text-transform: uppercase; }
+.stat-card .ic { font-size: 1.3rem; }
+.course-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.course-card2 {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  overflow: hidden; box-shadow: var(--shadow); display: flex; flex-direction: column;
+}
+.course-thumb {
+  height: 110px; display: flex; align-items: center; justify-content: center;
+  font-size: 2.2rem; color: #fff; font-weight: 800;
+}
+.course-card2 .course-body { padding: 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.course-card2 .course-body .btn { margin-top: auto; }
+@media (max-width: 760px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } .course-grid { grid-template-columns: 1fr; } }
+
+/* Textbook covers: a deterministic subject-gradient tile always paints
+   first; the CDN raster (when the row has one) covers it once loaded, and
+   removes itself on error so a broken fetch degrades to the tile — never a
+   broken-image icon. */
+.cover-wrap {
+  position: relative; width: 100%; aspect-ratio: 3 / 4; border-radius: 6px; overflow: hidden;
+  background: linear-gradient(160deg, #dbe7ff, #f3ecff);
+}
+.cover-fallback {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+  color: #33507e; font-weight: 800; text-align: center; padding: 8px;
+}
+.cover-fallback .cover-ic { font-size: 2rem; }
+.cover-fallback .cover-sub { font-size: .72rem; font-weight: 600; }
+.cover-wrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }

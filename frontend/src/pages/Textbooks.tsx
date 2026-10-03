@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiAvailability, apiLocate, apiMyRequests, apiReadingList, apiSubjects, apiTextbookOpenUrl, apiTextbookPortals, apiTextbooks } from '../api';
+import { apiAvailability, apiLocate, apiMyRequests, apiReadingList, apiSubjects, apiTextbookOpenUrl, apiTextbooks } from '../api';
 import { booksIn, subjectLabel } from '../catalog';
 import { monthLabel, pick, t } from '../i18n';
 import { takeTextbookPref } from '../prefs';
@@ -7,8 +7,6 @@ import type { Availability, BookAsk, Lang, ReadingPick, Subject, Textbook } from
 
 const BOARDS = ['Maharashtra SSC', 'Maharashtra HSC', 'CBSE'];
 const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
-
-interface Portal { name: string; url: string; boards: string[]; langs: string[] }
 
 /** Smart Book Finder's local state. Only `scanning` ever waits on the
  * network: local filtering is instant, and everything else is a final
@@ -37,7 +35,6 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   const [avail, setAvail] = useState<Availability | null>(null);
   const [legacy, setLegacy] = useState<Subject[] | null>(null);
   const [books, setBooks] = useState<Textbook[]>([]);
-  const [portals, setPortals] = useState<Portal[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Smart Book Finder + in-app viewer
@@ -55,8 +52,6 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   const [frameReady, setFrameReady] = useState(false);
 
   const signedIn = !!user;
-
-  useEffect(() => { apiTextbookPortals().then(setPortals).catch(() => setPortals([])); }, []);
 
   // The Monthly Reading List is public (book club), so a visitor sees it too.
   useEffect(() => { apiReadingList().then(setPicks).catch(() => setPicks([])); }, []);
@@ -194,7 +189,24 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     document.getElementById('finder')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const relevantPortals = portals.filter((p) => p.boards.includes(board));
+  /** "Find this book" on a catalog row with no verified PDF yet: the same
+   * scoped portal scan + queue as the finder, run right here — the card
+   * never navigates anywhere. */
+  const findBook = (b: Textbook) => {
+    setQuery(b.title);
+    setFinder({ kind: 'idle' });
+    void runFinder(b.title, { grade, board, lang: bookLang });
+    document.getElementById('finder')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  /** Deterministic subject hue for the cover tile painted behind the CDN
+   * raster (and left standing when the row has no cover or it fails). */
+  const coverHue = (subject: string) => {
+    let h = 0;
+    for (const c of subject) h = (h * 31 + c.charCodeAt(0)) % 360;
+    return h;
+  };
+
   const totalBooks = avail ? avail.mediums.reduce((n, m) => n + m.books, 0) : null;
   // Availability mode: only combinations with real books. Legacy fallback
   // (availability unreachable): the original generic lists, never empty.
@@ -301,9 +313,9 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
                     📖 {t('read', lang)}
                   </button>
                 ) : (
-                  <a className="btn small ghost" href={b.source_url} target="_blank" rel="noreferrer">
-                    🔗 {b.publisher} source
-                  </a>
+                  <button type="button" className="btn small ghost" onClick={() => findBook(b)}>
+                    🔎 {t('findThisBook', lang)}
+                  </button>
                 )}
               </div>
             ))}
@@ -363,29 +375,32 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
           <p>
             {term
               ? `${t('notHere', lang)} — “${query.trim()}”`
-              : 'No textbooks match this filter — try “All subjects/languages”, or open the official portal below.'}
+              : 'No textbooks match this filter — try “All subjects/languages”, or run the Smart Book Finder above.'}
           </p>
         </div>
       )}
       {/* e-book library grid: full-height cover tiles with a direct action
           per book (mirrors the official portals' layout). Deep-linked books
           open in the in-app reader — the PDF is proxied by our backend, so
-          the browser never visibly leaves this site. The rest fall back to
-          their source portal, visibly de-emphasised. Board/class context
-          lives in the filter bar above — cards stay scannable. */}
+          the browser never visibly leaves this site. Rows without a verified
+          PDF run the Smart Book Finder in-page instead of linking out.
+          Board/class context lives in the filter bar above — cards stay
+          scannable. */}
       {!!shown.length && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14, marginTop: 10 }}>
           {shown.map((b) => (
             <div className="card" key={b.id} style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {b.cover_url ? (
-                <img src={b.cover_url} alt="" loading="lazy" decoding="async" className="cover-shimmer"
-                  style={{ width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 6 }} />
-              ) : (
-                <div role="img" aria-label={`${b.subject_name} cover`}
-                  style={{ aspectRatio: '3 / 4', borderRadius: 6, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44 }}>
-                  📚
+              <div className="cover-wrap">
+                <div className="cover-fallback"
+                  style={{ background: `linear-gradient(160deg, hsl(${coverHue(b.subject_name)}, 65%, 88%), hsl(${(coverHue(b.subject_name) + 40) % 360}, 60%, 94%)` }}>
+                  <span className="cover-ic" aria-hidden="true">📚</span>
+                  <span className="cover-sub">{b.subject_name}</span>
                 </div>
-              )}
+                {b.cover_url && (
+                  <img src={b.cover_url} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer"
+                    onError={(e) => { e.currentTarget.remove(); }} />
+                )}
+              </div>
               <div title={b.title}
                 style={{ fontSize: '.86rem', lineHeight: 1.35, fontWeight: 600, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                 {b.title}
@@ -400,27 +415,15 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
                   📖 {t('read', lang)}
                 </button>
               ) : (
-                <a className="btn small ghost" href={b.source_url} target="_blank" rel="noreferrer"
+                <button type="button" className="btn small ghost" onClick={() => findBook(b)}
                   style={{ justifyContent: 'center', width: '100%' }}>
-                  🔗 {b.publisher} source
-                </a>
+                  🔎 {t('findThisBook', lang)}
+                </button>
               )}
             </div>
           ))}
         </div>
       )}
-
-      <h2 style={{ marginTop: 20 }}>🏛️ Official sources (always available)</h2>
-      <p className="muted">If a book link is missing, get it free directly from the government portal:</p>
-      {(relevantPortals.length ? relevantPortals : portals).map((p) => (
-        <div className="card" key={p.name}>
-          <strong>{p.name}</strong>
-          <div style={{ margin: '4px 0' }}>
-            {p.boards.map((b) => <span className="badge" key={b}>{b}</span>)}
-          </div>
-          <a className="btn small" href={p.url} target="_blank" rel="noreferrer">🔗 {p.url}</a>
-        </div>
-      ))}
 
       {/* In-app reader: a same-origin frame of /textbooks/{id}/open, which
           the backend answers with the PDF itself (200, application/pdf). */}

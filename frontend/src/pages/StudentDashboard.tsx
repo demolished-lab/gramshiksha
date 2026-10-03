@@ -60,10 +60,22 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
     go('textbooks');
   };
 
+  const overall = courses.length
+    ? Math.round(courses.reduce((n, c) => n + c.progress_pct, 0) / courses.length)
+    : 0;
+
   return (
     <div>
-      <div className="page-intro"><div><span className="eyebrow eyebrow-muted">Your learning space</span><h1>👋 {user.name || 'Learner'}</h1><p className="muted">{t('todaysLearning', lang)} · Keep your momentum going.</p></div><div className="streak-pill">🔥 <strong>{today.streak_days}</strong> {t('streak', lang)}</div></div>
-      <div className="dashboard-meta"><span>⚡ {today.xp} {t('xp', lang)}</span><span>⏱️ {today.study_minutes_today} min studied today</span></div>
+      {/* Mockup greeting hero: name, streak, overall progress on the blue
+          gradient card — same data as before, new presentation. */}
+      <div className="dash-hero">
+        <div className="dash-hero-row">
+          <div><span className="eyebrow" style={{ color: '#c9d8f7' }}>{t('todaysLearning', lang)}</span><h1>👋 {user.name || 'Learner'}</h1><p className="muted" style={{ margin: '4px 0 0' }}>Keep learning, keep growing.</p></div>
+          <div className="streak-pill">🔥 <strong>{today.streak_days}</strong> {t('streak', lang)}</div>
+        </div>
+        <div className="progressbar" aria-label="Overall course progress"><div style={{ width: `${overall}%` }} /></div>
+        <div className="dashboard-meta" style={{ color: '#c9d8f7', margin: '12px 0 0' }}><span>⚡ {today.xp} {t('xp', lang)}</span><span>⏱️ {today.study_minutes_today} min studied today</span><span style={{ marginLeft: 'auto' }}>{overall}%</span></div>
+      </div>
 
       {notifs.length > 0 && (
         <div className="card" style={{ borderLeft: '4px solid var(--accent)' }}>
@@ -154,27 +166,35 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
           <button className="btn" onClick={() => go('explore')}>{t('exploreCourses', lang)}</button>
         </div>
       )}
-      {courses.map((c) => (
-        <div className="card" key={c.id} style={{ cursor: 'pointer' }} onClick={() => go('course', c.id)}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <strong>{lang === 'hi' ? c.title_en : c.title_en}</strong>
-            <span className="badge green">{Math.round(c.progress_pct)}%</span>
-          </div>
-          <div className="progressbar" style={{ marginTop: 8 }}>
-            <div style={{ width: `${c.progress_pct}%` }} />
-          </div>
+      {!!courses.length && (
+        <div className="course-grid">
+          {courses.map((c) => (
+            <div className="course-card2" key={c.id}>
+              <div className="course-thumb" aria-hidden="true"
+                style={{ background: `linear-gradient(135deg, hsl(${(c.id * 47) % 360}, 62%, 52%), hsl(${((c.id * 47) % 360 + 40) % 360}, 60%, 42%)` }}>
+                📖
+              </div>
+              <div className="course-body">
+                <strong>{c.title_en}</strong>
+                <div className="progressbar"><div style={{ width: `${c.progress_pct}%` }} /></div>
+                <span className="muted">{Math.round(c.progress_pct)}%</span>
+                <button className="btn small" onClick={() => go('course', c.id)}>
+                  {t('continue', lang)}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
 
       {summary && (
         <>
           <h3 className="section-title">{t('progress', lang)}</h3>
-          <div className="stat-row">
-            <div className="stat"><div className="num">{summary.lessons_completed}</div><div className="lbl">{t('lessonsDone', lang)}</div></div>
-            <div className="stat"><div className="num">{summary.quiz_avg_pct === null ? '—' : `${summary.quiz_avg_pct}%`}</div><div className="lbl">{t('quizAvg', lang)}</div></div>
-            <div className="stat"><div className="num">{summary.week_minutes}</div><div className="lbl">min / week</div></div>
-            <div className="stat"><div className="num">{summary.badges.length}</div><div className="lbl">{t('badges', lang)}</div></div>
-            <div className="stat"><div className="num">{summary.certificates.length}</div><div className="lbl">{t('certificates', lang)}</div></div>
+          <div className="stat-cards">
+            <div className="stat-card"><div className="ic" aria-hidden="true">📚</div><div className="num">{courses.length}</div><div className="lbl">{t('exploreCourses', lang)}</div></div>
+            <div className="stat-card"><div className="ic" aria-hidden="true">✅</div><div className="num">{summary.lessons_completed}</div><div className="lbl">{t('lessonsDone', lang)}</div></div>
+            <div className="stat-card"><div className="ic" aria-hidden="true">🎯</div><div className="num">{summary.quiz_avg_pct === null ? '—' : `${summary.quiz_avg_pct}%`}</div><div className="lbl">{t('quizAvg', lang)}</div></div>
+            <div className="stat-card"><div className="ic" aria-hidden="true">🏆</div><div className="num">{summary.badges.length}</div><div className="lbl">{t('badges', lang)}</div></div>
           </div>
         </>
       )}
