@@ -31,8 +31,16 @@ export default function Practice({ lang }: { lang: Lang }) {
 
   const q = questions[idx];
 
+  const anon = !getToken();
   const answer = async (val: unknown) => {
     if (!q || feedback) return;
+    if (anon) {
+      // No fake "saved offline": without a session nothing will ever sync.
+      // The questions stay readable; grading needs the free login.
+      setChosen(val);
+      setFeedback({ correct: false, explanation: t('needLogin', lang) || 'Log in to check your answer.' });
+      return;
+    }
     setChosen(val);
     setAnswered((a) => (a.includes(q.id) ? a : [...a, q.id]));
     if (navigator.onLine && getToken()) {
@@ -124,6 +132,9 @@ export default function Practice({ lang }: { lang: Lang }) {
                   {feedback.correct ? '✅ ' + t('completed', lang) : '❌'}
                 </p>
                 <p className="muted">{feedback.explanation}</p>
+                {anon && (
+                  <p><a className="btn small" href="#/login/student">{t('login', lang)}</a></p>
+                )}
               </>
             )}
           </>

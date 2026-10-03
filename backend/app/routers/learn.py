@@ -9,7 +9,7 @@ from ..db import get_session
 from ..gamification import log_study_time, on_course_complete, on_lesson_complete, on_practice, on_quiz
 from ..models import (Chapter, Course, Enrollment, Lesson, PracticeAttempt, Progress,
                       Question, Quiz, QuizAttempt, QuizQuestion, TopicStats, User, utcnow)
-from ..security import get_current_user, require_student
+from ..security import get_current_user, optional_user, require_student
 
 router = APIRouter(prefix="/learn", tags=["learn"])
 
@@ -181,7 +181,9 @@ def practice_questions(class_grade: Optional[int] = Query(None, ge=1, le=12),
                        subject_name: Optional[str] = None, topic: Optional[str] = None,
                        difficulty: Optional[str] = None, limit: int = Query(10, le=50),
                        lang: str = "en", session: Session = Depends(get_session),
-                       user: User = Depends(get_current_user)):
+                       user: Optional[User] = Depends(optional_user)):
+    # Free content: anyone may read questions (answers stay hidden server-side
+    # and grading still needs a signed-in student).
     q = select(Question).where(Question.difficulty.isnot(None))
     if subject_name:
         q = q.where(Question.subject_name == subject_name)

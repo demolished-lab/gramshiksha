@@ -94,16 +94,21 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
           <p className="muted" style={{ margin: '6px 0' }}>{m.description}</p>
           <div className="muted">source: {m.source_of_content} · ⬇ {m.downloads} · {Math.round(m.file_size / 1024)} KB</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-            <button className="btn small" onClick={async () => {
-              try {
-                const res = await fetch(apiMaterialUrl(m.id), {
-                  headers: { Authorization: `Bearer ${getToken() ?? ''}` },
-                });
-                const text = await res.text();
-                saveDownload({ material_id: m.id, title: m.title, saved_at: new Date().toISOString(), text: text.slice(0, 50000) });
-                alert('Saved to My Downloads ✓');
-              } catch { window.open(apiMaterialUrl(m.id), '_blank'); }
-            }}>⬇ {t('download', lang)}</button>
+            {getToken() ? (
+              <button className="btn small" onClick={async () => {
+                try {
+                  const res = await fetch(apiMaterialUrl(m.id), {
+                    headers: { Authorization: `Bearer ${getToken() ?? ''}` },
+                  });
+                  if (!res.ok) throw new Error(`Download failed (${res.status})`);
+                  const text = await res.text();
+                  saveDownload({ material_id: m.id, title: m.title, saved_at: new Date().toISOString(), text: text.slice(0, 50000) });
+                  alert('Saved to My Downloads ✓');
+                } catch { window.open(apiMaterialUrl(m.id), '_blank'); }
+              }}>⬇ {t('download', lang)}</button>
+            ) : (
+              <a className="btn small" href="#/login/student">⬇ {t('download', lang)} · {t('login', lang)}</a>
+            )}
             <button className="btn small ghost" onClick={() => {
               const reason = prompt(`Report reason (${REPORT_REASONS.join('/')}):`, 'incorrect');
               if (reason && REPORT_REASONS.includes(reason)) apiReportMaterial(m.id, reason, '').then(() => alert('Reported ✓'));

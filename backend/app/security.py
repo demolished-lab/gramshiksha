@@ -50,6 +50,31 @@ def get_current_user(
     return user
 
 
+_optional_oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
+
+
+def optional_user(
+    token: str | None = Depends(_optional_oauth2),
+    session: Session = Depends(get_session),
+) -> User | None:
+    """Like get_current_user, but anonymous callers get None instead of 401.
+
+    For free content endpoints (practice questions, public material list) so
+    a logged-out visitor sees the library instead of an error page. Anything
+    that records progress or serves gated files keeps get_current_user.
+    """
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        email: str | None = payload.get("sub")
+    except JWTError:
+        return None
+    if email is None:
+        return None
+    return session.exec(select(User).where(User.email == email)).first()
+
+
 def has_role(user: User, *roles: str) -> bool:
     """True when `user` holds one of `roles` *and* the account is approved.
 

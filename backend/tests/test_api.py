@@ -146,6 +146,23 @@ def test_materials_upload_student_needs_review(client):
     assert any(m["id"] == mid for m in visible)
 
 
+def test_free_reads_need_no_session(client):
+    # Logged-out visitors see the free shelf, not an error page: public
+    # approved materials and practice questions (answers stay hidden).
+    anon_materials = client.get("/materials")
+    assert anon_materials.status_code == 200, anon_materials.text
+    assert all(m["visibility"] == "public" and m["status"] == "approved"
+               for m in anon_materials.json())
+    assert client.get("/materials", params={"mine": True}).status_code == 401
+    anon_qs = client.get("/learn/practice/questions", params={"limit": 3})
+    assert anon_qs.status_code == 200, anon_qs.text
+    assert anon_qs.json()
+    # ...while everything that records or gates stays behind a session.
+    assert client.post("/learn/practice/answer",
+                       json={"question_id": 1, "answer": 0}).status_code == 401
+    assert client.get("/materials/1/download").status_code == 401
+
+
 def test_doubts_flow(client):
     s = login(client, "student1@gramshiksha.in", "Learn@1234")
     r = client.post("/doubts", json={"subject_name": "Science", "chapter_title": "Living World",

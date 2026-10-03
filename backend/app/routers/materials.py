@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from ..db import get_session
 from ..models import MATERIAL_TYPES, Material, MaterialReport, User
 from ..ratelimit import rate_limit
-from ..security import get_current_user, has_role, require_any, require_roles
+from ..security import get_current_user, has_role, optional_user, require_any, require_roles
 from ..storage import delete_ref, download_target, save_upload
 from ..streams import stream_for
 from .catalog import _check_stream, _stream_or_common
@@ -110,18 +110,23 @@ def list_materials(
     stream: str = "",
     mine: bool = False,
     limit: int = Query(20, le=100), offset: int = 0,
-    user: User = Depends(get_current_user),
+    user: Optional[User] = Depends(optional_user),
     session: Session = Depends(get_session),
 ):
     _check_stream(stream)
     if mine:
+        # "My uploads" is meaningless without an identity.
+        if user is None:
+            raise HTTPException(401, "Sign in to see your uploads")
         rows = session.exec(select(Material).where(
             Material.uploader_id == user.id).order_by(Material.id.desc())
             .offset(offset).limit(limit)).all()
         return [_material_out(m, user) for m in rows]
-    # Visibility is enforced in SQL too, so limit/offset paginate over the rows
-    # the user can actually see (filtering after LIMIT pages over hidden rows).
-    q = _visible_query(user)
+    # Anonymous visitors see exactly the free shelf: approved + public.
+    # Anything school/private stays behind a session (see _visible_query).
+    q = (_visible_query(user) if user is not None
+         else select(Material).where(Material.status == "approved",
+                                     Material.visibility == "public"))
     if class_grade:
         q = q.where(Material.class_grade == class_grade)
     if board:
@@ -138,14 +143,15 @@ def list_materials(
     return [_material_out(m, user) for m in rows]
 
 
-def _material_out(m: Material, user: User) -> dict:
+def _material_out(m: Material, user: Optional[User]) -> dict:
     return {"id": m.id, "title": m.title, "description": m.description, "type": m.type,
             "class_grade": m.class_grade, "board": m.board, "subject_name": m.subject_name,
             "stream": m.stream,
             "chapter_title": m.chapter_title, "lang": m.lang, "status": m.status,
             "visibility": m.visibility, "source_of_content": m.source_of_content,
             "file_size": m.file_size, "downloads": m.downloads, "views": m.views,
-            "mine": m.uploader_id == user.id, "created_at": m.created_at.isoformat()}
+            "mine": user is not None and m.uploader_id == user.id,
+            "created_at": m.created_at.isoformat()}
 
 
 @router.get("/pending")
