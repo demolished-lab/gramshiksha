@@ -41,7 +41,12 @@ NCERT_CODES: dict[tuple[int, str, str], str] = {
 }
 
 NCERT_BASE = "https://ncert.nic.in/textbook/pdf"
-NCERT_UA = "GramShiksha-book/1.0"
+# ncert.nic.in's edge drops non-browser clients at TCP level (verified:
+# "GramShiksha-book/1.0" gets its connection reset while a browser UA gets
+# 200) — so this endpoint identifies as a browser. Everything else about
+# the fetch stays strict: HEAD-verified PDF, size cap, same-origin proxy.
+NCERT_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 NCERT_TIMEOUT_S = 30.0
 # Same ceiling as the eBalbharati proxy: refuse rather than melt the instance.
 NCERT_MAX_BYTES = 60 * 1024 * 1024
