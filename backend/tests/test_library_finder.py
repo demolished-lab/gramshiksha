@@ -13,6 +13,8 @@ Every path is a bare string literal — the route-coverage canary parses source
 with `ast`, so f-strings/variables there would be invisible to it. All live
 portal traffic is monkeypatched: tests never crawl eBalbharati.
 """
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect as sa_inspect
@@ -202,7 +204,12 @@ def test_scan_requests_fulfils_notifies_and_then_cools_down(client, monkeypatch)
                         lambda q, g, pref, d: (
                             [dict(HIT, title=FULFIL_TITLE,
                                   pdf=FAKE_PDF.format(3))], ["mr"]))
-    monkeypatch.setattr(library, "_last_scan_at", [0.0])  # reset module clock
+    # Reset the module clock deterministically: [0.0] only works when the
+    # machine has been up for 120 s, so a freshly-booted CI VM would see a
+    # bogus "cooling down" skip. Backdate past the cooldown instead.
+    monkeypatch.setattr(
+        library, "_last_scan_at",
+        [time.monotonic() - library.SCAN_COOLDOWN_S - 1.0])
     r = client.post("/library/scan-requests")
     assert r.status_code == 200, r.text
     out = r.json()
