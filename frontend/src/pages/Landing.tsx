@@ -22,20 +22,29 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
     <div className="landing-page">
       <section className="hero hero-home">
         <div className="hero-glow" aria-hidden="true" />
-        <div className="eyebrow"><span className="eyebrow-dot" /> Free learning for every learner</div>
-        <h1>Learn with confidence.<br /><span>Grow at your pace.</span></h1>
-        <p className="hero-copy">{t('tagline', lang)} — a friendly, low-data learning space for Classes 1–12, built for Bharat.</p>
-        <div className="hero-actions">
-          <button className="btn accent btn-lg" onClick={onLogin}>{t('startLearning', lang)} <span aria-hidden="true">→</span></button>
-          <button className="btn ghost btn-lg" onClick={() => go('explore')}>🧭 {t('explore', lang)}</button>
+        <div className="hero-copy-block">
+          <div className="eyebrow"><span className="eyebrow-dot" /> Free learning for every learner</div>
+          <h1>Quality education<br /><span>for every child.</span></h1>
+          <p className="hero-copy">{t('tagline', lang)} — a friendly, low-data learning space for Classes 1–12, built for Bharat.</p>
+          <div className="hero-actions">
+            <button className="btn accent btn-lg" onClick={onLogin}>{t('startLearning', lang)} <span aria-hidden="true">→</span></button>
+            <button className="btn ghost btn-lg" onClick={() => go('explore')}>🧭 {t('explore', lang)}</button>
+          </div>
+          <div className="quick-entry" aria-label="Quick sign in options">
+            <span>Already learning with us?</span>
+            <a href="#/login/student">Student login</a>
+            <span className="quick-divider" aria-hidden="true">·</span>
+            <a href="#/login/teacher">Teacher login</a>
+          </div>
+          <div className="hero-proof"><span>✓</span> SSC · HSC · CBSE <span>✓</span> English · हिंदी · मराठी <span>✓</span> Always free</div>
         </div>
-        <div className="quick-entry" aria-label="Quick sign in options">
-          <span>Already learning with us?</span>
-          <a href="#/login/student">Student login</a>
-          <span className="quick-divider" aria-hidden="true">·</span>
-          <a href="#/login/teacher">Teacher login</a>
+        <div className="hero-visual" aria-label="Students learning together">
+          <div className="hero-visual-orbit orbit-one" aria-hidden="true" />
+          <div className="hero-visual-orbit orbit-two" aria-hidden="true" />
+          <div className="student-illustration"><span className="student-halo" /><span className="student-face">🧑🏽‍🎓</span><span className="student-card">Learning<br /><strong>changes lives</strong></span></div>
+          <div className="floating-topic topic-book">📚<small>Learn</small></div>
+          <div className="floating-topic topic-star">✦<small>Grow</small></div>
         </div>
-        <div className="hero-proof"><span>✓</span> SSC · HSC · CBSE <span>✓</span> English · हिंदी · मराठी <span>✓</span> Always free</div>
       </section>
 
       <section className="section-block" aria-labelledby="classes-heading">

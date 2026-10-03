@@ -428,3 +428,36 @@ main.container { max-width: 1160px; padding: 24px 20px 96px; } .btn { box-shadow
 @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
 .page-head { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin: 12px 0 4px; flex-wrap: wrap; }
 .page-head h1 { margin: 0; }
+
+/* ---------- reference-inspired landing hero ---------- */
+.hero-home {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+  align-items: center; gap: clamp(24px, 5vw, 72px); text-align: left; overflow: hidden;
+  padding: clamp(50px, 8vw, 92px) clamp(24px, 6vw, 76px); border: 1px solid #dce8fb;
+  border-radius: 0 0 32px 32px; background: linear-gradient(135deg, #f7fbff 0%, #edf4ff 62%, #fff8f1 100%);
+}
+.hero-home .hero-copy-block { position: relative; z-index: 1; max-width: 580px; }
+.hero-home h1 { max-width: 650px; margin: 16px 0 14px; font-size: clamp(2.5rem, 5.4vw, 4.65rem); line-height: .98; letter-spacing: -.065em; }
+.hero-home h1 span { color: #2364d7; }
+.hero-home .hero-copy { max-width: 480px; margin-left: 0; font-size: 1rem; }
+.hero-home .hero-actions, .hero-home .quick-entry, .hero-home .hero-proof { justify-content: flex-start; }
+.hero-visual { position: relative; min-height: 350px; isolation: isolate; }
+.hero-visual-orbit { position: absolute; border-radius: 50%; filter: blur(.2px); }
+.orbit-one { width: 300px; height: 300px; top: 12px; right: 10%; background: #dceaff; opacity: .9; }
+.orbit-two { width: 200px; height: 200px; right: 2%; bottom: 8px; background: #ffe7b8; opacity: .72; }
+.student-illustration { position: absolute; right: 13%; bottom: 22px; width: 245px; height: 300px; display: grid; place-items: center; border-radius: 48% 48% 30% 30%; background: linear-gradient(160deg, #f8c89a 0 29%, #266bd7 30% 100%); box-shadow: 0 28px 40px rgba(27,63,160,.2); transform: rotate(3deg); }
+.student-halo { position: absolute; width: 168px; height: 168px; top: 22px; border-radius: 50%; background: #fff5e9; }
+.student-face { position: relative; z-index: 1; margin-top: -70px; font-size: 6.5rem; filter: drop-shadow(0 7px 5px rgba(0,0,0,.12)); }
+.student-card { position: absolute; z-index: 2; left: -30px; bottom: 24px; padding: 12px 16px; border-radius: 13px; background: #1f65da; color: #fff; font-size: .75rem; line-height: 1.2; box-shadow: 0 12px 24px rgba(31,101,218,.28); }
+.student-card strong { font-size: 1rem; }
+.floating-topic { position: absolute; z-index: 3; display: grid; place-items: center; width: 58px; height: 58px; border-radius: 17px; background: #fff; color: #2364d7; box-shadow: 0 12px 24px rgba(35,74,143,.14); font-size: 1.6rem; }
+.floating-topic small { display: block; font-size: .6rem; font-weight: 800; color: #5c6f89; }
+.topic-book { top: 22%; left: 6%; }
+.topic-star { top: 8%; right: 3%; color: #ea9b2f; }
+@media (max-width: 760px) {
+  .hero-home { grid-template-columns: 1fr; gap: 10px; padding: 56px 20px 36px; text-align: center; }
+  .hero-home .hero-actions, .hero-home .quick-entry, .hero-home .hero-proof { justify-content: center; }
+  .hero-home .hero-copy { margin-left: auto; margin-right: auto; }
+  .hero-visual { min-height: 260px; transform: scale(.82); transform-origin: top center; margin-bottom: -42px; }
+  .hero-home h1 { font-size: clamp(2.55rem, 12vw, 4rem); }
+}

@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "e2e:cypress": "cypress run",
     "e2e:ui": "playwright test --ui",
     "a11y": "playwright test e2e/mobile-drawer.spec.ts --grep \"WCAG\"",
     "perf:bundle": "npm run build && node scripts/report-bundle.mjs"
@@ -28,6 +29,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "axe-core": "^4.13.0",
+    "cypress": "^16.1.1",
     "typescript": "^5.5.3",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
