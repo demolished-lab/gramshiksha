@@ -11,6 +11,7 @@ playwright-report/
 test-results/
 lighthouse*.report.json
 lighthouse*.report.html
+frontend/reports/
 
 # Local data & secrets
 *.db

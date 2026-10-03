@@ -1,0 +1,64 @@
+name: weekly performance and SEO monitoring
+
+on:
+  schedule:
+    # Every Monday at 05:17 UTC, after the daily quality run has settled.
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    name: Lighthouse performance and SEO report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
+      - name: Serve production build
+        working-directory: frontend
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/gramshiksha-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:4173/ > /dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/gramshiksha-preview.log
+          exit 1
+
+      - name: Run Lighthouse
+        working-directory: frontend
+        run: |
+          mkdir -p reports
+          npx --yes lighthouse http://127.0.0.1:4173/ \
+            --only-categories=performance,seo \
+            --output=json --output=html \
+            --output-path=reports/lighthouse-weekly \
+            --chrome-flags="--headless --no-sandbox" \
+            --no-enable-error-reporting --quiet
+
+      - name: Check monitoring thresholds
+        run: python scripts/check_lighthouse.py frontend/reports/lighthouse-weekly.report.json
+
+      - name: Upload weekly report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-weekly-${{ github.run_id }}
+          path: frontend/reports/lighthouse-weekly.report.*
+          retention-days: 90

@@ -49,6 +49,13 @@ def test_meta_and_courses(client):
     assert detail["chapters"] and detail["chapters"][0]["lessons"]
 
 
+def test_empty_course_filter_returns_zero_total(client):
+    for path in ("/courses", "/api/courses"):
+        response = client.get(path, params={"board": "No Such Board"})
+        assert response.status_code == 200, response.text
+        assert response.json() == {"total": 0, "items": []}
+
+
 def test_enroll_and_progress_flow(client):
     h = login(client, "student2@gramshiksha.in", "Learn@1234")
     courses = client.get("/courses", params={"class_grade": 10, "board": "CBSE"}).json()

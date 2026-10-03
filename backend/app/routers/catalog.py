@@ -167,7 +167,9 @@ def list_courses(
         count_q = count_q.where(Course.difficulty == difficulty)
     if free_only:
         count_q = count_q.where(Course.is_free == True)  # noqa: E712
-    total = session.exec(count_q).one()
+    # SQLAlchemy may return no scalar row for an empty filtered result set
+    # (notably with SQLite), so an empty catalog must remain a valid response.
+    total = session.exec(count_q).one_or_none() or 0
     return {"total": total, "items": [_course_out(c) for c in rows]}
 
 
