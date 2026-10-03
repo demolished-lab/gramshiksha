@@ -1,25 +1,25 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { dataSaver, getLang, getUser, landingAfterAuth, logout, setDataSaver, setLang, SessionUser } from './auth';
 import { t } from './i18n';
 import type { Lang } from './types';
 import Landing from './pages/Landing';
 import { captureReferral } from './growth';
-import StudentDashboard from './pages/StudentDashboard';
-import Courses from './pages/Courses';
-import CourseDetail from './pages/CourseDetail';
-import LessonPage from './pages/LessonPage';
-import Practice from './pages/Practice';
-import Materials from './pages/Materials';
-import Textbooks from './pages/Textbooks';
-import Doubts from './pages/Doubts';
-import Downloads from './pages/Downloads';
-import ProgressPage from './pages/ProgressPage';
-import TeacherDashboard from './pages/TeacherDashboard';
-import ParentDashboard from './pages/ParentDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import Explore from './pages/Explore';
-import TeacherLogin from './pages/TeacherLogin';
-import StudentLogin from './pages/StudentLogin';
+const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
+const Courses = lazy(() => import('./pages/Courses'));
+const CourseDetail = lazy(() => import('./pages/CourseDetail'));
+const LessonPage = lazy(() => import('./pages/LessonPage'));
+const Practice = lazy(() => import('./pages/Practice'));
+const Materials = lazy(() => import('./pages/Materials'));
+const Textbooks = lazy(() => import('./pages/Textbooks'));
+const Doubts = lazy(() => import('./pages/Doubts'));
+const Downloads = lazy(() => import('./pages/Downloads'));
+const ProgressPage = lazy(() => import('./pages/ProgressPage'));
+const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'));
+const ParentDashboard = lazy(() => import('./pages/ParentDashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const Explore = lazy(() => import('./pages/Explore'));
+const TeacherLogin = lazy(() => import('./pages/TeacherLogin'));
+const StudentLogin = lazy(() => import('./pages/StudentLogin'));
 import AuthModal from './AuthModal';
 import ApprovalNotice from './ApprovalNotice';
 
@@ -193,7 +193,7 @@ export default function App() {
       <div className="app-content">
       <header className="appbar">
         {authenticated && <button className="mobile-menu-toggle" aria-label="Open navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)}>☰</button>}
-        <a className="brand" href="#/home" aria-label="GramShiksha home">
+        <a className="brand" href="#/home">
           <span className="brand-mark" aria-hidden="true">G</span>
           {t('appName', lang)}
         </a>
@@ -230,7 +230,7 @@ export default function App() {
         {isAdmin && <a href="#/admin" className={route.page === 'admin' ? 'active' : ''} aria-current={route.page === 'admin' ? 'page' : undefined}>Admin <span className="nav-role">✦</span></a>}
       </nav>
 
-      <main id="main-content" className="container">{page}</main>
+      <main id="main-content" className="container"><Suspense fallback={<div className="route-loading" aria-busy="true"><div className="skeleton skeleton-title" /><div className="skeleton skeleton-panel" /></div>}>{page}</Suspense></main>
 
       <nav className="tabbar" aria-label="Quick">
         {tabs.map(([p, ic, label]) => (

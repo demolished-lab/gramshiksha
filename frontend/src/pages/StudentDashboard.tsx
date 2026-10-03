@@ -19,21 +19,36 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
     if (!getToken()) { go('home'); return; }
     setLoading(true);
     setError('');
+    let active = true;
     (async () => {
+      const mark = `dashboard-load-${Date.now()}`;
+      if (typeof performance !== 'undefined') performance.mark(`${mark}-start`);
       try {
-        const [td, wk, sm, mc, nf] = await Promise.all([
-          apiToday(lang), apiWeakTopics(), apiProgressSummary(), apiMyCourses(), apiNotifications(),
-        ]);
-        setToday(td); setWeak(wk); setSummary(sm); setCourses(mc); setNotifs(nf.filter((n) => !n.read));
+        // The plan and enrolled courses are the critical path. Render the
+        // workspace as soon as those two requests finish.
+        const [td, mc] = await Promise.all([apiToday(lang), apiMyCourses()]);
+        if (!active) return;
+        setToday(td); setCourses(mc); setLoading(false);
+        if (typeof performance !== 'undefined') {
+          performance.mark(`${mark}-ready`);
+          performance.measure('gramshiksha-dashboard-critical', `${mark}-start`, `${mark}-ready`);
+        }
+        // Secondary widgets load independently and cannot blank the dashboard.
+        const [wk, sm, nf] = await Promise.allSettled([apiWeakTopics(), apiProgressSummary(), apiNotifications()]);
+        if (!active) return;
+        if (wk.status === 'fulfilled') setWeak(wk.value);
+        if (sm.status === 'fulfilled') setSummary(sm.value);
+        if (nf.status === 'fulfilled') setNotifs(nf.value.filter((n) => !n.read));
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Unable to load your learning plan');
+        if (active) setError(e instanceof Error ? e.message : 'Unable to load your learning plan');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     })();
     // The reading list is public, so a failed fetch must never take this
     // dashboard down with it — it simply stays off the card.
-    apiReadingList().then(setPicks).catch(() => setPicks([]));
+    apiReadingList().then((value) => { if (active) setPicks(value); }).catch(() => { if (active) setPicks([]); });
+    return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 

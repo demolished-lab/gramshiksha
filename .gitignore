@@ -7,6 +7,10 @@ __pycache__/
 # Node
 node_modules/
 dist/
+playwright-report/
+test-results/
+lighthouse*.report.json
+lighthouse*.report.html
 
 # Local data & secrets
 *.db
