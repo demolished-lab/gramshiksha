@@ -355,6 +355,12 @@ main.container { max-width: 1160px; padding: 24px 20px 96px; } .btn { box-shadow
 .cover-fallback .cover-sub { font-size: .72rem; font-weight: 600; }
 .cover-wrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
+/* NCERT chapter pager: prev / "Ch N" / next inside the viewer bar. Same
+   buttons and bar as the whole-book viewer — only the frame source gains
+   ?chapter=N, still same-origin proxied NCERT bytes. */
+.chapter-pager { display: inline-flex; align-items: center; gap: 6px; }
+.chapter-pager .muted { white-space: nowrap; font-size: .82rem; }
+
 /* --- mockup phase B: quiz shell, doubt tabs, landing band, activity ------
    Question palette + review flags (Practice), filter tabs + search (Doubts),
    Popular-classes band (Landing), activity feed + CSS bars (Teacher), cert

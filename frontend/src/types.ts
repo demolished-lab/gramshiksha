@@ -223,6 +223,9 @@ export interface Textbook {
   source_url: string;
   publisher: string;
   has_deep_link: boolean;
+  /** CBSE books whose NCERT chapter editions verified live — the viewer
+   * pages chapters instead of offering a whole-book Read. */
+  has_chapters: boolean;
   cover_url: string | null;
   /** 'Part 1'/'Part 2' for multi-part subjects; null for whole books. */
   part_label: string | null;

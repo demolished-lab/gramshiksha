@@ -168,6 +168,9 @@ describe('reader + Smart Book Finder', () => {
     expect(apiTextbookOpenUrl(12)).toBe('/api/textbooks/12/open');
     expect(apiTextbookOpenUrl(12, 'dl')).toBe('/api/textbooks/12/open?dl=1');
     expect(apiTextbookOpenUrl(12, 'ext')).toBe('/api/textbooks/12/open?ext=1');
+    // NCERT chapter editions page the same viewer, one chapter at a time.
+    expect(apiTextbookOpenUrl(12, undefined, 2)).toBe('/api/textbooks/12/open?chapter=2');
+    expect(apiTextbookOpenUrl(12, 'dl', 3)).toBe('/api/textbooks/12/open?dl=1&chapter=3');
   });
 
   it('posts the finder query with its class context and reads the ETA back', async () => {

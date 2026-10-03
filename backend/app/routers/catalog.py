@@ -5,6 +5,7 @@ from sqlmodel import Session, or_, select
 
 from ..db import get_session
 from ..models import Board, Chapter, Course, Enrollment, Lesson, Subject, Textbook, User
+from ..ncert import fetch_ncert_chapter, ncert_code
 from ..ratelimit import rate_limit
 from ..security import get_current_user, require_student
 from ..streams import STREAM_CODES, STREAMS
@@ -354,6 +355,8 @@ def _textbook_out(t: Textbook) -> dict:
     return {"id": t.id, "title": t.title, "board": t.board, "class_grade": t.class_grade,
             "subject_name": t.subject_name, "stream": t.stream, "lang": t.lang, "source_url": t.source_url,
             "publisher": t.publisher, "has_deep_link": bool(t.deep_url and t.last_ok),
+            "has_chapters": bool(t.board == "CBSE"
+                                 and ncert_code(t.class_grade, t.subject_name, t.lang)),
             "cover_url": _cover_cdn(t.cover_url) or None,
             "part_label": t.part_label or None, "clicks": t.clicks}
 
@@ -433,6 +436,7 @@ def _pdf_disposition(title: str, inline: bool) -> str:
 def open_textbook(textbook_id: int,
                   dl: int = Query(0),      # 1 → attachment (Save, not view)
                   ext: int = Query(0),      # 1 → legacy 302 to the publisher
+                  chapter: int = Query(0, ge=0, le=99),  # N ≥ 1 → NCERT chapter N
                   session: Session = Depends(get_session)):
     """Open a book **without leaving the site**.
 
@@ -442,6 +446,9 @@ def open_textbook(textbook_id: int,
     Query switches keep every older behaviour reachable:
       `?dl=1`  same bytes, `Content-Disposition: attachment` (Save file)
       `?ext=1` explicit "open on the publisher's site" → the old 302
+      `?chapter=N` an NCERT chapter edition (CBSE books with a verified code
+        only) — each chapter is HEAD-verified live before proxying, and a
+        missing chapter is an honest 404, never a redirect.
     Fallbacks still redirect (inside the iframe, so nothing visibly moves):
     no healthy deep link → the portal page; a proxy failure → the deep URL.
 
@@ -454,6 +461,25 @@ def open_textbook(textbook_id: int,
     t.clicks += 1
     session.add(t)
     session.commit()
+    if chapter:
+        # CBSE chapter edition: only books whose NCERT code was verified live
+        # (see app/ncert.py) — anything else is an honest 404, and the reader
+        # treats that as "no further chapters".
+        code = (ncert_code(t.class_grade, t.subject_name, t.lang)
+                if t.board == "CBSE" else None)
+        data = fetch_ncert_chapter(code, chapter) if code else None
+        if data is None:
+            raise HTTPException(404, "No such chapter edition")
+        return Response(
+            content=data, media_type="application/pdf",
+            headers={
+                "Content-Disposition": _pdf_disposition(
+                    f"{t.title} ch{chapter}", inline=not dl),
+                "Cache-Control": "private, max-age=300",
+                "X-Content-Type-Options": "nosniff",
+                "X-Frame-Options": "SAMEORIGIN",
+                "Content-Security-Policy": "frame-ancestors 'self'",
+            })
     deep = t.deep_url if (t.deep_url and t.last_ok) else None
     if not deep:
         # Nothing to proxy: source_url is the portal *page*, not a PDF.

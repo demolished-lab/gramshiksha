@@ -119,9 +119,16 @@ export const apiTextbookPortals = () =>
  * streams it back from our own origin — the viewer is a plain same-origin
  * iframe, so nothing visibly redirects to eBalbharati. `mode` switches the
  * response only: 'dl' saves the file, 'ext' is the opt-in "open on the
- * publisher's site" escape hatch. */
-export const apiTextbookOpenUrl = (id: number, mode?: 'dl' | 'ext') =>
-  `${BASE}/textbooks/${id}/open${mode ? `?${mode}=1` : ''}`;
+ * publisher's site" escape hatch. `chapter` pages one NCERT chapter edition
+ * (CBSE books with a verified code); the reader discovers the last chapter
+ * live, so a 404 just means "no further chapters". */
+export const apiTextbookOpenUrl = (id: number, mode?: 'dl' | 'ext', chapter?: number) => {
+  const p = new URLSearchParams();
+  if (mode) p.set(mode, '1');
+  if (chapter) p.set('chapter', String(chapter));
+  const q = p.toString();
+  return `${BASE}/textbooks/${id}/open${q ? `?${q}` : ''}`;
+};
 
 // ---------- library (Smart Book Finder) ----------
 /** Tier order server-side: this class's library (ms) → live official portal

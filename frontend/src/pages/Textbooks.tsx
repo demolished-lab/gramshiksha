@@ -50,8 +50,11 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   // The reader needs only what it shows: an id for the frame and a title for
   // the bar. A reading-list pick carries both, so it can open without first
   // re-fetching a whole Textbook row.
-  const [viewer, setViewer] = useState<{ id: number; title: string } | null>(null);
+  const [viewer, setViewer] = useState<{ id: number; title: string; chapters: boolean; chapter: number } | null>(null);
   const [frameReady, setFrameReady] = useState(false);
+  // NCERT chapter editions have no stored page count — the last chapter is
+  // whatever 404s first, discovered live and then clamped.
+  const [atEnd, setAtEnd] = useState(false);
 
   const signedIn = !!user;
 
@@ -157,7 +160,8 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   useEffect(() => {
     if (pref?.open) {
       setFrameReady(false);
-      setViewer({ id: pref.open, title: pref.q ?? '' });
+      setAtEnd(false);
+      setViewer({ id: pref.open, title: pref.q ?? '', chapters: false, chapter: 1 });
       return;
     }
     if (!pref?.q) return;
@@ -171,13 +175,39 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const openBook = (b: Textbook) => { setFrameReady(false); setViewer(b); };
+  const openBook = (b: Textbook) => {
+    setFrameReady(false);
+    setAtEnd(false);
+    setViewer({ id: b.id, title: b.title, chapters: !!b.has_chapters, chapter: 1 });
+  };
+
+  /** Page one NCERT chapter edition. The backend 404s past the last chapter,
+   * so Next probes ahead with a cheap HEAD first and clamps instead of
+   * opening an error page. Same-origin frame, so the check is allowed. */
+  const frameUrl = (v: { id: number; chapters: boolean; chapter: number }) =>
+    v.chapters ? apiTextbookOpenUrl(v.id, undefined, v.chapter) : apiTextbookOpenUrl(v.id);
+  const goChapter = async (delta: -1 | 1) => {
+    if (!viewer || !viewer.chapters) return;
+    const next = viewer.chapter + delta;
+    if (next < 1) return;
+    if (delta > 0) {
+      try {
+        const head = await fetch(apiTextbookOpenUrl(viewer.id, undefined, next), { method: 'HEAD' });
+        if (!head.ok) { setAtEnd(true); return; }
+      } catch { setAtEnd(true); return; }
+    } else {
+      setAtEnd(false);
+    }
+    setFrameReady(false);
+    setViewer({ ...viewer, chapter: next });
+  };
 
   /** "Read now" on a pick whose catalog row has a healthy PDF. */
   const openPick = (p: ReadingPick) => {
     if (!p.textbook_id) return;
     setFrameReady(false);
-    setViewer({ id: p.textbook_id, title: p.title });
+    setAtEnd(false);
+    setViewer({ id: p.textbook_id, title: p.title, chapters: false, chapter: 1 });
   };
 
   /** "Find this book" on a pick: adopt the pick's class/board/medium/lane so
@@ -327,6 +357,10 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
                   <button type="button" className="btn small accent" onClick={() => openBook(b)}>
                     📖 {t('read', lang)}
                   </button>
+                ) : b.has_chapters ? (
+                  <button type="button" className="btn small accent" onClick={() => openBook(b)}>
+                    📖 {t('chapter', lang)} 1
+                  </button>
                 ) : (
                   <button type="button" className="btn small ghost" onClick={() => findBook(b)}>
                     🔎 {t('findThisBook', lang)}
@@ -422,7 +456,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
                 {b.title}
               </div>
               <div className="muted" style={{ fontSize: '.74rem' }}>
-                {b.subject_name} · {b.lang.toUpperCase()}{b.part_label ? ` · ${b.part_label}` : ''}{b.has_deep_link ? ' · 📄' : ''}
+                {b.subject_name} · {b.lang.toUpperCase()}{b.part_label ? ` · ${b.part_label}` : ''}{b.has_deep_link ? ' · 📄' : ''}{!b.has_deep_link && b.has_chapters ? ' · 📖' : ''}
               </div>
               {b.stream && <div><span className="badge">{streamName(b.stream, lang)}</span></div>}
               {b.has_deep_link ? (
@@ -430,6 +464,12 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
                   onClick={() => openBook(b)}
                   style={{ justifyContent: 'center', width: '100%' }}>
                   📖 {t('read', lang)}
+                </button>
+              ) : b.has_chapters ? (
+                <button type="button" className="btn small accent"
+                  onClick={() => openBook(b)}
+                  style={{ justifyContent: 'center', width: '100%' }}>
+                  📖 {t('chapter', lang)} 1
                 </button>
               ) : (
                 <button type="button" className="btn small ghost" onClick={() => findBook(b)}
@@ -450,13 +490,26 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
           <div className="viewer-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="viewer-bar">
               <strong title={viewer.title}>{viewer.title}</strong>
-              <a className="btn small" href={apiTextbookOpenUrl(viewer.id, 'dl')}>
+              {viewer.chapters && (
+                <span className="chapter-pager" role="group" aria-label={t('chapter', lang)}>
+                  <button type="button" className="btn small ghost" disabled={viewer.chapter <= 1}
+                    onClick={() => void goChapter(-1)} aria-label="Previous chapter">‹</button>
+                  <span className="muted">{t('chapter', lang)} {viewer.chapter}</span>
+                  <button type="button" className="btn small ghost" disabled={atEnd}
+                    onClick={() => void goChapter(1)} aria-label="Next chapter">›</button>
+                </span>
+              )}
+              <a className="btn small"
+                href={viewer.chapters ? apiTextbookOpenUrl(viewer.id, 'dl', viewer.chapter) : apiTextbookOpenUrl(viewer.id, 'dl')}>
                 ⬇ {t('saveFile', lang)}
               </a>
               <button type="button" className="btn small ghost" onClick={() => setViewer(null)}>
                 ✕ {t('close', lang)}
               </button>
             </div>
+            {atEnd && viewer.chapters && (
+              <p className="muted" style={{ margin: '6px 12px 0' }}>{t('lastChapter', lang)}</p>
+            )}
             {!frameReady && (
               <div className="viewer-loading">
                 <div className="skeleton" />
@@ -464,7 +517,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
               </div>
             )}
             <iframe className="viewer-frame" title={viewer.title}
-              src={apiTextbookOpenUrl(viewer.id)}
+              src={frameUrl(viewer)}
               onLoad={() => setFrameReady(true)} />
           </div>
         </div>

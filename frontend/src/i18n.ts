@@ -105,6 +105,8 @@ const S: Record<string, [string, string, string]> = {
   checkStatus: ['Check approval status', 'स्वीकृति की स्थिति जाँचें', 'मंजुरीची स्थिती तपासा'],
   checking: ['Checking…', 'जाँच हो रही है…', 'तपासत आहे…'],
   read: ['Read', 'पढ़ें', 'वाचा'],
+  chapter: ['Chapter', 'अध्याय', 'धडा'],
+  lastChapter: ['Last chapter', 'अंतिम अध्याय', 'शेवटचा धडा'],
   saveFile: ['Save file', 'फ़ाइल सहेजें', 'फाइल जतन करा'],
   close: ['Close', 'बंद करें', 'बंद करा'],
   opening: ['Opening your book…', 'आपकी पुस्तक खुल रही है…', 'तुमची पुस्तक उघडत आहे…'],
