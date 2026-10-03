@@ -32,9 +32,9 @@ export default function CourseDetail({ lang, go, courseId }: { lang: Lang; go: (
   const totalLessons = course.chapters?.reduce((n, ch) => n + ch.lessons.length, 0) ?? 0;
 
   return (
-    <div>
-      <button className="btn ghost small" onClick={() => go('explore')}>← {t('back', lang)}</button>
-      <div className="card">
+    <div className="course-workspace">
+      <button className="btn ghost small back-link" onClick={() => go('explore')}>← {t('back', lang)}</button>
+      <div className="course-hero card">
         <h1>{pick(lang, course.title_en, course.title_hi, course.title_mr)}</h1>
         <div style={{ margin: '8px 0' }}>
           <span className="badge">Class {course.class_grade}</span>
@@ -55,8 +55,8 @@ export default function CourseDetail({ lang, go, courseId }: { lang: Lang; go: (
       </div>
 
       {(course.chapters ?? []).map((ch) => (
-        <div className="card" key={ch.id}>
-          <h3>{ch.order}. {pick(lang, ch.title_en, ch.title_hi, ch.title_mr)}</h3>
+          <div className="card chapter-card" key={ch.id}>
+          <div className="chapter-heading"><span className="chapter-number">{String(ch.order).padStart(2, '0')}</span><h3>{pick(lang, ch.title_en, ch.title_hi, ch.title_mr)}</h3></div>
           {ch.lessons.map((l) => (
             <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
               <span>{l.type === 'video' ? '🎬' : l.type === 'audio' ? '🎧' : '📄'}</span>

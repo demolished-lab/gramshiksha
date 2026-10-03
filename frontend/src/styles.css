@@ -256,3 +256,47 @@ main.container { max-width: 1160px; padding: 24px 20px 96px; } .btn { box-shadow
 .reading-note { margin: 4px 0 0; font-size: .85rem; color: var(--muted); }
 .reading-row .btn { flex: 0 0 auto; white-space: nowrap; }
 @media (max-width: 480px) { .reading-row { align-items: stretch; flex-direction: column; } .reading-row .btn { justify-content: center; } }
+/* ---------- reference dashboard system ---------- */
+.app-shell { min-height: 100vh; }
+.sidebar { display: none; }
+.app-content { min-width: 0; }
+.is-authenticated { display: grid; grid-template-columns: 238px minmax(0, 1fr); min-height: 100vh; background: #f5f8fd; }
+.is-authenticated .app-content { grid-column: 2; }
+.is-authenticated .sidebar { display: flex; position: fixed; inset: 0 auto 0 0; width: 238px; flex-direction: column; padding: 22px 14px; background: #fff; border-right: 1px solid #e2e9f3; z-index: 25; }
+.sidebar-brand { display: flex; align-items: center; gap: 9px; padding: 0 10px 25px; color: var(--ink); }
+.sidebar-brand strong { display: block; font-size: .94rem; letter-spacing: -.02em; } .sidebar-brand small { display: block; color: #9aa8bb; font-size: .61rem; margin-top: 1px; }
+.sidebar-label { padding: 10px 12px 7px; color: #a4afbf; font-size: .65rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.sidebar-nav, .sidebar-bottom { display: grid; gap: 4px; }
+.sidebar-nav a, .sidebar-bottom a, .sidebar-logout { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 0; border-radius: 9px; background: transparent; color: #62718a; text-align: left; font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; }
+.sidebar-nav a:hover, .sidebar-bottom a:hover, .sidebar-logout:hover { background: #f1f5ff; color: var(--primary); } .sidebar-nav a.active { background: linear-gradient(90deg, #2563df, #3877eb); color: #fff; box-shadow: 0 7px 16px rgba(37,99,235,.2); }
+.nav-icon { display: inline-grid; place-items: center; width: 18px; font-size: 1rem; font-weight: 800; } .sidebar-bottom { margin-top: auto; border-top: 1px solid #edf0f5; padding-top: 12px; }
+.is-authenticated .appbar { position: sticky; padding: 12px 28px; border-bottom-color: #e8edf5; } .is-authenticated .appbar .brand { display: none; }
+.profile-chip { display: inline-flex; align-items: center; gap: 8px; padding: 3px 0 3px 5px; border: 0; background: transparent; color: var(--ink); cursor: pointer; text-align: left; }
+.profile-chip span:last-child { display: grid; line-height: 1.15; } .profile-chip strong { font-size: .78rem; } .profile-chip small { color: var(--muted); font-size: .65rem; text-transform: capitalize; }
+.avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #f7cfb7; color: #a4512d; font-size: .78rem; font-weight: 900; }
+.is-authenticated main.container { max-width: 1120px; padding: 28px 34px 90px; }
+.is-authenticated .navbar { display: none; } .is-authenticated .tabbar { display: none; }
+.is-authenticated .card { border-color: #e3eaf3; border-radius: 13px; box-shadow: 0 4px 14px rgba(35,61,103,.045); }
+.is-authenticated .stat-row { gap: 14px; } .is-authenticated .stat { border-color: #e3eaf3; background: #fff; padding: 16px; } .is-authenticated .stat .num { font-size: 1.65rem; }
+.dashboard-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.course-workspace { max-width: 980px; margin: 0 auto; } .back-link { margin-bottom: 8px; box-shadow: none; } .course-hero { padding: 25px; background: linear-gradient(130deg, #edf4ff, #fff 70%); } .course-hero h1 { margin: 0 0 12px; color: var(--ink); font-size: clamp(1.7rem, 4vw, 2.35rem); letter-spacing: -.04em; } .course-hero .btn { margin-top: 12px; }
+.chapter-card { padding: 18px 20px; } .chapter-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; } .chapter-heading h3 { margin: 0; color: var(--ink); } .chapter-number { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: #edf3ff; color: var(--primary); font-size: .72rem; font-weight: 900; }
+@media (max-width: 900px) { .is-authenticated { display: block; } .is-authenticated .sidebar { display: none; } .is-authenticated .app-content { width: 100%; } .is-authenticated .navbar { display: flex; } .is-authenticated .tabbar { display: flex; } .is-authenticated main.container { padding: 20px 16px 90px; } }
+@media (max-width: 560px) { .is-authenticated .appbar { padding: 9px 12px; } .is-authenticated .appbar .btn.small { padding-left: 7px; padding-right: 7px; font-size: .72rem; } .profile-chip { margin-left: auto; } .profile-chip span:last-child { display: none; } .course-hero { padding: 18px; } }
+
+/* mobile navigation drawer */
+.sidebar-header { display: flex; align-items: flex-start; justify-content: space-between; }
+.drawer-close, .mobile-menu-toggle { display: none; border: 0; background: transparent; color: var(--ink); cursor: pointer; font: inherit; }
+.drawer-backdrop { display: none; }
+@media (max-width: 900px) {
+  .mobile-menu-toggle { display: inline-grid; place-items: center; width: 40px; height: 40px; margin-right: 4px; border-radius: 10px; color: var(--primary); font-size: 1.25rem; }
+  .mobile-menu-toggle:hover { background: #edf3ff; }
+  .is-authenticated .sidebar { display: flex; position: fixed; inset: 0 auto 0 0; width: min(84vw, 300px); transform: translateX(-105%); transition: transform .22s ease; box-shadow: 12px 0 35px rgba(20,46,92,.14); }
+  .is-authenticated .sidebar.drawer-open { transform: translateX(0); }
+  .drawer-close { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: #718096; font-size: 1.6rem; line-height: 1; }
+  .drawer-close:hover { background: #f1f5ff; color: var(--primary); }
+  .drawer-backdrop { display: block; position: fixed; inset: 0; z-index: 24; border: 0; background: rgba(15, 31, 61, .38); cursor: pointer; animation: fade-in .18s ease; }
+  .nav-drawer-open { overflow: hidden; }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .is-authenticated .sidebar, .drawer-backdrop { transition: none; animation: none; } }

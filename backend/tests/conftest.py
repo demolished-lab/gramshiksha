@@ -13,6 +13,12 @@ _tmpdir = tempfile.mkdtemp(prefix="gramshiksha-test-")
 _db = os.environ.get("DATABASE_URL", "")
 if not _db or _db.startswith("sqlite"):
     os.environ["DATABASE_URL"] = f"sqlite:///{_tmpdir}/test.db"
+# A developer's workspace may contain a production-oriented .env file. Test
+# fixtures must not inherit APP_ENV=production for the local SQLite suite;
+# explicit production cases construct Settings(app_env="production") and the
+# Postgres CI job still remains production because its DATABASE_URL is non-SQLite.
+if os.environ["DATABASE_URL"].startswith("sqlite"):
+    os.environ["APP_ENV"] = "development"
 os.environ.setdefault("JWT_SECRET", "test-secret")
 
 

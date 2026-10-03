@@ -41,6 +41,7 @@ export default function App() {
   const [online, setOnline] = useState(navigator.onLine);
   const [saver, setSaver] = useState(dataSaver());
   const [showAuth, setShowAuth] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notifCount] = useState(0);
 
   useEffect(() => {
@@ -75,6 +76,19 @@ export default function App() {
     document.body.classList.toggle('data-saver', saver);
   }, [saver]);
 
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileNavOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.body.classList.add('nav-drawer-open');
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.classList.remove('nav-drawer-open');
+    };
+  }, [mobileNavOpen]);
+
   const go = (page: string, id?: number) => {
     location.hash = `/${page}${id ? `/${id}` : ''}`;
   };
@@ -106,6 +120,7 @@ export default function App() {
     ['doubts', t('doubts', lang)],
     ['downloads', t('downloads', lang)],
   ];
+  const navIcons: Record<string, string> = { home: '⌂', explore: '▦', materials: '▤', textbooks: '▥', practice: '✎', doubts: '?', downloads: '⇩', dashboard: '◉', progress: '↗', teacher: '▣', parent: '♧', admin: '⚙' };
   const tabs: [string, string, string][] = [
     ['home', '🏠', t('home', lang)],
     ['explore', '📚', t('explore', lang)],
@@ -154,11 +169,30 @@ export default function App() {
       : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
   }
 
+  const authenticated = Boolean(user);
+  const roleHome = user?.role === 'student' ? 'dashboard' : user?.role === 'parent' ? 'parent' : isTeacher ? 'teacher' : 'admin';
+  const sidebarItems: [string, string][] = authenticated
+    ? user?.role === 'student'
+      ? [['dashboard', t('todaysLearning', lang)], ['explore', t('explore', lang)], ['textbooks', t('textbooks', lang)], ['practice', t('practice', lang)], ['doubts', t('doubts', lang)], ['progress', t('progress', lang)], ['downloads', t('downloads', lang)]]
+      : [['home', t('home', lang)], ['explore', t('explore', lang)], ['materials', t('materials', lang)], ['doubts', t('doubts', lang)], [roleHome, roleHome === 'teacher' ? t('teacher', lang) : roleHome === 'parent' ? t('parent', lang) : 'Admin']]
+    : [];
+
   return (
-    <>
+    <div className={authenticated ? 'app-shell is-authenticated' : 'app-shell'}>
       <a className="skip-link" href="#main-content">Skip to main content</a>
       {!online && <div className="banner-offline" role="status">📴 {t('offlineNote', lang)} <span>Cached lessons remain available.</span></div>}
+      {authenticated && mobileNavOpen && <button className="drawer-backdrop" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
+      <aside className={`sidebar ${mobileNavOpen ? 'drawer-open' : ''}`} aria-label="Workspace navigation">
+        <div className="sidebar-header"><a className="brand sidebar-brand" href="#/home" onClick={() => setMobileNavOpen(false)}><span className="brand-mark" aria-hidden="true">G</span><span><strong>GramShiksha</strong><small>Learn. Practice. Grow.</small></span></a><button className="drawer-close" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)}>×</button></div>
+        <div className="sidebar-label">Workspace</div>
+        <nav className="sidebar-nav">
+          {sidebarItems.map(([p, label]) => <a key={p} href={`#/${p}`} onClick={() => setMobileNavOpen(false)} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}><span className="nav-icon">{navIcons[p] ?? '•'}</span>{label}</a>)}
+        </nav>
+        <div className="sidebar-bottom"><a href="#/downloads" onClick={() => setMobileNavOpen(false)}><span className="nav-icon">⇩</span>{t('downloads', lang)}</a><button className="sidebar-logout" onClick={() => { setMobileNavOpen(false); logout(); setUser(null); go('home'); }}><span className="nav-icon">↪</span>{t('logout', lang)}</button></div>
+      </aside>
+      <div className="app-content">
       <header className="appbar">
+        {authenticated && <button className="mobile-menu-toggle" aria-label="Open navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)}>☰</button>}
         <a className="brand" href="#/home" aria-label="GramShiksha home">
           <span className="brand-mark" aria-hidden="true">G</span>
           {t('appName', lang)}
@@ -173,8 +207,8 @@ export default function App() {
         </button>
         {user ? (
           <>
-            <button className="btn small ghost" onClick={nav(user.role === 'student' ? 'dashboard' : user.role === 'parent' ? 'parent' : isTeacher ? 'teacher' : 'admin')}>
-              {user.name}
+            <button className="profile-chip" onClick={nav(roleHome)}>
+              <span className="avatar">{user.name?.slice(0, 1).toUpperCase() || 'G'}</span><span><strong>{user.name}</strong><small>{user.role === 'student' ? 'Student' : user.role.replace('_', ' ')}</small></span>
             </button>
             <button className="btn small ghost" onClick={() => { logout(); setUser(null); go('home'); }}>
               {t('logout', lang)}
@@ -208,6 +242,7 @@ export default function App() {
 
       {showAuth && <AuthModal lang={lang} onClose={() => setShowAuth(false)} onAuthed={onAuthed} />}
       {notifCount > 0 && <span aria-hidden style={{ display: 'none' }}>{notifCount}</span>}
-    </>
+      </div>
+    </div>
   );
 }
