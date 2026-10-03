@@ -49,6 +49,19 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
         </div>
       </section>
 
+      <section className="section-block" aria-labelledby="popular-heading">
+        <div className="section-heading"><div><span className="eyebrow eyebrow-muted">Levels</span><h2 id="popular-heading">Popular classes</h2></div></div>
+        <div className="band-grid">
+          {[['🧒', 'Class 1–5', 'Foundational learning', 3], ['🧑‍🎓', 'Class 6–8', 'Build strong concepts', 7], ['📝', 'Class 9–10', 'Board preparation', 10], ['🎓', 'Class 11–12', 'Higher studies', 12]].map(([icon, title, sub, g]) => (
+            <button className="band-card" key={title as string} onClick={() => go('explore', g as number)}>
+              <span className="band-ic" aria-hidden="true">{icon}</span>
+              <strong>{title}</strong>
+              <small>{sub}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="feature-grid" aria-label="Why GramShiksha">
         {FEATURES.map(([icon, title, body]) => <article className="feature-card" key={title}><div className="feature-icon" aria-hidden="true">{icon}</div><h3>{title}</h3><p>{body}</p></article>)}
       </section>

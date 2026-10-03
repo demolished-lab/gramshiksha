@@ -14,9 +14,12 @@ export default function Practice({ lang }: { lang: Lang }) {
   const [weak, setWeak] = useState<WeakTopics | null>(null);
   const [difficulty, setDifficulty] = useState('');
   const [error, setError] = useState('');
+  const [flagged, setFlagged] = useState<number[]>([]);
+  const [answered, setAnswered] = useState<number[]>([]);
 
   const load = (diff: string) => {
     setQuestions([]); setIdx(0); setFeedback(null); setChosen(null);
+    setFlagged([]); setAnswered([]);
     apiPracticeQuestions({ difficulty: diff || undefined, limit: 10, lang })
       .then(setQuestions).catch((e) => setError(String(e)));
   };
@@ -31,6 +34,7 @@ export default function Practice({ lang }: { lang: Lang }) {
   const answer = async (val: unknown) => {
     if (!q || feedback) return;
     setChosen(val);
+    setAnswered((a) => (a.includes(q.id) ? a : [...a, q.id]));
     if (navigator.onLine && getToken()) {
       try {
         const r = await apiPracticeAnswer(q.id, val);
@@ -62,16 +66,26 @@ export default function Practice({ lang }: { lang: Lang }) {
         </div>
       )}
 
-      <div className="card">
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+      <div className="quiz-shell">
+      <div className="card quiz-main">
+        <div className="quiz-top">
+          <span className="quiz-count">Question {questions.length ? idx + 1 : '—'} of {questions.length || '—'}</span>
+          <span style={{ flex: 1 }} />
+          <span className="muted">✓ {stats.correct}/{stats.attempted}</span>
+          {q && (
+            <button type="button" className={`btn small ${flagged.includes(q.id) ? '' : 'ghost'}`}
+              onClick={() => setFlagged((f) => (f.includes(q.id) ? f.filter((x) => x !== q.id) : [...f, q.id]))}>
+              ⚑ Review
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           {['', 'easy', 'medium', 'hard'].map((d) => (
             <button key={d || 'all'} className={`btn small ${difficulty === d ? '' : 'ghost'}`}
               onClick={() => { setDifficulty(d); load(d); }}>
               {d || 'all'}
             </button>
           ))}
-          <span style={{ flex: 1 }} />
-          <span className="muted">{idx + 1}/{questions.length || '—'} · ✓ {stats.correct}/{stats.attempted}</span>
         </div>
 
         {!questions.length && !error && <div className="skeleton" style={{ height: 80 }} />}
@@ -110,18 +124,49 @@ export default function Practice({ lang }: { lang: Lang }) {
                   {feedback.correct ? '✅ ' + t('completed', lang) : '❌'}
                 </p>
                 <p className="muted">{feedback.explanation}</p>
-                <button className="btn" onClick={() => {
-                  setFeedback(null); setChosen(null); setFillText('');
-                  setIdx(idx + 1 < questions.length ? idx + 1 : 0);
-                  if (idx + 1 >= questions.length) load(difficulty);
-                }}>
-                  {t('next', lang)} →
-                </button>
               </>
             )}
           </>
         )}
+        </div>
+        {!!questions.length && (
+          <div className="card quiz-palette" aria-label="Question palette">
+            <strong>Questions</strong>
+            <div className="qgrid">
+              {questions.map((qq, qi) => (
+                <button key={qq.id} type="button"
+                  className={`qnum${qi === idx ? ' cur' : ''}${answered.includes(qq.id) ? ' done' : ''}${flagged.includes(qq.id) ? ' flagged' : ''}`}
+                  onClick={() => {
+                    setFeedback(null); setChosen(null); setFillText(''); setIdx(qi);
+                  }}>
+                  {qi + 1}
+                </button>
+              ))}
+            </div>
+            <div className="quiz-legend muted"><span>🟩 answered</span><span>⚑ review</span></div>
+          </div>
+        )}
       </div>
+      {!!questions.length && (
+        <div className="quiz-nav">
+          <button className="btn ghost" disabled={!idx} onClick={() => {
+            setFeedback(null); setChosen(null); setFillText(''); setIdx(idx - 1);
+          }}>
+            ← {t('back', lang)}
+          </button>
+          <button className="btn" onClick={() => {
+            if (feedback || !q) {
+              setFeedback(null); setChosen(null); setFillText('');
+              if (idx + 1 >= questions.length) load(difficulty);
+              else setIdx(idx + 1);
+            } else {
+              setFeedback(null); setChosen(null); setFillText(''); setIdx((idx + 1) % questions.length);
+            }
+          }}>
+            {t('next', lang)} →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

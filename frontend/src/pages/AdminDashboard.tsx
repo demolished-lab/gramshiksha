@@ -60,12 +60,12 @@ export default function AdminDashboard({ lang }: { lang: Lang }) {
 
   return (
     <div>
-      <h1>🛠 Admin</h1>
+      <div className="page-head"><div><span className="eyebrow eyebrow-muted">Administration</span><h1>🛠 Admin</h1></div></div>
       {stats && (
-        <div className="stat-row">
-          <div className="stat"><div className="num">{stats.students}</div><div className="lbl">{t('students', lang)}</div></div>
-          <div className="stat"><div className="num">{stats.teachers}</div><div className="lbl">{t('teacher', lang)}</div></div>
-          <div className="stat"><div className="num">{stats.lessons_completed_total}</div><div className="lbl">{t('lessonsDone', lang)}</div></div>
+        <div className="stat-cards">
+          <div className="stat-card"><div className="ic" aria-hidden="true">👥</div><div className="num">{stats.students}</div><div className="lbl">{t('students', lang)}</div></div>
+          <div className="stat-card"><div className="ic" aria-hidden="true">👩‍🏫</div><div className="num">{stats.teachers}</div><div className="lbl">{t('teacher', lang)}</div></div>
+          <div className="stat-card"><div className="ic" aria-hidden="true">📖</div><div className="num">{stats.lessons_completed_total}</div><div className="lbl">{t('lessonsDone', lang)}</div></div>
         </div>
       )}
 

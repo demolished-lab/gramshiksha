@@ -24,13 +24,12 @@ export default function ProgressPage({ lang }: { lang: Lang }) {
 
   return (
     <div>
-      <h1>📈 {t('progress', lang)}</h1>
-      <div className="stat-row">
-        <div className="stat"><div className="num">{s.lessons_completed}</div><div className="lbl">{t('lessonsDone', lang)}</div></div>
-        <div className="stat"><div className="num">{s.quizzes_taken}</div><div className="lbl">Quizzes</div></div>
-        <div className="stat"><div className="num">{s.quiz_avg_pct === null ? '—' : `${s.quiz_avg_pct}%`}</div><div className="lbl">{t('quizAvg', lang)}</div></div>
-        <div className="stat"><div className="num">{s.xp}</div><div className="lbl">{t('xp', lang)}</div></div>
-        <div className="stat"><div className="num">🔥 {s.streak_days}</div><div className="lbl">{t('streak', lang)}</div></div>
+      <div className="page-head"><div><span className="eyebrow eyebrow-muted">Your journey</span><h1>📈 {t('progress', lang)}</h1></div></div>
+      <div className="stat-cards">
+        <div className="stat-card"><div className="ic" aria-hidden="true">📖</div><div className="num">{s.lessons_completed}</div><div className="lbl">{t('lessonsDone', lang)}</div></div>
+        <div className="stat-card"><div className="ic" aria-hidden="true">✏️</div><div className="num">{s.quizzes_taken}</div><div className="lbl">Quizzes</div></div>
+        <div className="stat-card"><div className="ic" aria-hidden="true">🎯</div><div className="num">{s.quiz_avg_pct === null ? '—' : `${s.quiz_avg_pct}%`}</div><div className="lbl">{t('quizAvg', lang)}</div></div>
+        <div className="stat-card"><div className="ic" aria-hidden="true">🔥</div><div className="num">{s.streak_days}</div><div className="lbl">{t('streak', lang)}</div></div>
       </div>
 
       <div className="card">
@@ -56,12 +55,18 @@ export default function ProgressPage({ lang }: { lang: Lang }) {
       <div className="card">
         <h3>📜 {t('certificates', lang)}</h3>
         {s.certificates.length === 0 && <p className="muted">Complete a course to earn your first certificate.</p>}
-        {s.certificates.map((c) => (
-          <div key={c.cert_id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-            <strong>GS Certificate</strong> <span className="muted">{c.cert_id}</span>
-            <div className="muted">issued {new Date(c.issued_at).toLocaleDateString()}</div>
+        {!!s.certificates.length && (
+          <div className="cert-grid">
+            {s.certificates.map((c) => (
+              <div className="cert-card" key={c.cert_id}>
+                <div className="cert-ic" aria-hidden="true">🏆</div>
+                <strong>GS Certificate</strong>
+                <div className="muted">{c.cert_id}</div>
+                <div className="muted">issued {new Date(c.issued_at).toLocaleDateString()}</div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

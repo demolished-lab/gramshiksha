@@ -354,3 +354,77 @@ main.container { max-width: 1160px; padding: 24px 20px 96px; } .btn { box-shadow
 .cover-fallback .cover-ic { font-size: 2rem; }
 .cover-fallback .cover-sub { font-size: .72rem; font-weight: 600; }
 .cover-wrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* --- mockup phase B: quiz shell, doubt tabs, landing band, activity ------
+   Question palette + review flags (Practice), filter tabs + search (Doubts),
+   Popular-classes band (Landing), activity feed + CSS bars (Teacher), cert
+   cards (Progress), and a real 404 — all data already on the page. */
+.quiz-shell { display: grid; grid-template-columns: 1fr 180px; gap: 14px; align-items: start; }
+.quiz-main { min-width: 0; }
+.quiz-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.quiz-count { font-weight: 800; color: var(--ink); }
+.quiz-nav { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.quiz-palette { position: sticky; top: 76px; }
+.quiz-palette .qgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.quiz-palette .qnum {
+  display: grid; place-items: center; height: 34px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--border); background: #fff; color: var(--muted);
+  font: inherit; font-size: .8rem; font-weight: 700;
+}
+.quiz-palette .qnum.cur { border-color: var(--primary); color: var(--primary); }
+.quiz-palette .qnum.done { background: var(--success); border-color: var(--success); color: #fff; }
+.quiz-palette .qnum.flagged::after { content: '●'; color: var(--accent); font-size: .55rem; margin-left: 2px; }
+.quiz-legend { display: flex; gap: 10px; margin-top: 8px; }
+@media (max-width: 640px) { .quiz-shell { grid-template-columns: 1fr; } .quiz-palette { position: static; } }
+
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+.tabs button {
+  border: 1px solid var(--border); background: #fff; color: var(--muted);
+  border-radius: 999px; padding: 7px 14px; font: inherit; font-size: .83rem;
+  font-weight: 600; cursor: pointer;
+}
+.tabs button.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.search-row { display: flex; gap: 8px; margin: 10px 0; }
+.search-row input { flex: 1; }
+
+.band-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.band-card {
+  border: 1px solid var(--border); border-radius: 16px; padding: 18px; cursor: pointer;
+  background: #fff; text-align: left; font: inherit; color: var(--ink);
+  box-shadow: var(--shadow); transition: transform .18s ease, box-shadow .18s ease;
+}
+.band-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.band-card .band-ic { font-size: 1.8rem; }
+.band-card strong { display: block; margin-top: 8px; }
+.band-card small { color: var(--muted); }
+@media (max-width: 760px) { .band-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.activity { display: grid; gap: 0; }
+.activity-item {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 11px 0; border-bottom: 1px solid var(--border);
+}
+.activity-item:last-child { border-bottom: 0; }
+.activity-ava {
+  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
+  background: var(--soft-blue); font-size: 1.05rem; flex: 0 0 auto;
+}
+.bars { display: flex; align-items: flex-end; gap: 10px; height: 150px; padding-top: 8px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.bar-col .bar {
+  width: 70%; max-width: 44px; border-radius: 7px 7px 3px 3px;
+  background: linear-gradient(180deg, #4c83f1, #2457d6); min-height: 5px;
+}
+.bar-col .bar.dim { background: #c9d8f5; }
+.bar-col small { color: var(--muted); font-size: .68rem; }
+
+.cert-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.cert-card {
+  border: 1px solid #f0d9a8; border-radius: 14px; padding: 18px; text-align: center;
+  background: linear-gradient(160deg, #fffdf5, #fff8e6); box-shadow: var(--shadow);
+}
+.cert-card .cert-ic { font-size: 2rem; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+.page-head { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin: 12px 0 4px; flex-wrap: wrap; }
+.page-head h1 { margin: 0; }

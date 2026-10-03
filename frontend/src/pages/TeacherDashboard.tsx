@@ -72,18 +72,73 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
 
   if (error) return <p className="error">{t('errorLoad', lang)} — {error}</p>;
 
+  // Class performance, honestly: the share of students (with any quiz data)
+  // in each score band. No quiz data yet → no chart, not a flat line.
+  const scored = students.filter((s) => s.quiz_avg_pct !== null);
+  const banded: [string, number][] = [['<40', 0], ['40–60', 0], ['60–80', 0], ['80+', 0]];
+  for (const s of scored) {
+    const v = s.quiz_avg_pct ?? 0;
+    banded[v < 40 ? 0 : v < 60 ? 1 : v < 80 ? 2 : 3][1] += 1;
+  }
+  const bandMax = Math.max(1, ...banded.map((b) => b[1]));
+  const weakStudents = students.filter((s) => s.weak_topics.length > 0
+    || (s.quiz_avg_pct !== null && (s.quiz_avg_pct ?? 100) < 50));
+
   return (
     <div>
-      <h1>👩‍🏫 {t('teacher', lang)}</h1>
+      <div className="dash-hero">
+        <div className="dash-hero-row">
+          <div><span className="eyebrow" style={{ color: '#c9d8f7' }}>{t('teacher', lang)}</span><h1>👩‍🏫 Welcome back</h1><p className="muted" style={{ margin: '4px 0 0' }}>{overview ? `${overview.total_students} students · ${overview.my_courses.length} courses` : t('loading', lang)}</p></div>
+        </div>
+      </div>
 
       {overview && (
-        <div className="stat-row">
-          <div className="stat"><div className="num">{overview.total_students}</div><div className="lbl">{t('students', lang)}</div></div>
-          <div className="stat"><div className="num">{overview.my_courses.length}</div><div className="lbl">{t('courses', lang)}</div></div>
-          <div className="stat"><div className="num">{overview.pending_material_reviews}</div><div className="lbl">{t('pending', lang)}</div></div>
-          <div className="stat"><div className="num">{overview.pending_doubts}</div><div className="lbl">{t('doubts', lang)}</div></div>
+        <div className="stat-cards">
+          <div className="stat-card"><div className="ic" aria-hidden="true">👥</div><div className="num">{overview.total_students}</div><div className="lbl">{t('students', lang)}</div></div>
+          <div className="stat-card"><div className="ic" aria-hidden="true">📚</div><div className="num">{overview.my_courses.length}</div><div className="lbl">{t('courses', lang)}</div></div>
+          <div className="stat-card"><div className="ic" aria-hidden="true">📦</div><div className="num">{overview.pending_material_reviews}</div><div className="lbl">{t('pending', lang)}</div></div>
+          <div className="stat-card"><div className="ic" aria-hidden="true">❓</div><div className="num">{overview.pending_doubts}</div><div className="lbl">{t('doubts', lang)}</div></div>
         </div>
       )}
+
+      <div className="two-col">
+        <div className="card">
+          <h3>📰 Recent activity</h3>
+          <div className="activity">
+            {doubts.slice(0, 3).map((d) => (
+              <div className="activity-item" key={`d${d.id}`}>
+                <span className="activity-ava" aria-hidden="true">❓</span>
+                <div><strong>{d.student_name}</strong> <span className="muted">asked in {d.subject_name}</span><div className="muted">{d.text.slice(0, 80)}{d.text.length > 80 ? '…' : ''}</div></div>
+              </div>
+            ))}
+            {weakStudents.slice(0, 3).map((s) => (
+              <div className="activity-item" key={`s${s.id}`}>
+                <span className="activity-ava" aria-hidden="true">🎯</span>
+                <div><strong>{s.name}</strong> <span className="muted">needs help{s.quiz_avg_pct !== null ? ` · quiz ${s.quiz_avg_pct}%` : ''}</span></div>
+              </div>
+            ))}
+            {!doubts.length && !weakStudents.length && (
+              <p className="muted">All quiet — no pending doubts, no struggling students ✓</p>
+            )}
+          </div>
+        </div>
+        <div className="card">
+          <h3>📊 Class performance</h3>
+          {!scored.length && <p className="muted">Quiz scores appear here once students attempt quizzes.</p>}
+          {!!scored.length && (
+            <div className="bars" role="img" aria-label={`Quiz score bands across ${scored.length} students`}>
+              {banded.map(([label, n]) => (
+                <div className="bar-col" key={label}>
+                  <span className="muted">{n}</span>
+                  <div className={`bar${n === 0 ? ' dim' : ''}`} style={{ height: `${Math.max(5, (n / bandMax) * 105)}px` }} />
+                  <small>{label}</small>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
 
       {/* Monthly Reading List: post one pick a month and every student sees
           it (book club — the audience is all students, not a class). The

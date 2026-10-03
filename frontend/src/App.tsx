@@ -169,6 +169,22 @@ export default function App() {
       : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
   }
 
+  // Unknown hash routes get a real 404 (with a way home), not a silent
+  // landing render — deep links stay honest about where they point.
+  const knownPages = ['home', 'login', 'dashboard', 'explore', 'courses', 'course',
+    'lesson', 'practice', 'materials', 'textbooks', 'doubts', 'downloads',
+    'progress', 'teacher', 'parent', 'admin'];
+  if (!knownPages.includes(route.page)) {
+    page = (
+      <div className="card" style={{ textAlign: 'center', padding: '48px 20px' }}>
+        <div style={{ fontSize: '3rem', fontWeight: 900, color: 'var(--primary)' }}>404</div>
+        <h2>Page not found</h2>
+        <p className="muted">This link points nowhere on GramShiksha.</p>
+        <button className="btn" onClick={nav('home')}>← {t('home', lang)}</button>
+      </div>
+    );
+  }
+
   const authenticated = Boolean(user);
   const roleHome = user?.role === 'student' ? 'dashboard' : user?.role === 'parent' ? 'parent' : isTeacher ? 'teacher' : 'admin';
   const sidebarItems: [string, string][] = authenticated

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiAskDoubt, apiDoubts, apiReplyDoubt, apiResolveDoubt } from '../api';
-import { getToken } from '../auth';
+import { getToken, getUser } from '../auth';
 import { t } from '../i18n';
 import type { Doubt, Lang } from '../types';
 
@@ -11,6 +11,8 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
   const [replyFor, setReplyFor] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
   const [error, setError] = useState('');
+  const [tab, setTab] = useState<'all' | 'unanswered' | 'answered' | 'mine'>('all');
+  const [term, setTerm] = useState('');
   const isTeacher = user && ['teacher', 'school_admin', 'platform_admin'].includes(user.role);
 
   const load = () => {
@@ -31,7 +33,23 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
 
   return (
     <div>
-      <h1>❓ {t('doubts', lang)}</h1>
+      <div className="page-head">
+        <div><span className="eyebrow eyebrow-muted">Q & A</span><h1>❓ {t('doubts', lang)}</h1></div>
+      </div>
+
+      <div className="search-row">
+        <input value={term} onChange={(e) => setTerm(e.target.value)}
+          placeholder="Search your doubts…" aria-label="Search doubts" />
+      </div>
+      <div className="tabs" role="tablist" aria-label="Doubt filters">
+        {(['all', 'unanswered', 'answered', 'mine'] as const).map((k) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k}
+            className={tab === k ? 'active' : ''}
+            onClick={() => setTab(k)}>
+            {k === 'all' ? 'All' : k === 'unanswered' ? 'Unanswered' : k === 'answered' ? 'Answered' : 'My questions'}
+          </button>
+        ))}
+      </div>
 
       {user?.role === 'student' && (
         <div className="card">
@@ -46,9 +64,18 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
       )}
 
       {error && <p className="error">{error}</p>}
-      {!doubts.length && <div className="empty-state"><div className="icon">💬</div><p>No doubts submitted yet.</p></div>}
-
-      {doubts.map((d) => (
+      {(() => {
+        const q = term.trim().toLowerCase();
+        const me = getUser()?.name;
+        const rows = doubts.filter((d) =>
+          (tab === 'all'
+            || (tab === 'unanswered' && d.status !== 'resolved' && d.status !== 'answered')
+            || (tab === 'answered' && (d.status === 'answered' || d.status === 'resolved'))
+            || (tab === 'mine' && !!me && d.student_name === me))
+          && (!q || d.text.toLowerCase().includes(q) || d.subject_name.toLowerCase().includes(q)));
+        return (<>
+          {!rows.length && <div className="empty-state"><div className="icon">💬</div><p>{doubts.length ? 'Nothing matches this filter.' : 'No doubts submitted yet.'}</p></div>}
+          {rows.map((d) => (
         <div className="card" key={d.id}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <strong>{d.subject_name}</strong>
@@ -79,7 +106,8 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
             )}
           </div>
         </div>
-      ))}
+          ))}
+        </>);})()}
     </div>
   );
 }
