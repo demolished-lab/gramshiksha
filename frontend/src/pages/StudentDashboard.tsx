@@ -94,6 +94,20 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
         <div className="dashboard-meta" style={{ color: '#c9d8f7', margin: '12px 0 0' }}><span>⚡ {today.xp} {t('xp', lang)}</span><span>⏱️ {today.study_minutes_today} min studied today</span><span style={{ marginLeft: 'auto' }}>{overall}%</span></div>
       </div>
 
+      <section className="reference-progress-panel" aria-labelledby="progress-panel-title">
+        <div><span className="eyebrow">Your progress</span><h2 id="progress-panel-title">Overall course progress</h2></div>
+        <strong>{overall}%</strong>
+        <div className="progressbar"><div style={{ width: `${overall}%` }} /></div>
+        <button className="btn small" onClick={() => go('progress')}>View details →</button>
+      </section>
+
+      <div className="reference-metric-grid" aria-label="Learning summary">
+        <div className="reference-metric"><span>📚</span><strong>{courses.length}</strong><small>Courses enrolled</small></div>
+        <div className="reference-metric"><span>✅</span><strong>{summary?.lessons_completed ?? 0}</strong><small>Lessons completed</small></div>
+        <div className="reference-metric"><span>📝</span><strong>{summary?.quizzes_taken ?? 0}</strong><small>Assignments</small></div>
+        <div className="reference-metric"><span>🏆</span><strong>{summary?.certificates.length ?? 0}</strong><small>Certificates</small></div>
+      </div>
+
       {notifs.length > 0 && (
         <div className="card" style={{ borderLeft: '4px solid var(--accent)' }}>
           <strong>🔔 {notifs.length}</strong>
@@ -203,6 +217,20 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
           ))}
         </div>
       )}
+
+      <h3 className="section-title">Recommended for you <button className="text-link" onClick={() => go('explore')}>View all →</button></h3>
+      <div className="recommendation-grid">
+        {[
+          ['🎬', 'Important questions', 'Board exam revision', 'practice'],
+          ['🧠', 'Full chapter revision', 'Science Class 10', 'practice'],
+          ['📄', 'Previous year papers', 'Maths 2020–2024', 'textbooks'],
+          ['🌿', 'Short notes', 'All subjects', 'materials'],
+        ].map(([icon, title, sub, route]) => (
+          <button className="recommendation-card" key={title} onClick={() => go(route)}>
+            <span className="recommendation-thumb">{icon}</span><strong>{title}</strong><small>{sub}</small>
+          </button>
+        ))}
+      </div>
 
       {summary && (
         <>

@@ -55,10 +55,11 @@ export default function LessonPage({ lang, go, lessonId }: { lang: Lang; go: (p:
   if (!lesson) return <div><div className="skeleton" style={{ width: '40%' }} /><div className="skeleton" style={{ height: 120 }} /><div className="skeleton" /></div>;
 
   return (
-    <div>
-      <button className="btn ghost small" onClick={() => lesson.course_id ? go('course', lesson.course_id) : go('courses')}>← {t('back', lang)}</button>
+    <div className="lesson-workspace">
+      <main className="lesson-main">
+        <button className="btn ghost small" onClick={() => lesson.course_id ? go('course', lesson.course_id) : go('courses')}>← {t('back', lang)}</button>
 
-      <div className="card">
+        <div className="card lesson-video-card">
         <h1>{lesson.title}</h1>
         <div style={{ margin: '6px 0' }}>
           <span className="badge gray">{lesson.type}</span>
@@ -92,24 +93,28 @@ export default function LessonPage({ lang, go, lessonId }: { lang: Lang; go: (p:
         </div>
         {xpMsg && <p className="success">⚡ {xpMsg}</p>}
         {error && <p className="error">{error}</p>}
-      </div>
+        </div>
 
-      {/* Inline practice questions */}
-      {showQuiz && quiz && (
-        <InlineQuiz lang={lang} quiz={quiz} onDone={(r) => setQuizResult(r)} result={quizResult} />
-      )}
+        {/* Inline practice questions */}
+        {showQuiz && quiz && (
+          <InlineQuiz lang={lang} quiz={quiz} onDone={(r) => setQuizResult(r)} result={quizResult} />
+        )}
+      </main>
 
-      {/* Notes */}
-      <div className="card">
-        <h3>📝 {t('myNotes', lang)}</h3>
-        {notes.map((n) => <p key={n.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>{n.body}</p>)}
-        {getToken() ? (
-          <>
-            <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder={t('addNote', lang)} />
-            <button className="btn small" style={{ marginTop: 8 }} disabled={!noteText.trim()} onClick={addNote}>{t('addNote', lang)}</button>
-          </>
-        ) : <p className="muted">Log in to save notes.</p>}
-      </div>
+      <aside className="lesson-sidebar">
+        <div className="card lesson-notes-card">
+          <div className="lesson-tabs"><strong>Notes</strong><span>Transcript</span><span>Download</span><span>Discussion</span></div>
+          <h3>📝 {t('myNotes', lang)}</h3>
+          {notes.map((n) => <p key={n.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>{n.body}</p>)}
+          {getToken() ? (
+            <>
+              <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder={t('addNote', lang)} />
+              <button className="btn small" style={{ marginTop: 8 }} disabled={!noteText.trim()} onClick={addNote}>{t('addNote', lang)}</button>
+            </>
+          ) : <p className="muted">Log in to save notes.</p>}
+        </div>
+        <div className="card key-points-card"><h3>Key points</h3><ul><li>Review the lesson explanation carefully.</li><li>Use Practice to check your understanding.</li><li>Bookmark this lesson for revision.</li></ul></div>
+      </aside>
     </div>
   );
 }
