@@ -201,9 +201,9 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
         <div className="course-grid">
           {courses.map((c, ci) => (
             <div className="course-card2" key={c.id}>
-              <div className="course-thumb" aria-hidden="true"
-                style={{ backgroundColor: '#dceaff', backgroundImage: "url('/reference-assets/dashboard-course-cards.jpg')", backgroundSize: '300% 100%', backgroundPosition: `${ci * 50}% center` }}>
-                <span className="sr-only">Course artwork</span>
+              <div className="course-thumb">
+                <img src={ci % 2 === 0 ? '/images/gramshiksha-classroom-learning.jpg' : '/images/gramshiksha-science-study.jpg'} alt="" loading="lazy" />
+                <span className="sr-only">{c.title_en} course artwork</span>
               </div>
               <div className="course-body">
                 <strong>{c.title_en}</strong>
@@ -221,13 +221,13 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
       <h3 className="section-title">Recommended for you <button className="text-link" onClick={() => go('explore')}>View all →</button></h3>
       <div className="recommendation-grid">
         {[
-          ['🎬', 'Important questions', 'Board exam revision', 'practice'],
-          ['🧠', 'Full chapter revision', 'Science Class 10', 'practice'],
-          ['📄', 'Previous year papers', 'Maths 2020–2024', 'textbooks'],
-          ['🌿', 'Short notes', 'All subjects', 'materials'],
-        ].map(([icon, title, sub, route]) => (
+          ['🎬', 'Important questions', 'Board exam revision', 'practice', '/images/gramshiksha-math-lesson.jpg'],
+          ['🧠', 'Full chapter revision', 'Science Class 10', 'practice', '/images/gramshiksha-science-study.jpg'],
+          ['📄', 'Previous year papers', 'Maths 2020–2024', 'textbooks', '/images/gramshiksha-classroom-learning.jpg'],
+          ['🌿', 'Short notes', 'All subjects', 'materials', '/images/gramshiksha-teacher-support.jpg'],
+        ].map(([icon, title, sub, route, image]) => (
           <button className="recommendation-card" key={title} onClick={() => go(route)}>
-            <span className="recommendation-thumb">{icon}</span><strong>{title}</strong><small>{sub}</small>
+            <span className="recommendation-thumb"><img src={image} alt="" loading="lazy" /><span aria-hidden="true">{icon}</span></span><strong>{title}</strong><small>{sub}</small>
           </button>
         ))}
       </div>

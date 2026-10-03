@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 test.beforeEach(async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 0) > 900, 'Navigation drawer is a mobile-breakpoint interaction');
   await page.addInitScript(() => {
     localStorage.setItem('gs_token', 'e2e-token');
     localStorage.setItem('gs_user', JSON.stringify({

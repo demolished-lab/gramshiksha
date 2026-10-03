@@ -41,7 +41,7 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
         <div className="hero-visual" aria-label="Students learning together">
           <div className="hero-visual-orbit orbit-one" aria-hidden="true" />
           <div className="hero-visual-orbit orbit-two" aria-hidden="true" />
-          <div className="student-illustration"><img src="/reference-assets/hero-students.jpg" alt="Students learning together" /><span className="student-card">Education<br /><strong>changes lives</strong></span></div>
+          <div className="student-illustration"><img src="/images/gramshiksha-hero-classroom.jpg" alt="Students learning together in a bright classroom" /><span className="student-card">Education<br /><strong>changes lives</strong></span></div>
           <div className="floating-topic topic-book">📚<small>Learn</small></div>
           <div className="floating-topic topic-star">✦<small>Grow</small></div>
         </div>
@@ -61,9 +61,9 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
       <section className="section-block" aria-labelledby="popular-heading">
         <div className="section-heading"><div><span className="eyebrow eyebrow-muted">Levels</span><h2 id="popular-heading">Popular classes</h2></div></div>
         <div className="band-grid">
-          {[['🧒', 'Class 1–5', 'Foundational learning', 3], ['🧑‍🎓', 'Class 6–8', 'Build strong concepts', 7], ['📝', 'Class 9–10', 'Board preparation', 10], ['🎓', 'Class 11–12', 'Higher studies', 12]].map(([icon, title, sub, g]) => (
+          {[['🧒', 'Class 1–5', 'Foundational learning', 3, '/images/gramshiksha-classroom-learning.jpg'], ['🧑‍🎓', 'Class 6–8', 'Build strong concepts', 7, '/images/gramshiksha-science-study.jpg'], ['📝', 'Class 9–10', 'Board preparation', 10, '/images/gramshiksha-math-lesson.jpg'], ['🎓', 'Class 11–12', 'Higher studies', 12, '/images/gramshiksha-teacher-support.jpg']].map(([icon, title, sub, g, image]) => (
             <button className="band-card" key={title as string} onClick={() => go('explore', g as number)}>
-              <span className="band-ic" aria-hidden="true">{icon}</span>
+              <span className="band-image"><img src={image as string} alt="" loading="lazy" /><span className="band-ic" aria-hidden="true">{icon}</span></span>
               <strong>{title}</strong>
               <small>{sub}</small>
             </button>

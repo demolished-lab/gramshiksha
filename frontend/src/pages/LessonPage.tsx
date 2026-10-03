@@ -76,7 +76,7 @@ export default function LessonPage({ lang, go, lessonId }: { lang: Lang; go: (p:
             </a>
           ) : (
             <div className="lesson-poster-wrap">
-              <img className="lesson-poster" src="/reference-assets/lesson-video.jpg" alt="Lesson video preview" />
+              <img className="lesson-poster" src="/images/gramshiksha-math-lesson.jpg" alt="Teacher introducing a mathematics lesson" />
               <span className="lesson-poster-controls">▶ 4:32 / 5:00</span>
               <span className="lesson-poster-links">🎬 <a href={lesson.video_url} target="_blank" rel="noreferrer">open video</a>
               {lesson.video_url_low && <> · <a href={lesson.video_url_low} target="_blank" rel="noreferrer" style={{ color: '#93C5FD' }}>240p</a></>}
