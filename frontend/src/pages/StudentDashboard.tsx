@@ -199,11 +199,11 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
       )}
       {!!courses.length && (
         <div className="course-grid">
-          {courses.map((c) => (
+          {courses.map((c, ci) => (
             <div className="course-card2" key={c.id}>
               <div className="course-thumb" aria-hidden="true"
-                style={{ background: `linear-gradient(135deg, hsl(${(c.id * 47) % 360}, 62%, 52%), hsl(${((c.id * 47) % 360 + 40) % 360}, 60%, 42%)` }}>
-                📖
+                style={{ backgroundColor: '#dceaff', backgroundImage: "url('/reference-assets/dashboard-course-cards.jpg')", backgroundSize: '300% 100%', backgroundPosition: `${ci * 50}% center` }}>
+                <span className="sr-only">Course artwork</span>
               </div>
               <div className="course-body">
                 <strong>{c.title_en}</strong>

@@ -41,7 +41,7 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
         <div className="hero-visual" aria-label="Students learning together">
           <div className="hero-visual-orbit orbit-one" aria-hidden="true" />
           <div className="hero-visual-orbit orbit-two" aria-hidden="true" />
-          <div className="student-illustration"><span className="student-halo" /><span className="student-face">🧑🏽‍🎓</span><span className="student-card">Learning<br /><strong>changes lives</strong></span></div>
+          <div className="student-illustration"><img src="/reference-assets/hero-students.jpg" alt="Students learning together" /><span className="student-card">Education<br /><strong>changes lives</strong></span></div>
           <div className="floating-topic topic-book">📚<small>Learn</small></div>
           <div className="floating-topic topic-star">✦<small>Grow</small></div>
         </div>

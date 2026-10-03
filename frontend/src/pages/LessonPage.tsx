@@ -75,9 +75,12 @@ export default function LessonPage({ lang, go, lessonId }: { lang: Lang; go: (p:
               🎬 {saver ? 'Load video (~' + lesson.estimate_mb + ' MB)' : 'Watch video'}
             </a>
           ) : (
-            <div style={{ background: '#0F172A', borderRadius: 10, padding: '32px 16px', textAlign: 'center', color: '#fff', marginBottom: 10 }}>
-              🎬 video player — <a href={lesson.video_url} target="_blank" rel="noreferrer" style={{ color: '#93C5FD' }}>open</a>
+            <div className="lesson-poster-wrap">
+              <img className="lesson-poster" src="/reference-assets/lesson-video.jpg" alt="Lesson video preview" />
+              <span className="lesson-poster-controls">▶ 4:32 / 5:00</span>
+              <span className="lesson-poster-links">🎬 <a href={lesson.video_url} target="_blank" rel="noreferrer">open video</a>
               {lesson.video_url_low && <> · <a href={lesson.video_url_low} target="_blank" rel="noreferrer" style={{ color: '#93C5FD' }}>240p</a></>}
+              </span>
             </div>
           )
         )}

@@ -506,3 +506,17 @@ main.container { max-width: 1160px; padding: 24px 20px 96px; } .btn { box-shadow
 .key-points-card ul { margin: 0; padding-left: 18px; color: #596274; font-size: .82rem; }
 .key-points-card li { margin: 8px 0; }
 @media (max-width: 850px) { .lesson-workspace { grid-template-columns: 1fr; } .lesson-sidebar { position: static; } .lesson-video-card > div[style*="background"] { min-height: 190px; } }
+
+/* ---------- supplied reference imagery ---------- */
+.student-illustration { overflow: hidden; background: #f6d4af; }
+.student-illustration img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.student-illustration::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 52%, rgba(20,47,104,.2)); pointer-events: none; }
+.lesson-poster-wrap { position: relative; min-height: 260px; overflow: hidden; border-radius: 10px; background: #0f172a; margin: 14px 0 16px; }
+.lesson-poster { display: block; width: 100%; height: 260px; object-fit: cover; object-position: center; }
+.lesson-poster-controls, .lesson-poster-links { position: absolute; z-index: 1; color: #fff; font-size: .75rem; text-shadow: 0 1px 4px #000; }
+.lesson-poster-controls { left: 14px; bottom: 12px; }
+.lesson-poster-links { right: 14px; bottom: 12px; }
+.lesson-poster-links a { color: #fff; text-decoration: underline; }
+@media (max-width: 850px) { .lesson-poster, .lesson-poster-wrap { height: 190px; min-height: 190px; } }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
