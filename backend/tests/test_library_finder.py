@@ -233,6 +233,6 @@ def test_my_requests_is_yours_and_needs_a_session(client, monkeypatch):
     assert any(x["query"] == MINE_TITLE.lower()
                and x["status"] == "pending" for x in rows)
     assert all(set(x) == {"id", "query", "class_grade", "status",
-                          "textbook_id", "created_at", "found_at"} for x in rows)
+                          "textbook_id", "stream", "created_at", "found_at"} for x in rows)
     # production mount twin
     assert client.get("/api/library/requests", headers=h).status_code == 200

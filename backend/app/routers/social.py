@@ -8,6 +8,8 @@ from ..db import get_session
 from ..models import (Bookmark, Doubt, DoubtReply, Note, Notification, User)
 from ..ratelimit import rate_limit
 from ..security import get_current_user, has_role, require_roles
+from ..streams import stream_for
+from .catalog import _check_stream
 
 router = APIRouter(tags=["social"])
 
@@ -25,6 +27,7 @@ class DoubtIn(BaseModel):
 def ask_doubt(payload: DoubtIn, user=Depends(require_roles("student")),
               session: Session = Depends(get_session)):
     d = Doubt(student_id=user.id, subject_name=payload.subject_name,
+              stream=stream_for(user.class_grade, payload.subject_name),
               chapter_title=payload.chapter_title, text=payload.text.strip())
     session.add(d)
     session.commit()
@@ -33,17 +36,23 @@ def ask_doubt(payload: DoubtIn, user=Depends(require_roles("student")),
 
 
 @router.get("/doubts")
-def my_doubts(user=Depends(get_current_user), session: Session = Depends(get_session)):
+def my_doubts(user=Depends(get_current_user),
+              stream: str = "",
+              session: Session = Depends(get_session)):
+    _check_stream(stream)
     if user.role == "student":
         rows = session.exec(select(Doubt).where(Doubt.student_id == user.id)).all()
     else:
         rows = session.exec(select(Doubt).order_by(Doubt.created_at.desc())).all()
+    if stream:
+        rows = [d for d in rows if d.stream in ("", stream)]
     out = []
     for d in rows:
         student = session.get(User, d.student_id)
         replies = session.exec(select(DoubtReply).where(DoubtReply.doubt_id == d.id)).all()
         out.append({
             "id": d.id, "text": d.text, "subject_name": d.subject_name,
+            "stream": d.stream,
             "chapter_title": d.chapter_title, "status": d.status,
             "created_at": d.created_at.isoformat(),
             "student_name": student.name if student else "?",

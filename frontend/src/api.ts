@@ -93,6 +93,7 @@ export const apiAvailability = (board: string, classGrade: number) =>
 export interface CourseQuery {
   class_grade?: number | null; board?: string | null; subject_id?: number | null;
   lang?: string | null; difficulty?: string | null; free_only?: boolean;
+  stream?: string | null;
   sort?: string; limit?: number; offset?: number;
 }
 export const apiCourses = (q: CourseQuery = {}) => {
@@ -105,10 +106,11 @@ export const apiCourses = (q: CourseQuery = {}) => {
 export const apiCourse = (id: number) => req<Course>(`/courses/${id}`);
 export const apiEnroll = (id: number) => post<{ ok: boolean }>(`/courses/${id}/enroll`);
 export const apiMyCourses = () => req<(Course & { progress_pct: number })[]>('/my/courses');
-export const apiTextbooks = (classGrade: number, board: string, lang?: string | null, subjectName?: string | null) => {
+export const apiTextbooks = (classGrade: number, board: string, lang?: string | null, subjectName?: string | null, stream?: string | null) => {
   const p = new URLSearchParams({ class_grade: String(classGrade), board });
   if (lang) p.set('lang', lang);
   if (subjectName) p.set('subject_name', subjectName);
+  if (stream) p.set('stream', stream);
   return req<Textbook[]>(`/textbooks?${p.toString()}`);
 };
 export const apiTextbookPortals = () =>
@@ -125,16 +127,17 @@ export const apiTextbookOpenUrl = (id: number, mode?: 'dl' | 'ext') =>
 /** Tier order server-side: this class's library (ms) → live official portal
  * scan (seconds) → request queue. Never throws the book away: a miss comes
  * back as `result: 'queued'` with a queue position, not an error. */
-export const apiLocate = (q: string, classGrade: number | null, board: string, lang: string) =>
-  post<LocateResult>('/library/locate', { q, class_grade: classGrade, board, lang });
+export const apiLocate = (q: string, classGrade: number | null, board: string, lang: string, stream?: string | null) =>
+  post<LocateResult>('/library/locate', { q, class_grade: classGrade, board, lang, stream: stream || '' });
 /** The signed-in learner's own asks (401 when anonymous — callers ignore). */
 export const apiMyRequests = () => req<BookAsk[]>('/library/requests');
 
 // ---------- library (Monthly Reading List) ----------
 /** Public book-club list: this month and the two before it, newest first.
- * `mine=1` is the signed-in teacher's own picks (401 otherwise). */
-export const apiReadingList = (mine = false) =>
-  req<ReadingPick[]>(`/library/reading${mine ? '?mine=1' : ''}`);
+ * `mine=1` is the signed-in teacher's own picks (401 otherwise).
+ * `stream` narrows to one 11-12 stream (common picks stay included). */
+export const apiReadingList = (mine = false, stream?: string | null) =>
+  req<ReadingPick[]>(`/library/reading${mine ? '?mine=1' : ''}${!mine && stream ? `?stream=${encodeURIComponent(stream)}` : ''}`);
 /** Approved teachers only (401 anonymous, 403 student/pending). Posting the
  * same title again in the same month rewrites it instead of duplicating. */
 export const apiSavePick = (payload: Partial<ReadingPick>) =>
@@ -165,7 +168,7 @@ export const apiWeakTopics = () => req<WeakTopics>('/learn/weak-topics');
 export const apiSyncQueue = (items: unknown[]) => post<{ synced: { ok: boolean }[] }>('/learn/sync', items);
 
 // ---------- materials ----------
-export const apiMaterials = (opts: { class_grade?: number; board?: string; subject_name?: string; type?: string; lang?: string; mine?: boolean }) => {
+export const apiMaterials = (opts: { class_grade?: number; board?: string; subject_name?: string; type?: string; lang?: string; mine?: boolean; stream?: string }) => {
   const p = new URLSearchParams();
   Object.entries(opts).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') p.set(k, String(v)); });
   return req<Material[]>(`/materials?${p.toString()}`);
@@ -189,7 +192,8 @@ export const apiMaterialUrl = (id: number) => `${BASE}/materials/${id}/download`
 // ---------- social ----------
 export const apiAskDoubt = (subject_name: string, chapter_title: string, text: string) =>
   post<{ id: number }>('/doubts', { subject_name, chapter_title, text });
-export const apiDoubts = () => req<Doubt[]>('/doubts');
+export const apiDoubts = (stream?: string | null) =>
+  req<Doubt[]>(`/doubts${stream ? `?stream=${encodeURIComponent(stream)}` : ''}`);
 export const apiReplyDoubt = (id: number, body: string) => post<{ ok: boolean }>(`/doubts/${id}/reply`, { body });
 export const apiResolveDoubt = (id: number) => post<{ ok: boolean }>(`/doubts/${id}/resolve`);
 export const apiBookmarks = () => req<{ id: number; lesson_id: number | null; course_id: number | null }[]>('/bookmarks');

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiAvailability } from '../api';
 import { booksIn, subjectLabel, visibleSubjects } from '../catalog';
+import StreamPicker, { streamName } from '../components/StreamPicker';
 import { t } from '../i18n';
 import { peekExplorePref, setCoursesPref, setExplorePref, setTextbookPref } from '../prefs';
 import type { Availability, Lang } from '../types';
@@ -27,6 +28,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
   const [board, setBoard] = useState<string>(
     saved?.board ?? user?.board ?? 'Maharashtra SSC');
   const [med, setMed] = useState(''); // selected medium lang, '' = all mediums
+  const [stream, setStream] = useState(saved?.stream ?? ''); // 11-12 lane, '' = all
   const [data, setData] = useState<Availability | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,7 +41,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
     let live = true;
     setLoading(true);
     setError('');
-    setExplorePref({ grade, board });
+    setExplorePref({ grade, board, stream: stream || undefined });
     apiAvailability(board, grade)
       .then((a) => {
         if (!live) return;
@@ -49,6 +51,8 @@ export default function Explore({ lang, go, routeGrade, user }: {
         setMed((m) => (m && a.mediums.some((x) => x.lang === m))
           ? m
           : (a.mediums[0]?.lang ?? ''));
+        // Same for the stream lane: a stale lane must never filter everything out.
+        setStream((s) => (s && a.streams.some((x) => x.code === s)) ? s : '');
       })
       .catch(() => { if (live) setError(t('errorLoad', lang)); })
       .finally(() => { if (live) setLoading(false); });
@@ -61,6 +65,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
     setTextbookPref({
       grade, board, subject,
       lang: med || undefined,
+      stream: stream || undefined,
     });
     go('textbooks');
   };
@@ -71,11 +76,14 @@ export default function Explore({ lang, go, routeGrade, user }: {
       go('course', courseIds[0]);
       return;
     }
-    setCoursesPref({ grade, board, subjectId });
+    setCoursesPref({ grade, board, subjectId, stream: stream || undefined });
     go('courses');
   };
 
-  const subjects = data ? visibleSubjects(data, med) : [];
+  // Stream lane first (common subjects always pass), then the medium filter.
+  const subjects = data
+    ? visibleSubjects(data, med).filter((s) => !stream || s.stream === '' || s.stream === stream)
+    : [];
 
   return (
     <div>
@@ -105,6 +113,8 @@ export default function Explore({ lang, go, routeGrade, user }: {
         </div>
       )}
 
+      {data && <StreamPicker lang={lang} streams={data.streams} value={stream} onChange={setStream} />}
+
       {loading && <div><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>}
       {error && (
         <p className="error">
@@ -130,6 +140,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
                 <div className="card" key={s.name}>
                   <strong>{subjectLabel(s, lang)}</strong>
                   <div style={{ margin: '6px 0' }}>
+                    {s.stream && <span className="badge">{streamName(s.stream, lang)}</span>}
                     {books > 0 && <span className="badge green">📖 {books} {t('books', lang)}</span>}
                     {s.lessons > 0 && <span className="badge">🎓 {s.lessons} {t('lessons', lang)}</span>}
                     {books === 0 && s.courses > 0 && (

@@ -33,7 +33,8 @@ from ..db import get_session
 from ..models import BookRequest, Notification, ReadingPick, Textbook, User, utcnow
 from ..ratelimit import rate_limit
 from ..security import get_current_user, require_teacher
-from .catalog import _textbook_out, check_url
+from .catalog import _check_stream, _textbook_out, check_url
+from ..streams import stream_for
 
 # scripts/ is a sibling of app/ — put the backend root on sys.path so the
 # import works no matter what cwd the server was started from.
@@ -161,6 +162,7 @@ def ingest_hit(session: Session, *, title: str, pdf: str, cover: str,
     row = Textbook(
         board="Maharashtra HSC" if grade >= 11 else "Maharashtra SSC",
         class_grade=grade, subject_name=subject, lang=lang,
+        stream=stream_for(grade, subject),
         part_label=parse_part(title), title=WS_RE.sub(" ", title).strip(),
         source_url=PORTAL,
         publisher="Official", deep_url=pdf, cover_url=cover,
@@ -171,7 +173,8 @@ def ingest_hit(session: Session, *, title: str, pdf: str, cover: str,
 
 
 def _queue(session: Session, *, q: str, grade: Optional[int], board: str,
-           lang: str, user_id: Optional[int]) -> tuple[BookRequest, int]:
+           lang: str, user_id: Optional[int],
+           stream: str = "") -> tuple[BookRequest, int]:
     """Record the ask (deduped on query+grade) and return its queue position."""
     conds = [BookRequest.query == q, BookRequest.status == "pending"]
     if grade is None:
@@ -182,7 +185,7 @@ def _queue(session: Session, *, q: str, grade: Optional[int], board: str,
         select(BookRequest).where(*conds).order_by(BookRequest.created_at)).first()
     if row is None:
         row = BookRequest(user_id=user_id, query=q, class_grade=grade,
-                          board=board, lang=lang)
+                          board=board, lang=lang, stream=stream)
         session.add(row)
         session.flush()
     if user_id and row.user_id is None:
@@ -215,6 +218,7 @@ class LocateIn(BaseModel):
     class_grade: Optional[int] = Field(default=None, ge=1, le=12)
     board: str = ""
     lang: str = ""
+    stream: str = ""
 
 
 def _eta_seconds(lang: str) -> int:
@@ -259,6 +263,7 @@ def locate(payload: LocateIn, session: Session = Depends(get_session),
 
     _req, position = _queue(session, q=q, grade=payload.class_grade,
                             board=payload.board, lang=payload.lang,
+                            stream=_check_stream(payload.stream),
                             user_id=user.id if user else None)
     session.commit()
     return {"result": "queued", "position": position, "pending": True,
@@ -330,7 +335,7 @@ def my_requests(user: User = Depends(get_current_user),
         .order_by(BookRequest.created_at.desc()).limit(20)).all()
     return [
         {"id": r.id, "query": r.query, "class_grade": r.class_grade,
-         "status": r.status, "textbook_id": r.textbook_id,
+         "status": r.status, "textbook_id": r.textbook_id, "stream": r.stream,
          "created_at": r.created_at.isoformat(),
          "found_at": r.found_at.isoformat() if r.found_at else None}
         for r in rows
@@ -357,6 +362,7 @@ class ReadingIn(BaseModel):
     subject_name: str = Field(default="", max_length=80)
     class_grade: Optional[int] = Field(default=None, ge=1, le=12)
     board: str = Field(default="", max_length=40)
+    stream: str = Field(default="", max_length=12)
     textbook_id: Optional[int] = Field(default=None, ge=1)
 
 
@@ -385,7 +391,7 @@ def _pick_out(p: ReadingPick, teacher_name: str, readable: bool) -> dict:
     return {
         "id": p.id, "month": p.month, "title": p.title, "author": p.author,
         "note": p.note, "lang": p.lang, "subject_name": p.subject_name,
-        "class_grade": p.class_grade, "board": p.board,
+        "class_grade": p.class_grade, "board": p.board, "stream": p.stream,
         "textbook_id": p.textbook_id, "readable": readable,
         "teacher_name": teacher_name, "created_at": p.created_at.isoformat(),
     }
@@ -393,6 +399,7 @@ def _pick_out(p: ReadingPick, teacher_name: str, readable: bool) -> dict:
 
 @router.get("/library/reading")
 def reading_list(mine: bool = False,
+                 stream: str = "",
                  user: Optional[User] = Depends(_optional_user),
                  session: Session = Depends(get_session)) -> list[dict]:
     """This month's reading list — public by decision (any student, any class).
@@ -410,6 +417,9 @@ def reading_list(mine: bool = False,
         select(ReadingPick).where(ReadingPick.month.in_(_recent_months()))
         .order_by(ReadingPick.month.desc(), ReadingPick.id.desc())
         .limit(60)).all()
+    if _check_stream(stream):
+        # Common picks ("") belong to every stream's shelf.
+        rows = [r for r in rows if r.stream in ("", stream)]
     if mine:
         if user is None:
             raise HTTPException(401, "Sign in to see your own reading picks")
@@ -475,6 +485,12 @@ def create_reading(payload: ReadingIn,
     row.subject_name = payload.subject_name
     row.class_grade = payload.class_grade
     row.board = payload.board
+    # Explicit stream wins; otherwise derive it from grade+subject, or inherit
+    # the linked book's — a pick never claims a stream it doesn't belong to.
+    derived = (_check_stream(payload.stream) or stream_for(
+        payload.class_grade, payload.subject_name)
+        or (book.stream if book is not None else ""))
+    row.stream = derived
     if book is not None:
         row.textbook_id = book.id
     # else: a new pick has no link (the student gets "Find this book"), and an

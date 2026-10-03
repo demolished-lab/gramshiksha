@@ -137,7 +137,7 @@ def test_reading_list_is_public_windowed_and_newest_first(client):
 
     # newest month first, and a shape the frontend can bind without guessing
     list_keys = {"id", "month", "title", "author", "note", "lang",
-                 "subject_name", "class_grade", "board", "textbook_id",
+                 "subject_name", "class_grade", "board", "stream", "textbook_id",
                  "readable", "teacher_name", "created_at"}
     assert all(set(x) == list_keys for x in rows)
     months = [x["month"] for x in rows]

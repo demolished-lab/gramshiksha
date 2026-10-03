@@ -181,7 +181,7 @@ describe('reader + Smart Book Finder', () => {
     expect(init.method).toBe('POST');
     expect(headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(String(init.body))).toEqual({
-      q: 'गणित 8', class_grade: 8, board: 'Maharashtra SSC', lang: 'mr' });
+      q: 'गणित 8', class_grade: 8, board: 'Maharashtra SSC', lang: 'mr', stream: '' });
     expect(res.result).toBe('queued');
     expect(res.position).toBe(2);
   });

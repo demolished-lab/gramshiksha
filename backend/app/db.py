@@ -70,6 +70,7 @@ def create_db_and_tables() -> None:
     # keep the shims (idempotent, no-op once a revision owns those columns).
     ensure_textbook_columns()
     ensure_user_columns()
+    ensure_stream_columns()
 
 
 def _add_missing_columns(table: str, wants: list[tuple[str, str, str]]) -> None:
@@ -118,6 +119,19 @@ def ensure_user_columns() -> None:
         ("role_status", "VARCHAR NOT NULL DEFAULT 'active'",
          "VARCHAR NOT NULL DEFAULT 'active'"),
     ])
+
+
+def ensure_stream_columns() -> None:
+    """Give stamped pre-Alembic databases the stream-categorization column.
+
+    Same story as role_status: the stamp claims head, so every table head
+    knows about must exist with every column. Idempotent, no-op post-migration.
+    """
+    for table in ("textbook", "subject", "material", "bookrequest",
+                  "readingpick", "doubt"):
+        _add_missing_columns(table, [
+            ("stream", "TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"),
+        ])
 
 
 def get_session():

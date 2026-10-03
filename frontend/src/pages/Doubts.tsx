@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { apiAskDoubt, apiDoubts, apiReplyDoubt, apiResolveDoubt } from '../api';
 import { getToken, getUser } from '../auth';
 import { t } from '../i18n';
-import type { Doubt, Lang } from '../types';
+import StreamPicker, { streamName } from '../components/StreamPicker';
+import type { AvailabilityStream, Doubt, Lang } from '../types';
 
 export default function Doubts({ lang, user }: { lang: Lang; user: { role: string } | null }) {
   const [doubts, setDoubts] = useState<Doubt[]>([]);
@@ -13,12 +14,16 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
   const [error, setError] = useState('');
   const [tab, setTab] = useState<'all' | 'unanswered' | 'answered' | 'mine'>('all');
   const [term, setTerm] = useState('');
+  const [stream, setStream] = useState('');
   const isTeacher = user && ['teacher', 'school_admin', 'platform_admin'].includes(user.role);
 
   const load = () => {
     if (getToken()) apiDoubts().then(setDoubts).catch((e) => setError(String(e)));
   };
   useEffect(load, []);
+  useEffect(() => {
+    if (stream && !doubts.some((d) => d.stream === stream)) setStream('');
+  }, [doubts, stream]);
 
   if (!getToken()) {
     return <div className="empty-state"><div className="icon">❓</div><p>{t('needLogin', lang) || 'Log in to ask doubts.'}</p></div>;
@@ -65,6 +70,19 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
 
       {error && <p className="error">{error}</p>}
       {(() => {
+        const counts = new Map<string, number>();
+        for (const d of doubts) {
+          if (d.stream) counts.set(d.stream, (counts.get(d.stream) ?? 0) + 1);
+        }
+        const streams: AvailabilityStream[] = [...counts.entries()].map(([code, books]) => ({
+          code,
+          label_en: streamName(code, lang),
+          books,
+        }));
+        return <StreamPicker lang={lang} streams={streams} value={stream} onChange={setStream} />;
+      })()}
+
+      {(() => {
         const q = term.trim().toLowerCase();
         const me = getUser()?.name;
         const rows = doubts.filter((d) =>
@@ -72,6 +90,7 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
             || (tab === 'unanswered' && d.status !== 'resolved' && d.status !== 'answered')
             || (tab === 'answered' && (d.status === 'answered' || d.status === 'resolved'))
             || (tab === 'mine' && !!me && d.student_name === me))
+          && (!stream || d.stream === '' || d.stream === stream)
           && (!q || d.text.toLowerCase().includes(q) || d.subject_name.toLowerCase().includes(q)));
         return (<>
           {!rows.length && <div className="empty-state"><div className="icon">💬</div><p>{doubts.length ? 'Nothing matches this filter.' : 'No doubts submitted yet.'}</p></div>}
@@ -79,7 +98,10 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
         <div className="card" key={d.id}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <strong>{d.subject_name}</strong>
-            <span className={`badge ${d.status === 'resolved' ? 'green' : d.status === 'answered' ? '' : 'orange'}`}>{d.status}</span>
+            <span>
+              {d.stream && <span className="badge gray" style={{ marginRight: 6 }}>{streamName(d.stream, lang)}</span>}
+              <span className={`badge ${d.status === 'resolved' ? 'green' : d.status === 'answered' ? '' : 'orange'}`}>{d.status}</span>
+            </span>
           </div>
           <p style={{ margin: '8px 0' }}>{d.text}</p>
           <div className="muted">— {d.student_name}, {new Date(d.created_at).toLocaleDateString()}</div>

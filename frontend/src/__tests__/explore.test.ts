@@ -23,13 +23,14 @@ const avail: Availability = {
     { lang: 'en', label: 'English', books: 2, subjects: 1 },
     { lang: 'mr', label: 'मराठी', books: 3, subjects: 2 },
   ],
+  streams: [],
   subjects: [
     { name: 'Mathematics', name_hi: 'गणित', name_mr: 'गणित', subject_id: 1,
-      books_by_lang: { en: 1, mr: 2 }, courses: 1, lessons: 4, course_ids: [10] },
+      books_by_lang: { en: 1, mr: 2 }, courses: 1, lessons: 4, course_ids: [10], stream: '' },
     { name: 'Marathi', name_hi: 'मराठी', name_mr: 'मराठी', subject_id: null,
-      books_by_lang: { mr: 1 }, courses: 0, lessons: 0, course_ids: [] },
+      books_by_lang: { mr: 1 }, courses: 0, lessons: 0, course_ids: [], stream: '' },
     { name: 'Craft', name_hi: null, name_mr: null, subject_id: 2,
-      books_by_lang: {}, courses: 2, lessons: 6, course_ids: [11, 12] },
+      books_by_lang: {}, courses: 2, lessons: 6, course_ids: [11, 12], stream: '' },
   ],
 };
 
@@ -56,7 +57,7 @@ describe('visibleSubjects', () => {
       ...avail,
       subjects: [...avail.subjects,
         { name: 'Ghost', name_hi: null, name_mr: null, subject_id: null,
-          books_by_lang: {}, courses: 0, lessons: 0, course_ids: [] }],
+          books_by_lang: {}, courses: 0, lessons: 0, course_ids: [], stream: '' }],
     };
     expect(visibleSubjects(empty, 'en').map((s) => s.name)).not.toContain('Ghost');
   });

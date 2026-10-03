@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiMyCourses, apiNotifications, apiProgressSummary, apiReadingList, apiToday, apiWeakTopics } from '../api';
 import { getUser, getToken } from '../auth';
 import { monthLabel, t } from '../i18n';
+import { streamName } from '../components/StreamPicker';
 import { setTextbookPref } from '../prefs';
 import type { Lang, TodayPlan, WeakTopics, ProgressSummary, Notification, ReadingPick } from '../types';
 
@@ -69,6 +70,7 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
       grade: p.class_grade ?? me?.class_grade ?? 8,
       board: p.board || me?.board || 'Maharashtra SSC',
       lang: p.lang || undefined,
+      stream: p.stream || undefined,
       q: p.title,
       open: p.readable && p.textbook_id ? p.textbook_id : undefined,
     });
@@ -124,7 +126,7 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
                   {p.author && <span className="muted"> · {p.author}</span>}
                 </div>
                 <div className="muted reading-meta">
-                  {p.teacher_name}{p.subject_name ? ` · ${p.subject_name}` : ''}
+                  {p.teacher_name}{p.subject_name ? ` · ${p.subject_name}` : ''}{p.stream ? ` · ${streamName(p.stream, lang)}` : ''}
                 </div>
                 {p.note && <p className="reading-note">{p.note}</p>}
               </div>

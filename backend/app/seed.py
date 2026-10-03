@@ -36,6 +36,7 @@ from .models import (Board, Chapter, Course, DailyActivity, Doubt, DoubtReply,
                      Subject, Textbook, User, TopicStats)
 from .models import Material
 from .security import hash_password
+from .streams import stream_for
 
 log = logging.getLogger("gramshiksha")
 
@@ -1693,7 +1694,16 @@ def seed(session: Session) -> None:
                     Subject.name_en == en)).first()
                 if not exists:
                     session.add(Subject(name_en=en, name_hi=hi, name_mr=mr,
-                                        class_grade=grade, board=board))
+                                        class_grade=grade, board=board,
+                                        stream=stream_for(grade, en)))
+    session.flush()
+
+    # Stream backfill for databases seeded before streams existed: derived,
+    # never hand-edited, so recompute unconditionally (idempotent).
+    for subj_row in session.exec(select(Subject).where(
+            Subject.class_grade >= 11)).all():
+        subj_row.stream = stream_for(subj_row.class_grade, subj_row.name_en)
+        session.add(subj_row)
     session.flush()
 
     # --- users: demo accounts are dev-only -------------------------------
@@ -1833,7 +1843,16 @@ def seed(session: Session) -> None:
             Textbook.subject_name == subj, Textbook.lang == lang)).first()
         if not exists:
             session.add(Textbook(board=board, class_grade=grade, subject_name=subj,
-                                 lang=lang, title=title, source_url=url, publisher="Official"))
+                                 lang=lang, title=title, source_url=url, publisher="Official",
+                                 stream=stream_for(grade, subj)))
+    session.flush()
+
+    # Same stream backfill for catalog rows from the crawler era.
+    for tb in session.exec(select(Textbook).where(
+            Textbook.class_grade >= 11)).all():
+        tb.stream = stream_for(tb.class_grade, tb.subject_name)
+        session.add(tb)
+    session.flush()
 
     # --- enrollments & demo activity (dev only, and only on first ever seed) ---
     if demo and student1 and student2 and teacher1 and not session.exec(select(Enrollment)).first():

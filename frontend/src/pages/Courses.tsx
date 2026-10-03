@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { apiBoards, apiCourses, apiSubjects } from '../api';
+import { apiAvailability, apiBoards, apiCourses, apiSubjects } from '../api';
+import StreamPicker, { streamName } from '../components/StreamPicker';
 import { pick, t } from '../i18n';
 import { takeCoursesPref } from '../prefs';
-import type { Course, Lang, Subject } from '../types';
+import type { AvailabilityStream, Course, Lang, Subject } from '../types';
 
 const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
 
@@ -17,6 +18,8 @@ export default function Courses({ lang, go }: { lang: Lang; go: (p: string, id?:
   const [sort, setSort] = useState('popular');
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [boards, setBoards] = useState<{ id: number; name: string }[]>([]);
+  const [streams, setStreams] = useState<AvailabilityStream[]>([]);
+  const [stream, setStream] = useState<string>(pref?.stream ?? '');
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -26,14 +29,28 @@ export default function Courses({ lang, go }: { lang: Lang; go: (p: string, id?:
     if (grade && board) apiSubjects(Number(grade), board).then(setSubjects).catch(() => setSubjects([]));
     else setSubjects([]);
   }, [grade, board]);
+  useEffect(() => {
+    // Stream lanes only exist for 11-12 with a board picked; anything else
+    // clears the lane so it can never filter everything out.
+    if (grade && Number(grade) >= 11 && board) {
+      apiAvailability(board, Number(grade)).then((a) => {
+        setStreams(a.streams);
+        setStream((s) => (s && a.streams.some((x) => x.code === s)) ? s : '');
+      }).catch(() => setStreams([]));
+    } else {
+      setStreams([]);
+      setStream('');
+    }
+  }, [grade, board]);
 
   useEffect(() => {
     setLoading(true); setError('');
     apiCourses({
       class_grade: grade || null, board: board || null,
       subject_id: subjectId || null, difficulty: difficulty || null, sort,
+      stream: stream || null,
     }).then((r) => setCourses(r.items)).catch((e) => setError(String(e))).finally(() => setLoading(false));
-  }, [grade, board, subjectId, difficulty, sort]);
+  }, [grade, board, subjectId, difficulty, sort, stream]);
 
   return (
     <div>
@@ -49,7 +66,7 @@ export default function Courses({ lang, go }: { lang: Lang; go: (p: string, id?:
         </select>
         <select value={subjectId} onChange={(e) => setSubjectId(e.target.value ? Number(e.target.value) : '')} aria-label="Subject" disabled={!subjects.length}>
           <option value="">Subject: all</option>
-          {subjects.map((s) => <option key={s.id} value={s.id}>{pick(lang, s.name_en, s.name_hi, s.name_mr)}</option>)}
+          {subjects.filter((s) => !stream || !s.stream || s.stream === stream).map((s) => <option key={s.id} value={s.id}>{pick(lang, s.name_en, s.name_hi, s.name_mr)}</option>)}
         </select>
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} aria-label="Difficulty">
           <option value="">Level: all</option>
@@ -65,6 +82,7 @@ export default function Courses({ lang, go }: { lang: Lang; go: (p: string, id?:
           <option value="longest">Longest</option>
         </select>
       </div>
+      <StreamPicker lang={lang} streams={streams} value={stream} onChange={setStream} />
 
       {loading && <div><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>}
       {error && <p className="error">{t('errorLoad', lang)}</p>}
@@ -82,6 +100,7 @@ export default function Courses({ lang, go }: { lang: Lang; go: (p: string, id?:
             </div>
             <div>
               <span className="badge">{c.difficulty}</span>
+              {c.stream && <span className="badge gray">{streamName(c.stream, lang)}</span>}
               <span className="badge gray">⏱ {Math.round(c.duration_min / 60)}h</span>
               <span className="badge orange">★ {c.rating}</span>
             </div>

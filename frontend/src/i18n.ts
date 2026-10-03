@@ -137,6 +137,12 @@ const S: Record<string, [string, string, string]> = {
   withdraw: ['Withdraw', 'हटाएं', 'काढा'],
   saved: ['Saved', 'सहेजा गया', 'जतन करले'],
   myPicks: ['Your picks', 'आपकी पसंदें', 'तुमच्या निवडी'],
+  streamLabel: ['Stream', 'स्ट्रीम', 'स्ट्रीम'],
+  streamAll: ['All streams', 'सभी स्ट्रीम', 'सर्व स्ट्रीम'],
+  streamScience: ['Science', 'विज्ञान', 'विज्ञान'],
+  streamCommerce: ['Commerce', 'वाणिज्य', 'वाणिज्य'],
+  streamArts: ['Arts & Humanities', 'कला व मानविकी', 'कला व मानविकी'],
+  streamVocational: ['Vocational', 'व्यावसायिक', 'व्यावसायिक'],
 };
 
 export function t(key: keyof typeof S | string, lang: Lang): string {

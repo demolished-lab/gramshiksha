@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiAvailability, apiLocate, apiMyRequests, apiReadingList, apiSubjects, apiTextbookOpenUrl, apiTextbooks } from '../api';
 import { booksIn, subjectLabel } from '../catalog';
 import { monthLabel, pick, t } from '../i18n';
+import StreamPicker, { streamName } from '../components/StreamPicker';
 import { takeTextbookPref } from '../prefs';
 import type { Availability, BookAsk, Lang, ReadingPick, Subject, Textbook } from '../types';
 
@@ -32,6 +33,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   const [board, setBoard] = useState<string>(pref?.board ?? user?.board ?? 'Maharashtra SSC');
   const [bookLang, setBookLang] = useState<string>(pref?.lang ?? '');
   const [subject, setSubject] = useState<string>(pref?.subject ?? '');
+  const [stream, setStream] = useState<string>(pref?.stream ?? '');
   const [avail, setAvail] = useState<Availability | null>(null);
   const [legacy, setLegacy] = useState<Subject[] | null>(null);
   const [books, setBooks] = useState<Textbook[]>([]);
@@ -68,7 +70,12 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     setAvail(null);
     setLegacy(null);
     apiAvailability(board, grade)
-      .then((a) => { if (live) setAvail(a); })
+      .then((a) => {
+        if (!live) return;
+        setAvail(a);
+        // A stale stream lane must never filter everything out.
+        setStream((s) => (s && a.streams.some((x) => x.code === s)) ? s : '');
+      })
       .catch(() => {
         // Availability unreachable (old backend mid-deploy, network blip) —
         // fall back to the legacy generic filters rather than render empty,
@@ -96,10 +103,10 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
 
   useEffect(() => {
     setLoading(true);
-    apiTextbooks(grade, board, bookLang || null, subject || null)
+    apiTextbooks(grade, board, bookLang || null, subject || null, stream || null)
       .then(setBooks).catch(() => setBooks([]))
       .finally(() => setLoading(false));
-  }, [grade, board, bookLang, subject, reload]);
+  }, [grade, board, bookLang, subject, stream, reload]);
 
   // ETA countdown while the official portal is being scanned server-side.
   useEffect(() => {
@@ -122,15 +129,16 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
    * A miss is not an error — it is a queue position with an honest ETA.
    * `termIn`/`scope` come from "Find this book", where the title and class
    * belong to a reading-list pick rather than to this page's filters. */
-  const runFinder = async (termIn?: string, scope?: { grade: number; board: string; lang: string }) => {
+  const runFinder = async (termIn?: string, scope?: { grade: number; board: string; lang: string; stream?: string }) => {
     const term = (termIn ?? query).trim();
     if (term.length < 2 || finder.kind === 'scanning') return;
     const g = scope?.grade ?? grade;
     const b = scope?.board ?? board;
     const l = scope?.lang ?? bookLang;
+    const s = scope?.stream ?? stream;
     setFinder({ kind: 'scanning', left: l ? 10 : 30 });
     try {
-      const res = await apiLocate(term, g, b, l);
+      const res = await apiLocate(term, g, b, l, s || undefined);
       if (res.result === 'found') {
         setFinder({ kind: 'found', books: res.books ?? [], official: res.source === 'official' });
         if (res.source === 'official') setReload((n) => n + 1); // it is now in this class
@@ -157,6 +165,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
       grade: pref.grade ?? grade,
       board: pref.board || board,
       lang: pref.lang ?? '',
+      stream: pref.stream ?? '',
     });
     document.getElementById('finder')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,18 +180,20 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     setViewer({ id: p.textbook_id, title: p.title });
   };
 
-  /** "Find this book" on a pick: adopt the pick's class/board/medium so the
-   * portal scan (tier 2) looks in the right place, then search right here —
-   * never a redirect, only a final result in the panel below. */
+  /** "Find this book" on a pick: adopt the pick's class/board/medium/lane so
+   * the portal scan (tier 2) looks in the right place, then search right
+   * here — never a redirect, only a final result in the panel below. */
   const findThisBook = (p: ReadingPick) => {
     const scope = {
       grade: p.class_grade ?? grade,
       board: p.board || board,
       lang: p.lang || bookLang,
+      stream: p.stream || stream,
     };
     setGrade(scope.grade);
     setBoard(scope.board);
     setBookLang(scope.lang);
+    setStream(scope.stream);
     setQuery(p.title);
     setFinder({ kind: 'idle' });
     void runFinder(p.title, scope);
@@ -195,7 +206,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   const findBook = (b: Textbook) => {
     setQuery(b.title);
     setFinder({ kind: 'idle' });
-    void runFinder(b.title, { grade, board, lang: bookLang });
+    void runFinder(b.title, { grade, board, lang: bookLang, stream });
     document.getElementById('finder')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -211,7 +222,10 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   // Availability mode: only combinations with real books. Legacy fallback
   // (availability unreachable): the original generic lists, never empty.
   const subjectRows: { value: string; label: string }[] = avail
-    ? avail.subjects.filter((s) => booksIn(s, bookLang) > 0).map((s) => ({
+    ? avail.subjects
+      .filter((s) => booksIn(s, bookLang) > 0)
+      .filter((s) => !stream || s.stream === '' || s.stream === stream)
+      .map((s) => ({
         value: s.name,
         label: `${subjectLabel(s, lang)} (${booksIn(s, bookLang)})`,
       }))
@@ -255,6 +269,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
                 <div className="muted reading-meta">
                   {p.teacher_name}
                   {p.subject_name ? ` · ${p.subject_name}` : ''}
+                  {p.stream ? ` · ${streamName(p.stream, lang)}` : ''}
                   {p.lang ? ` · ${p.lang.toUpperCase()}` : ''}
                   {p.month !== picks[0].month ? ` · ${monthLabel(p.month, lang)}` : ''}
                 </div>
@@ -359,6 +374,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
           {mediumRows.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </div>
+      {avail && <StreamPicker lang={lang} streams={avail.streams} value={stream} onChange={setStream} />}
 
       {!loading && (
         <p className="muted" style={{ margin: '8px 2px' }}>
@@ -408,6 +424,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
               <div className="muted" style={{ fontSize: '.74rem' }}>
                 {b.subject_name} · {b.lang.toUpperCase()}{b.part_label ? ` · ${b.part_label}` : ''}{b.has_deep_link ? ' · 📄' : ''}
               </div>
+              {b.stream && <div><span className="badge">{streamName(b.stream, lang)}</span></div>}
               {b.has_deep_link ? (
                 <button type="button" className="btn small accent"
                   onClick={() => openBook(b)}

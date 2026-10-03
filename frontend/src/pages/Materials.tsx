@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { apiMaterials, apiMaterialUrl, apiPendingMaterials, apiReportMaterial, apiReviewMaterial, apiUploadMaterial } from '../api';
+import { apiAvailability, apiMaterials, apiMaterialUrl, apiPendingMaterials, apiReportMaterial, apiReviewMaterial, apiUploadMaterial } from '../api';
+import StreamPicker, { streamName } from '../components/StreamPicker';
 import { getToken, saveDownload } from '../auth';
 import { t } from '../i18n';
-import type { Lang, Material } from '../types';
+import type { AvailabilityStream, Lang, Material } from '../types';
 
 const TYPES = ['notes', 'chapter_notes', 'revision_notes', 'question_paper', 'practice_paper', 'worksheet', 'sample_paper', 'important_questions', 'formula_sheet', 'audio'];
 const REPORT_REASONS = ['incorrect', 'duplicate', 'poor_quality', 'copyright', 'inappropriate', 'wrong_class_subject', 'other'];
@@ -10,27 +11,57 @@ const REPORT_REASONS = ['incorrect', 'duplicate', 'poor_quality', 'copyright', '
 export default function Materials({ lang, user }: { lang: Lang; user: { role: string } | null }) {
   const [items, setItems] = useState<Material[]>([]);
   const [type, setType] = useState('');
+  const [grade, setGrade] = useState<number | ''>('');
+  const [board, setBoard] = useState('');
+  const [streams, setStreams] = useState<AvailabilityStream[]>([]);
+  const [stream, setStream] = useState('');
   const [showUpload, setShowUpload] = useState(false);
   const [pending, setPending] = useState<Material[]>([]);
   const [error, setError] = useState('');
   const isTeacher = user && ['teacher', 'school_admin', 'platform_admin'].includes(user.role);
 
   const load = () => {
-    apiMaterials({ type: type || undefined }).then(setItems).catch((e) => setError(String(e)));
+    apiMaterials({
+      type: type || undefined,
+      class_grade: grade || undefined,
+      board: board || undefined,
+      stream: stream || undefined,
+    }).then(setItems).catch((e) => setError(String(e)));
     if (isTeacher) apiPendingMaterials().then(setPending).catch(() => {});
   };
-  useEffect(load, [type, user?.role]);
+  useEffect(load, [type, grade, board, stream, user?.role]);
+
+  useEffect(() => {
+    if (grade && Number(grade) >= 11 && board) {
+      apiAvailability(board, Number(grade)).then((a) => {
+        setStreams(a.streams);
+        setStream((s) => (s && a.streams.some((x) => x.code === s)) ? s : '');
+      }).catch(() => setStreams([]));
+    } else {
+      setStreams([]);
+      setStream('');
+    }
+  }, [grade, board]);
 
   return (
     <div>
       <h1>📚 {t('materials', lang)}</h1>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <select style={{ maxWidth: 140 }} value={grade} onChange={(e) => setGrade(e.target.value ? Number(e.target.value) : '')} aria-label="Class">
+          <option value="">Class: all</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => <option key={g} value={g}>Class {g}</option>)}
+        </select>
+        <select style={{ maxWidth: 220 }} value={board} onChange={(e) => setBoard(e.target.value)} aria-label="Board">
+          <option value="">Board: all</option>
+          <option>Maharashtra SSC</option><option>Maharashtra HSC</option><option>CBSE</option>
+        </select>
         <select style={{ maxWidth: 220 }} value={type} onChange={(e) => setType(e.target.value)} aria-label="Type">
           <option value="">All types</option>
           {TYPES.map((ty) => <option key={ty} value={ty}>{ty.replace(/_/g, ' ')}</option>)}
         </select>
         {getToken() && <button className="btn small" onClick={() => setShowUpload(!showUpload)}>⬆ {t('newMaterial', lang)}</button>}
       </div>
+      <StreamPicker lang={lang} streams={streams} value={stream} onChange={setStream} />
 
       {showUpload && <UploadForm lang={lang} userRole={user?.role ?? 'student'} onDone={() => { setShowUpload(false); load(); }} />}
 
@@ -57,6 +88,7 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
             <span className="badge gray">{m.type.replace(/_/g, ' ')}</span>
             <span className="badge">Class {m.class_grade}</span>
             <span className="badge">{m.board}</span>
+            {m.stream && <span className="badge gray">{streamName(m.stream, lang)}</span>}
             <span className="badge green">{m.lang}</span>
           </div>
           <p className="muted" style={{ margin: '6px 0' }}>{m.description}</p>

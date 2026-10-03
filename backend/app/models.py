@@ -69,6 +69,9 @@ class Subject(SQLModel, table=True):
     name_mr: str
     class_grade: int = Field(index=True)
     board: str = Field(default="CBSE", index=True)
+    # Stream for 11-12 ("science" | "commerce" | "arts" | "vocational",
+    # "" = common to all streams) — courses inherit it via subject_id.
+    stream: str = Field(default="", index=True)
 
 
 class Course(SQLModel, table=True):
@@ -247,6 +250,7 @@ class Material(SQLModel, table=True):
     board: str = Field(index=True)
     subject_name: str = Field(index=True)
     chapter_title: str = ""
+    stream: str = Field(default="", index=True)  # 11-12 stream, "" = common
     lang: str = "en"
     uploader_id: int = Field(foreign_key="user.id", index=True)
     uploader_role: str = "teacher"
@@ -280,6 +284,9 @@ class Textbook(SQLModel, table=True):
     # "Part 1"/"Part 2" for multi-part subjects (e.g. परिसर अभ्यास भाग-१/२);
     # set only by the crawler/apply — a partless book leaves it empty.
     part_label: str = ""
+    # 11-12 stream ("science" | "commerce" | "arts" | "vocational",
+    # "" = common to all streams) — derived from subject_name at insert.
+    stream: str = Field(default="", index=True)
     title: str
     source_url: str  # official portal link only (ePathshala / eBalbharati)
     publisher: str = "NCERT"
@@ -308,6 +315,7 @@ class BookRequest(SQLModel, table=True):
     class_grade: Optional[int] = Field(default=None, index=True)
     board: str = "Maharashtra SSC"
     lang: str = ""
+    stream: str = Field(default="", index=True)  # ask-time scope, "" = common
     status: str = "pending"  # pending | found | declined
     textbook_id: Optional[int] = Field(default=None, foreign_key="textbook.id")
     created_at: datetime = Field(default_factory=utcnow)
@@ -337,6 +345,7 @@ class ReadingPick(SQLModel, table=True):
     subject_name: str = ""
     class_grade: Optional[int] = Field(default=None, index=True)  # null = whole school
     board: str = ""
+    stream: str = Field(default="", index=True)  # "" = every stream's club
     textbook_id: Optional[int] = Field(default=None, foreign_key="textbook.id")
     created_at: datetime = Field(default_factory=utcnow)
 
@@ -345,6 +354,7 @@ class Doubt(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     student_id: int = Field(foreign_key="user.id", index=True)
     subject_name: str = "general"
+    stream: str = Field(default="", index=True)  # asker's stream, "" = common
     chapter_title: str = ""
     text: str
     image_path: Optional[str] = None

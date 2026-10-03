@@ -11,6 +11,8 @@ export interface TextbookPref {
   board: string;
   subject?: string;
   lang?: string;
+  /** 11-12 stream lane — hands the library the same lane the student picked. */
+  stream?: string;
   /** A title to hand straight to the Smart Book Finder — set by "Find this
    * book" on a Monthly Reading List pick so the student lands on the page
    * with the search already filled and running. */
@@ -24,6 +26,7 @@ export interface CoursesPref {
   grade: number;
   board: string;
   subjectId?: number;
+  stream?: string;
 }
 
 const write = (key: string, value: unknown): void => {
@@ -50,7 +53,7 @@ export const takeCoursesPref = (): CoursesPref | null => take<CoursesPref>(COURS
 
 /** Explore hub remembers its own last class/board for the whole session. */
 const EXPLORE_KEY = 'gs_explore';
-export interface ExplorePref { grade: number; board: string }
+export interface ExplorePref { grade: number; board: string; stream?: string }
 export const setExplorePref = (p: ExplorePref): void => write(EXPLORE_KEY, p);
 export const peekExplorePref = (): ExplorePref | null => {
   try {

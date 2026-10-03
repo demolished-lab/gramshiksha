@@ -11,6 +11,8 @@ from ..models import MATERIAL_TYPES, Material, MaterialReport, User
 from ..ratelimit import rate_limit
 from ..security import get_current_user, has_role, require_any, require_roles
 from ..storage import delete_ref, download_target, save_upload
+from ..streams import stream_for
+from .catalog import _check_stream, _stream_or_common
 
 router = APIRouter(prefix="/materials", tags=["materials"])
 
@@ -56,6 +58,7 @@ def upload_material(
     m = Material(
         title=title.strip(), description=description, type=type,
         class_grade=class_grade, board=board, subject_name=subject_name,
+        stream=stream_for(class_grade, subject_name),
         chapter_title=chapter_title, lang=lang, uploader_id=user.id,
         uploader_role=user.role, visibility=visibility, status=status,
         source_of_content=source_of_content, file_path=path, file_size=size,
@@ -104,11 +107,13 @@ def list_materials(
     subject_name: Optional[str] = None,
     type: Optional[str] = None,
     lang: Optional[str] = None,
+    stream: str = "",
     mine: bool = False,
     limit: int = Query(20, le=100), offset: int = 0,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
+    _check_stream(stream)
     if mine:
         rows = session.exec(select(Material).where(
             Material.uploader_id == user.id).order_by(Material.id.desc())
@@ -127,6 +132,8 @@ def list_materials(
         q = q.where(Material.type == type)
     if lang:
         q = q.where(Material.lang == lang)
+    if stream:
+        q = q.where(_stream_or_common(Material.stream, stream))
     rows = session.exec(q.order_by(Material.id.desc()).offset(offset).limit(limit)).all()
     return [_material_out(m, user) for m in rows]
 
@@ -134,6 +141,7 @@ def list_materials(
 def _material_out(m: Material, user: User) -> dict:
     return {"id": m.id, "title": m.title, "description": m.description, "type": m.type,
             "class_grade": m.class_grade, "board": m.board, "subject_name": m.subject_name,
+            "stream": m.stream,
             "chapter_title": m.chapter_title, "lang": m.lang, "status": m.status,
             "visibility": m.visibility, "source_of_content": m.source_of_content,
             "file_size": m.file_size, "downloads": m.downloads, "views": m.views,

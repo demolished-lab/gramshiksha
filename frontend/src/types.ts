@@ -17,6 +17,14 @@ export interface LoginResponse {
   streak_days: number;
 }
 
+/** One stream that actually has books for an 11-12 (board, class) —
+ * rendered as a picker chip. Empty for younger classes. */
+export interface AvailabilityStream {
+  code: string;
+  label_en: string;
+  books: number;
+}
+
 /** One medium (instruction language) that actually has books for a
  * (board, class) — rendered as an explore chip. */
 export interface AvailabilityMedium {
@@ -38,12 +46,16 @@ export interface AvailabilitySubject {
   courses: number;
   lessons: number;
   course_ids: number[];
+  /** 11-12 stream code ("" = common to all streams). */
+  stream: string;
 }
 
 export interface Availability {
   board: string;
   class_grade: number;
   mediums: AvailabilityMedium[];
+  /** Streams actually present ([] below class 11). */
+  streams: AvailabilityStream[];
   subjects: AvailabilitySubject[];
 }
 
@@ -67,6 +79,7 @@ export interface Subject {
   name_en: string;
   name_hi: string;
   name_mr: string;
+  stream?: string;
 }
 
 export interface Course {
@@ -81,6 +94,8 @@ export interface Course {
   board: string;
   class_grade: number;
   subject_id: number;
+  /** 11-12 stream inherited from the subject ("" = common). */
+  stream?: string;
   lang: string;
   difficulty: string;
   duration_min: number;
@@ -183,6 +198,8 @@ export interface Material {
   board: string;
   subject_name: string;
   chapter_title: string;
+  /** Ask-time stream ("" = common). */
+  stream?: string;
   lang: string;
   status: string;
   visibility: string;
@@ -200,6 +217,8 @@ export interface Textbook {
   board: string;
   class_grade: number;
   subject_name: string;
+  /** 11-12 stream ("" = common to all streams). */
+  stream: string;
   lang: string;
   source_url: string;
   publisher: string;
@@ -231,6 +250,7 @@ export interface BookAsk {
   class_grade: number | null;
   status: 'pending' | 'found' | 'declined';
   textbook_id: number | null;
+  stream: string;
   created_at: string;
   found_at: string | null;
 }
@@ -250,6 +270,8 @@ export interface ReadingPick {
   subject_name: string;
   class_grade: number | null;
   board: string;
+  /** 11-12 stream ("" = every stream's club). */
+  stream: string;
   textbook_id: number | null;
   readable: boolean;
   teacher_name: string;
@@ -261,6 +283,8 @@ export interface Doubt {
   id: number;
   text: string;
   subject_name: string;
+  /** Ask-time stream ("" = common). */
+  stream: string;
   chapter_title: string;
   status: 'pending' | 'answered' | 'resolved';
   created_at: string;
