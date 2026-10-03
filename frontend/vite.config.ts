@@ -7,6 +7,6 @@ export default defineConfig({
     port: 5174,
     proxy: { '/api': { target: 'http://localhost:8123', rewrite: (p) => p.replace(/^\/api/, '') } },
   },
-  preview: { port: 4174 },
+  preview: { port: 4174, allowedHosts: ['.manus.computer'] },
   build: { chunkSizeWarningLimit: 700 },
 });

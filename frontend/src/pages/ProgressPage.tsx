@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiProgressSummary } from '../api';
+import { apiProgressSummary, apiProgressWeekly } from '../api';
 import { getToken } from '../auth';
 import { t } from '../i18n';
 import type { Lang, ProgressSummary } from '../types';
@@ -12,8 +12,7 @@ export default function ProgressPage({ lang }: { lang: Lang }) {
   useEffect(() => {
     if (!getToken()) return;
     apiProgressSummary().then(setS).catch((e) => setError(String(e)));
-    fetch('/api/progress/weekly', { headers: { Authorization: `Bearer ${getToken()}` } })
-      .then((r) => r.json()).then(setWeekly).catch(() => {});
+    apiProgressWeekly().then((data) => setWeekly(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
   if (!getToken()) return <div className="empty-state"><p>Log in to see your progress.</p></div>;

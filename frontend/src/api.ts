@@ -210,6 +210,7 @@ export const apiReadAll = () => post<{ ok: boolean }>('/notifications/read-all')
 
 // ---------- dashboards ----------
 export const apiProgressSummary = () => req<ProgressSummary>('/progress/summary');
+export const apiProgressWeekly = () => req<{ date: string; minutes: number }[]>('/progress/weekly');
 export const apiTeacherStudents = () => req<TeacherStudent[]>('/teacher/students');
 export const apiTeacherOverview = () => req<{ my_courses: { id: number; title_en: string; students: number }[]; pending_material_reviews: number; pending_doubts: number; total_students: number }>('/teacher/overview');
 export const apiParentChildren = () => req<ParentChild[]>('/parent/children');
