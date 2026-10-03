@@ -40,3 +40,48 @@ jobs:
             "https://gramshiksha-backend.onrender.com/ready" || echo 000)
           echo "backend -> $code"
           case "$code" in 200) ;; *) exit 1 ;; esac
+
+      - name: Drain the book-finder queue (replaces the retired local cron)
+        run: |
+          # POST /library/scan-requests re-scans pending asks (library first,
+          # then the official portal) and notifies finders. The endpoint has
+          # its own 120 s cooldown plus a 4/min rate limit, so this 5-minute
+          # tick can never turn into a crawl cannon. Exit 0 even on a
+          # cooldown skip — a skip is a healthy answer, not a failure.
+          body=$(curl -sS --max-time 120 -X POST \
+            "https://gramshiksha-backend.onrender.com/api/library/scan-requests" || echo '{}')
+          echo "scan-requests -> $body"
+
+  # Weekly fork watch, embedded here because this file's schedule is the one
+  # proven to fire (3/3 ticks). forks.yml keeps its dead Monday cron for
+  # manual dispatch only. Gate: Monday 06:00-06:05 UTC ticks the script once;
+  # the script itself is idempotent (one open issue per new fork), so even a
+  # double tick files nothing twice.
+  fork-watch:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Gate to Monday 06:00 UTC
+        id: gate
+        run: |
+          slot=$(date -u +%u%H%M)
+          if [ "$slot" -ge 10600 ] && [ "$slot" -lt 10605 ]; then
+            echo "run=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=no (slot $slot)" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'yes'
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'yes'
+        with:
+          python-version: "3.12"
+      - name: File an issue per new public fork
+        if: steps.gate.outputs.run == 'yes'
+        run: python scripts/watch_forks.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

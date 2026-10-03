@@ -166,20 +166,20 @@ integration — pushes to `main` deploy Render only, and that is intentional
   silent too, file a GitHub Support ticket with the evidence pack (repo,
   default branch, missed UTC ticks, empty `event=schedule` filter): support
   re-syncs the scheduler server-side.
-  **Interim (active 2026-10-02):** `%USERPROFILE%\.gramshiksha\keep-warm.ps1`
-  runs from Windows Task Scheduler ("GramShiksha Keep Warm", every 10 min
-  while this machine is on) and logs timestamp + HTTP code to
-  `keep-warm.log` — verified waking a cold instance (200 after ~50 s).
-  Independent of GitHub entirely; remove with `schtasks /Delete /TN
-  "GramShiksha Keep Warm" /F` once the cloud schedule is proven.
-  **Power condition matters:** Task Scheduler's default is "do not start on
-  batteries", and that silently skipped **14 runs** on 2026-10-03 (02:37 →
-  04:57, `NumberOfMissedRuns = 14`) the moment the laptop was unplugged —
-  the instance went cold and no log line appeared at all. The task is now set
-  with `DisallowStartIfOnBatteries = False`, `StopIfGoingOnBatteries = False`
-  and `StartWhenAvailable = True`; the audit below reads them back from
-  `(Get-ScheduledTask -TaskName "GramShiksha Keep Warm").Settings` and flags a
-  non-zero `NumberOfMissedRuns`.
+  **Retired 2026-10-03 (owner request: no cron on the local machine):**
+  `%USERPROFILE%\.gramshiksha\keep-warm.ps1` ran from Windows Task Scheduler
+  ("GramShiksha Keep Warm", every 10 min) until warm-ping.yml's schedule was
+  proven firing (3/3 ticks). The Task Scheduler task is now **Disabled** (not
+  deleted — re-enable with `Enable-ScheduledTask -TaskName "GramShiksha Keep
+  Warm"` if the cloud schedule ever goes silent). Its three jobs moved
+  server-side: `.github/workflows/warm-ping.yml` pings `/ready` every 5 min,
+  POSTs `/api/library/scan-requests` on the same tick, and runs
+  `scripts/watch_forks.py` on Mondays 06:00 UTC. Loop audits no longer check
+  `keep-warm.log` or the task state; they check the Actions tab instead
+  (warm-ping green + a fresh fork-watch issue only when a new fork exists).
+  **Historical note:** Task Scheduler's default "do not start on batteries"
+  silently skipped **14 runs** on 2026-10-03 (02:37 → 04:57,
+  `NumberOfMissedRuns = 14`) — part of why the cloud move happened.
   The same task also drives `forks.yml`: that workflow was schedule-only
   (Mondays 06:00 UTC) and would otherwise never run, so the script dispatches
   it itself at most once per 24 h via the stored git credential (marker file
@@ -191,11 +191,5 @@ integration — pushes to `main` deploy Render only, and that is intentional
   (library first, official government portal second) and notifies the
   requester when the book lands, so "not cataloged yet" resolves itself with
   no manual step. The endpoint holds its own 120 s module cooldown, so
-  back-to-back runs can never become a crawl cannon — `keep-warm.log` shows
-  one `scan 200` per run (a 200 that answered `{"skipped":true}` inside the
-  cooldown is healthy too). **Every loop audit must verify:** task registered
-  (`schtasks /Query /TN "GramShiksha Keep Warm"`), its settings still allow
-  battery starts with `NumberOfMissedRuns = 0`, `keep-warm.log` advancing
-  with `200` and `scan 200` lines, and marker no older than ~48 h — an older
-  marker plus `forks-dispatch` failure lines in the log means the credential
-  or API broke.
+  back-to-back runs can never become a crawl cannon — a 200 that answered
+  `{"skipped":true}` inside the cooldown is healthy too.
