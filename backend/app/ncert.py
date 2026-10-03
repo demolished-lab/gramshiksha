@@ -16,28 +16,124 @@ is never stored — the reader discovers the last chapter live (a 404 means
 exactly like the eBalbharati path.
 """
 
-# (class_grade, subject_name, lang) -> NCERT book code. Verified live
-# 2026-10-03 (HTTP 200 + application/pdf on chapter 01).
+# (class_grade, subject_name.lower(), lang) -> NCERT book code. Every code
+# returned HTTP 200 + application/pdf on its chapter 01; ambiguous mains
+# were confirmed by title page (pypdf): Santoor/Veena/Maths-Mela (current
+# NCF editions win over Marigold/Rimjhim/Math-Magic), Kaveri/Ganga/Ganita
+# Manjari/Exploration (real current books), Part-I volumes (Political
+# Theory over Constitution, Fundamentals over India volumes — title pages
+# checked), First Flight over Foot Prints, Honeydew over It-So-Happened,
+# Hornbill over Snapshots/Woven Words, Aroh over Antra/Vitan, Sparsh over
+# Kshitij (canonical main reader), Kshitij-2 over Kritika. Single-option
+# branches are self-validating (NCERT lists exactly one book). NOT mapped:
+# grade-3 EVS (files absent), Marathi medium (never published), 9-10
+# History/Geography (integrated SST book only — mapping both rows to one
+# code would confuse), cross-medium seed noise beyond language subjects.
 NCERT_CODES: dict[tuple[int, str, str], str] = {
-    (7, "Science", "en"): "gesc1",
-    (8, "Science", "en"): "hesc1",
-    (8, "Mathematics", "en"): "hemh1",
-    (9, "Science", "en"): "iesc1",
-    (9, "Science", "hi"): "ihsc1",
-    (9, "Mathematics", "en"): "iemh1",
-    (9, "Mathematics", "hi"): "ihmh1",
-    (10, "Science", "en"): "jesc1",
-    (10, "Science", "hi"): "jhsc1",
-    (10, "Mathematics", "en"): "jemh1",
-    (10, "Mathematics", "hi"): "jhmh1",
-    (11, "Mathematics", "en"): "kemh1",
-    (11, "Physics", "en"): "keph1",
-    (11, "Chemistry", "en"): "kech1",
-    (11, "Biology", "en"): "kebo1",
-    (12, "Mathematics", "en"): "lemh1",
-    (12, "Physics", "en"): "leph1",
-    (12, "Chemistry", "en"): "lech1",
-    (12, "Biology", "en"): "lebo1",
+    (4, "environmental studies", "en"): "deap1",
+    (4, "environmental studies", "hi"): "dhap1",
+    (5, "environmental studies", "en"): "eeap1",
+    (5, "environmental studies", "hi"): "ehap1",
+    (1, "mathematics", "en"): "aejm1",
+    (1, "mathematics", "hi"): "ahjm1",
+    (2, "mathematics", "en"): "bejm1",
+    (2, "mathematics", "hi"): "bhjm1",
+    (3, "mathematics", "en"): "cemm1",
+    (3, "mathematics", "hi"): "chmm1",
+    (4, "mathematics", "en"): "demm1",
+    (4, "mathematics", "hi"): "dhmm1",
+    (5, "mathematics", "en"): "eemm1",
+    (5, "mathematics", "hi"): "ehmm1",
+    (6, "mathematics", "en"): "fegp1",
+    (6, "mathematics", "hi"): "fhgp1",
+    (7, "mathematics", "en"): "gegp1",
+    (7, "mathematics", "hi"): "ghgp1",
+    (8, "mathematics", "en"): "hegp1",
+    (8, "mathematics", "hi"): "hhgp1",
+    (9, "mathematics", "en"): "iemh1",
+    (9, "mathematics", "hi"): "ihmh1",
+    (10, "mathematics", "en"): "jemh1",
+    (10, "mathematics", "hi"): "jhmh1",
+    (11, "mathematics", "en"): "kemh1",
+    (11, "mathematics", "hi"): "khmh1",
+    (12, "mathematics", "en"): "lemh1",
+    (12, "mathematics", "hi"): "lhmh1",
+    (6, "science", "en"): "fecu1",
+    (6, "science", "hi"): "fhcu1",
+    (7, "science", "en"): "gecu1",
+    (7, "science", "hi"): "ghcu1",
+    (8, "science", "en"): "hecu1",
+    (8, "science", "hi"): "hhcu1",
+    (9, "science", "en"): "iesc1",
+    (9, "science", "hi"): "ihsc1",
+    (10, "science", "en"): "jesc1",
+    (10, "science", "hi"): "jhsc1",
+    (2, "english", "en"): "bemr1",
+    (3, "english", "en"): "cesa1",
+    (4, "english", "en"): "desa1",
+    (5, "english", "en"): "eesa1",
+    (6, "english", "en"): "fepr1",
+    (7, "english", "en"): "gepr1",
+    (8, "english", "en"): "hehd1",
+    (9, "english", "en"): "iebe1",
+    (10, "english", "en"): "jeff1",
+    (11, "english", "en"): "kehb1",
+    (12, "english", "en"): "lefl1",
+    (2, "english", "hi"): "bemr1",
+    (3, "english", "hi"): "cesa1",
+    (4, "english", "hi"): "desa1",
+    (5, "english", "hi"): "eesa1",
+    (6, "english", "hi"): "fepr1",
+    (7, "english", "hi"): "gepr1",
+    (8, "english", "hi"): "hehd1",
+    (9, "english", "hi"): "iebe1",
+    (10, "english", "hi"): "jeff1",
+    (11, "english", "hi"): "kehb1",
+    (12, "english", "hi"): "lefl1",
+    (1, "hindi", "hi"): "ahsr1",
+    (1, "hindi", "en"): "ahsr1",
+    (2, "hindi", "hi"): "bhsr1",
+    (2, "hindi", "en"): "bhsr1",
+    (3, "hindi", "hi"): "chve1",
+    (3, "hindi", "en"): "chve1",
+    (4, "hindi", "hi"): "dhve1",
+    (4, "hindi", "en"): "dhve1",
+    (5, "hindi", "hi"): "ehve1",
+    (5, "hindi", "en"): "ehve1",
+    (6, "hindi", "hi"): "fhml1",
+    (6, "hindi", "en"): "fhml1",
+    (7, "hindi", "hi"): "ghml1",
+    (7, "hindi", "en"): "ghml1",
+    (8, "hindi", "hi"): "hhml1",
+    (8, "hindi", "en"): "hhml1",
+    (9, "hindi", "hi"): "ihga1",
+    (9, "hindi", "en"): "ihga1",
+    (10, "hindi", "hi"): "jhks1",
+    (10, "hindi", "en"): "jhks1",
+    (11, "hindi", "hi"): "khar1",
+    (11, "hindi", "en"): "khar1",
+    (12, "hindi", "hi"): "lhar1",
+    (12, "hindi", "en"): "lhar1",
+    (6, "social science", "en"): "fees1",
+    (6, "social science", "hi"): "fhes1",
+    (7, "social science", "en"): "gees1",
+    (7, "social science", "hi"): "ghes1",
+    (8, "social science", "en"): "hees1",
+    (8, "social science", "hi"): "hhes1",
+    (11, "physics", "en"): "keph1",
+    (11, "chemistry", "en"): "kech1",
+    (11, "biology", "en"): "kebo1",
+    (11, "civics", "en"): "keps1",
+    (11, "geography", "en"): "kegy2",
+    (11, "history", "en"): "kehs1",
+    (11, "computer science", "en"): "kecs1",
+    (12, "physics", "en"): "leph1",
+    (12, "chemistry", "en"): "lech1",
+    (12, "biology", "en"): "lebo1",
+    (12, "civics", "en"): "leps1",
+    (12, "geography", "en"): "legy1",
+    (12, "history", "en"): "lehs1",
+    (12, "computer science", "en"): "lecs1",
 }
 
 NCERT_BASE = "https://ncert.nic.in/textbook/pdf"
@@ -56,7 +152,8 @@ def ncert_code(class_grade: int | None, subject_name: str, lang: str) -> str | N
     """The NCERT book code for one catalog row, or None when unverified."""
     if not class_grade:
         return None
-    return NCERT_CODES.get((class_grade, (subject_name or "").strip(), (lang or "").strip()))
+    return NCERT_CODES.get((class_grade, (subject_name or "").strip().lower(),
+                            (lang or "").strip().lower()))
 
 
 def chapter_url(code: str, chapter: int) -> str:

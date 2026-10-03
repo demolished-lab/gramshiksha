@@ -42,14 +42,19 @@ def test_mapping_covers_only_live_verified_codes():
     assert ncert_code(10, "Science", "en") == "jesc1"
     assert ncert_code(10, "Science", "hi") == "jhsc1"
     assert ncert_code(12, "Mathematics", "en") == "lemh1"
+    assert ncert_code(3, "Mathematics", "en") == "cemm1"  # current NCF edition
+    assert ncert_code(3, "English", "en") == "cesa1"  # Santoor, not Marigold
+    assert ncert_code(9, "English", "en") == "iebe1"  # Kaveri, the listed reader
+    assert ncert_code(12, "Civics", "en") == "leps1"  # Book I
     assert chapter_url("jesc1", 1).endswith("/jesc101.pdf")
     assert chapter_url("jesc1", 12).endswith("/jesc112.pdf")
     # shared names outside the verified set stay on the Find flow
     assert ncert_code(10, "Marathi", "en") is None
-    assert ncert_code(6, "Science", "en") is None
-    assert ncert_code(8, "Hindi", "en") is None
+    assert ncert_code(6, "Science", "en") is not None
+    assert ncert_code(1, "English", "en") is None  # no such NCERT book
     assert ncert_code(None, "Science", "en") is None
-    assert len(NCERT_CODES) == 19
+    assert ncert_code(9, "History", "en") is None  # integrated SST only
+    assert len(NCERT_CODES) == 104
 
 
 def test_list_flags_chapter_books(client):
