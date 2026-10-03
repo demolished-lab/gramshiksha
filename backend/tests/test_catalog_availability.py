@@ -11,6 +11,8 @@ Every fixture row uses a private board name: the test DB is shared across the
 suite and `SEED_DEMO=auto` seeds real boards on SQLite, so a made-up board is
 the only way to assert exact sets.
 """
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -143,6 +145,19 @@ def test_empty_combo_is_empty_lists_not_an_error(client):
     data = r.json()
     assert data["mediums"] == []
     assert data["subjects"] == []
+
+
+def test_availability_concurrent_reads_are_isolated(client):
+    def read_availability(_):
+        return client.get(
+            "/catalog/availability", params={"board": BOARD, "class_grade": 9}
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        responses = list(executor.map(read_availability, range(32)))
+    assert all(response.status_code == 200 for response in responses), [
+        response.text for response in responses if response.status_code != 200
+    ]
 
 
 def test_grade_bounds_are_validated(client):

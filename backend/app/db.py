@@ -10,9 +10,13 @@ connect_args = {}
 engine_kwargs: dict = {}
 
 if settings.database_url.startswith("sqlite"):
-    # FastAPI threadpool + SQLite: share one connection across threads.
+    # FastAPI handlers run in a threadpool. File-backed SQLite must use the
+    # normal per-thread connection pool; sharing one connection with
+    # StaticPool corrupts concurrent result streams. StaticPool is safe and
+    # necessary only for an in-memory database whose schema must be shared.
     engine_kwargs["connect_args"] = {"check_same_thread": False}
-    engine_kwargs["poolclass"] = StaticPool
+    if ":memory:" in settings.database_url or settings.database_url == "sqlite://":
+        engine_kwargs["poolclass"] = StaticPool
 else:
     # Neon/Postgres in production.
     engine_kwargs["pool_pre_ping"] = True
