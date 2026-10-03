@@ -110,6 +110,24 @@ def test_practice_and_weak_topics(client):
     assert isinstance(weak["weak"], list)
 
 
+def test_practice_multi_accepts_exact_set(client):
+    from sqlmodel import Session, select
+    from app.db import engine
+    from app.models import Question
+    h = login(client, "student1@gramshiksha.in", "Learn@1234")
+    with Session(engine) as s:
+        q = s.exec(select(Question).where(Question.type == "multi")).first()
+    assert q is not None
+    import json as _json
+    want = sorted(_json.loads(q.correct))
+    full = client.post("/learn/practice/answer",
+                       json={"question_id": q.id, "answer": want}, headers=h).json()
+    assert full["correct"] is True and sorted(full["correct_answer"]) == want
+    partial = client.post("/learn/practice/answer",
+                          json={"question_id": q.id, "answer": want[:1]}, headers=h).json()
+    assert partial["correct"] is False
+
+
 def test_learning_path_and_today(client):
     h = login(client, "student1@gramshiksha.in", "Learn@1234")
     path = client.get("/learn/path", headers=h).json()

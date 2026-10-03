@@ -108,23 +108,38 @@ export default function Practice({ lang }: { lang: Lang }) {
                 {!feedback && <button className="btn" style={{ marginTop: 10 }} disabled={!fillText.trim()} onClick={() => answer(fillText.trim())}>{t('submit', lang)}</button>}
               </>
             ) : (
-              q.options.map((o, oi) => {
-                let cls = 'opt';
-                if (!feedback && chosen === oi) cls += ' selected';
-                if (feedback) {
-                  const correctArr = Array.isArray(feedback) ? [] : null;
-                  void correctArr;
-                  const r = feedback as unknown as { correct_answer?: unknown };
-                  const arr = Array.isArray(r.correct_answer) ? r.correct_answer as number[] : r.correct_answer === oi ? [oi] : [];
-                  if (arr.includes(oi)) cls += ' correct';
-                  else if (chosen === oi) cls += ' wrong';
-                }
-                return (
-                  <div key={oi} className={cls} onClick={() => answer(oi)}>
-                    {String.fromCharCode(65 + oi)}. {o}
-                  </div>
-                );
-              })
+              <>
+                {q.type === 'multi' && !feedback && (
+                  <p className="muted" style={{ margin: '6px 0 0' }}>{t('selectAll', lang)}</p>
+                )}
+                {q.options.map((o, oi) => {
+                  const picked: number[] = q.type === 'multi' && Array.isArray(chosen) ? chosen : [];
+                  const isPicked = q.type === 'multi' ? picked.includes(oi) : chosen === oi;
+                  let cls = 'opt';
+                  if (!feedback && isPicked) cls += ' selected';
+                  if (feedback) {
+                    const r = feedback as unknown as { correct_answer?: unknown };
+                    const arr = Array.isArray(r.correct_answer) ? r.correct_answer as number[] : r.correct_answer === oi ? [oi] : [];
+                    if (arr.includes(oi)) cls += ' correct';
+                    else if (isPicked) cls += ' wrong';
+                  }
+                  return (
+                    <div key={oi} className={cls} onClick={() => {
+                      if (feedback) return;
+                      if (q.type === 'multi') {
+                        setChosen(picked.includes(oi) ? picked.filter((x) => x !== oi) : [...picked, oi]);
+                      } else {
+                        answer(oi);
+                      }
+                    }}>
+                      {String.fromCharCode(65 + oi)}. {o}
+                    </div>
+                  );
+                })}
+                {q.type === 'multi' && !feedback && (
+                  <button className="btn" style={{ marginTop: 10 }} onClick={() => answer(Array.isArray(chosen) ? chosen : [])}>{t('submit', lang)}</button>
+                )}
+              </>
             )}
             {feedback && (
               <>

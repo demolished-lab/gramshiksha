@@ -151,20 +151,35 @@ function InlineQuiz({ lang, quiz, onDone, result }: {
                 disabled={!!result}
                 onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })} />
             ) : (
-              q.options.map((o, oi) => {
-                let cls = 'opt';
-                if (!result && answers[q.id] === oi) cls += ' selected';
-                if (result && res) {
-                  const correctArr = Array.isArray(res.correct_answer) ? res.correct_answer : [res.correct_answer];
-                  if (correctArr.includes(oi)) cls += ' correct';
-                  else if (answers[q.id] === oi) cls += ' wrong';
-                }
-                return (
-                  <div key={oi} className={cls} onClick={() => !result && setAnswers({ ...answers, [q.id]: oi })}>
-                    {String.fromCharCode(65 + oi)}. {o}
-                  </div>
-                );
-              })
+              <>
+                {q.type === 'multi' && !result && (
+                  <p className="muted" style={{ margin: '6px 0 0' }}>{t('selectAll', lang)}</p>
+                )}
+                {q.options.map((o, oi) => {
+                  const cur = answers[q.id];
+                  const picked: number[] = q.type === 'multi' && Array.isArray(cur) ? cur : [];
+                  const isPicked = q.type === 'multi' ? picked.includes(oi) : cur === oi;
+                  let cls = 'opt';
+                  if (!result && isPicked) cls += ' selected';
+                  if (result && res) {
+                    const correctArr = Array.isArray(res.correct_answer) ? res.correct_answer : [res.correct_answer];
+                    if (correctArr.includes(oi)) cls += ' correct';
+                    else if (isPicked) cls += ' wrong';
+                  }
+                  return (
+                    <div key={oi} className={cls} onClick={() => {
+                      if (result) return;
+                      if (q.type === 'multi') {
+                        setAnswers({ ...answers, [q.id]: picked.includes(oi) ? picked.filter((x) => x !== oi) : [...picked, oi] });
+                      } else {
+                        setAnswers({ ...answers, [q.id]: oi });
+                      }
+                    }}>
+                      {String.fromCharCode(65 + oi)}. {o}
+                    </div>
+                  );
+                })}
+              </>
             )}
             {result && res && <p className="explanation muted">{res.correct ? '✅' : '❌'} {res.explanation}</p>}
           </div>

@@ -64,6 +64,7 @@ const S: Record<string, [string, string, string]> = {
   dataSaver: ['Data Saver', 'डेटा सेवर', 'डेटा सेव्हर'],
   offlineNote: ['Offline — cached lessons shown', 'ऑफ़लाइन — कैश किए पाठ दिख रहे हैं', 'ऑफलाइन — कॅश केलेले धडे दिसत आहेत'],
   submit: ['Submit', 'जमा करें', 'जमा करा'],
+  selectAll: ['Select all that apply', 'सभी सही उत्तर चुनें', 'बरोबर असलेली सर्व उत्तरे निवडा'],
   next: ['Next', 'आगे', 'पुढे'],
   back: ['Back', 'वापस', 'मागे'],
   markComplete: ['Mark complete', 'पूर्ण करें', 'पूर्ण करा'],
