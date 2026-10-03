@@ -1613,6 +1613,8 @@ def build_textbooks():
                                      f"{en} — कक्षा {grade} (NCERT)",
                                      EPATHSHALA_HI))
                 elif board == "Maharashtra SSC":
+                    if grade > 10:
+                        continue  # SSC is classes 1-10 — never seed phantom rows
                     # Marathi medium default + English medium alt + Hindi/Urdu
                     # (eBalbharati publishes all four; verified via portal crawl)
                     rows.append((board, grade, en, "mr",
@@ -1629,11 +1631,16 @@ def build_textbooks():
                                  f"{en} — جماعت {grade} (بال بھارتی)",
                                  EBALBHARATI))
                 else:  # Maharashtra HSC
+                    if grade < 11:
+                        continue  # HSC is classes 11-12 — never seed phantom rows
                     rows.append((board, grade, en, "en",
                                  f"{en} — Std {grade} (Balbharati)",
                                  EBALBHARATI))
                     rows.append((board, grade, en, "mr",
                                  f"{en} — इयत्ता {grade} (बालभारती)",
+                                 EBALBHARATI))
+                    rows.append((board, grade, en, "ur",
+                                 f"{en} — جماعت {grade} (بال بھارتی)",
                                  EBALBHARATI))
     return rows
 

@@ -121,6 +121,17 @@ def test_stream_columns_exist_after_migration(client):
     assert all("stream" in names for names in cols.values())
 
 
+def test_seed_emits_no_phantom_board_combos():
+    # HSC starts at 11, SSC ends at 10 — the seeder once emitted every board
+    # for every grade, which filled two bogus shelves with unreadable rows.
+    from app.seed import build_textbooks
+
+    bad = [(board, grade, subj) for board, grade, subj, _lang, _t, _u in build_textbooks()
+           if (board == "Maharashtra HSC" and grade <= 10)
+           or (board == "Maharashtra SSC" and grade >= 11)]
+    assert bad == []
+
+
 def test_textbooks_stream_filter_keeps_shared_books(client):
     seed_book("Stream Probe Physics", "Physics")
     seed_book("Stream Probe History", "History")
