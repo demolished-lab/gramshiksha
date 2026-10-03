@@ -5,7 +5,7 @@ from sqlmodel import Session, or_, select
 
 from ..db import get_session
 from ..models import Board, Chapter, Course, Enrollment, Lesson, Subject, Textbook, User
-from ..ncert import fetch_ncert_chapter, ncert_code
+from ..ncert import chapter_exists, fetch_ncert_chapter, ncert_code
 from ..ratelimit import rate_limit
 from ..security import get_current_user, require_student
 from ..streams import STREAM_CODES, STREAMS
@@ -461,41 +461,16 @@ def open_textbook(textbook_id: int,
     t.clicks += 1
     session.add(t)
     session.commit()
-    if chapter:
-        # CBSE chapter edition: only books whose NCERT code was verified live
-        # (see app/ncert.py) — anything else is an honest 404, and the reader
-        # treats that as "no further chapters".
-        code = (ncert_code(t.class_grade, t.subject_name, t.lang)
-                if t.board == "CBSE" else None)
-        data = fetch_ncert_chapter(code, chapter) if code else None
-        if data is None:
-            raise HTTPException(404, "No such chapter edition")
-        return Response(
-            content=data, media_type="application/pdf",
-            headers={
-                "Content-Disposition": _pdf_disposition(
-                    f"{t.title} ch{chapter}", inline=not dl),
-                "Cache-Control": "private, max-age=300",
-                "X-Content-Type-Options": "nosniff",
-                "X-Frame-Options": "SAMEORIGIN",
-                "Content-Security-Policy": "frame-ancestors 'self'",
-            })
-    deep = t.deep_url if (t.deep_url and t.last_ok) else None
-    if not deep:
-        # Nothing to proxy: source_url is the portal *page*, not a PDF.
-        return RedirectResponse(t.source_url, status_code=302)
-    if ext:
-        return RedirectResponse(deep, status_code=302)
-    data = _fetch_pdf(deep)
-    if data is None:
-        # Publisher down/slow/changed its mind — fall through to the source,
-        # still inside this frame. Rare by construction (deep links are
-        # re-verified), but a broken button helps nobody.
-        return RedirectResponse(deep, status_code=302)
+    kind, payload = _resolve_open(textbook_id, dl, ext, chapter, session)
+    if kind == "miss":
+        raise HTTPException(404, payload)
+    if kind == "redirect":
+        return RedirectResponse(payload, status_code=302)
+    data, title = payload
     return Response(
         content=data, media_type="application/pdf",
         headers={
-            "Content-Disposition": _pdf_disposition(t.title, inline=not dl),
+            "Content-Disposition": _pdf_disposition(title, inline=not dl),
             # private: student traffic must not be parked in a shared cache.
             "Cache-Control": "private, max-age=300",
             "X-Content-Type-Options": "nosniff",
@@ -505,3 +480,73 @@ def open_textbook(textbook_id: int,
             "X-Frame-Options": "SAMEORIGIN",
             "Content-Security-Policy": "frame-ancestors 'self'",
         })
+
+
+@router.head("/textbooks/{textbook_id}/open",
+             dependencies=[Depends(rate_limit("catalog.open", 30, 60.0))])
+def open_textbook_head(textbook_id: int,
+                       dl: int = Query(0),
+                       ext: int = Query(0),
+                       chapter: int = Query(0, ge=0, le=99),
+                       session: Session = Depends(get_session)):
+    """Existence probe for the chapter pager: same resolution as GET, headers
+    only, no bytes, no click counted. The reader HEADs chapter N+1 before
+    paging — a 404 clamps the pager at the last chapter instead of opening
+    an error page."""
+    from fastapi.responses import Response
+    if chapter:
+        # Pager probe: existence only, no bytes, no click. A past-end chapter
+        # is 404 so the pager clamps instead of opening an error page.
+        t = session.get(Textbook, textbook_id)
+        code = (ncert_code(t.class_grade, t.subject_name, t.lang)
+                if t is not None and t.board == "CBSE" else None)
+        if code is None or not chapter_exists(code, chapter):
+            raise HTTPException(404, "No such chapter edition")
+        return Response(status_code=200, media_type="application/pdf")
+    kind, payload = _resolve_open(textbook_id, dl, ext, chapter, session)
+    if kind == "miss":
+        raise HTTPException(404, payload)
+    if kind == "redirect":
+        # A redirect target exists (portal page / deep URL) — the resource
+        # the reader asked about is reachable.
+        return Response(status_code=200)
+    data, title = payload
+    return Response(
+        status_code=200, media_type="application/pdf",
+        headers={
+            "Content-Disposition": _pdf_disposition(title, inline=not dl),
+            "Content-Length": str(len(data)),
+        })
+
+
+def _resolve_open(textbook_id: int, dl: int, ext: int, chapter: int,
+                  session: Session):
+    """Shared resolution for GET and HEAD: returns ("pdf", (data, title)) or
+    ("redirect", url) or ("miss", message). Click counting stays with the
+    GET caller — a HEAD probe must not inflate analytics."""
+    t = session.get(Textbook, textbook_id)
+    if not t:
+        return ("miss", "Textbook not found")
+    if chapter:
+        # CBSE chapter edition: only books whose NCERT code was verified live
+        # (see app/ncert.py) — anything else is an honest 404, and the reader
+        # treats that as "no further chapters".
+        code = (ncert_code(t.class_grade, t.subject_name, t.lang)
+                if t.board == "CBSE" else None)
+        data = fetch_ncert_chapter(code, chapter) if code else None
+        if data is None:
+            return ("miss", "No such chapter edition")
+        return ("pdf", (data, f"{t.title} ch{chapter}"))
+    deep = t.deep_url if (t.deep_url and t.last_ok) else None
+    if not deep:
+        # Nothing to proxy: source_url is the portal *page*, not a PDF.
+        return ("redirect", t.source_url)
+    if ext:
+        return ("redirect", deep)
+    data = _fetch_pdf(deep)
+    if data is None:
+        # Publisher down/slow/changed its mind — fall through to the source,
+        # still inside this frame. Rare by construction (deep links are
+        # re-verified), but a broken button helps nobody.
+        return ("redirect", deep)
+    return ("pdf", (data, t.title))

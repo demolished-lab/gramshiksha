@@ -84,15 +84,25 @@ def test_chapter_proxies_from_our_origin(client, monkeypatch):
     assert d.status_code == 200
     assert d.headers["content-disposition"].startswith("attachment; ")
     assert seen[-1] == ("jesc1", 2)
+    # ...and the pager's HEAD probe resolves the same chapter — existence
+    # only, no bytes downloaded, no click counted.
+    monkeypatch.setattr(catalog, "chapter_exists", lambda code, n: True)
+    h = client.head(f"/textbooks/{tid}/open", params={"chapter": 2})
+    assert h.status_code == 200
+    assert h.content == b""
 
 
 def test_chapter_miss_is_404_not_redirect(client, monkeypatch):
     tid = cbse_science_10_id()
     monkeypatch.setattr(catalog, "fetch_ncert_chapter", lambda code, n: None)
+    monkeypatch.setattr(catalog, "chapter_exists", lambda code, n: False)
     r = client.get(f"/textbooks/{tid}/open", params={"chapter": 99},
                    follow_redirects=False)
     assert r.status_code == 404
     assert "location" not in r.headers
+    # the pager's HEAD probe sees the same answer, without counting a click
+    h = client.head(f"/textbooks/{tid}/open", params={"chapter": 99})
+    assert h.status_code == 404
 
 
 def test_chapter_refuses_unmapped_boards(client, monkeypatch):

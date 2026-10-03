@@ -64,6 +64,26 @@ def chapter_url(code: str, chapter: int) -> str:
     return f"{NCERT_BASE}/{code}{chapter:02d}.pdf"
 
 
+def chapter_exists(code: str, chapter: int) -> bool:
+    """Light existence probe: HEAD only, no bytes. What the pager's HEAD
+    route calls before paging — a full download just to learn "yes" would
+    burn the free tier for nothing."""
+    import httpx
+
+    if chapter < 1 or chapter > 99:
+        return False
+    try:
+        head = httpx.head(chapter_url(code, chapter), timeout=NCERT_TIMEOUT_S,
+                          follow_redirects=True,
+                          headers={"User-Agent": NCERT_UA})
+        if head.status_code != 200:
+            return False
+        ctype = head.headers.get("content-type", "").lower()
+        return "pdf" in ctype or "octet-stream" in ctype
+    except Exception:
+        return False
+
+
 def fetch_ncert_chapter(code: str, chapter: int) -> bytes | None:
     """HEAD-verify then download one NCERT chapter, or None.
 
