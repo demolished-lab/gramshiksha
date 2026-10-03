@@ -21,12 +21,27 @@ def login(client, email, password):
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
+# Boards only exist for the classes they actually teach — HSC starts at 11
+# and SSC ends at 10, so phantom combos (HSC class 5, SSC class 11) are
+# legitimately empty shelves, not missing content.
+VALID_COMBOS = {
+    "Maharashtra SSC": range(1, 11),
+    "Maharashtra HSC": range(11, 13),
+    "CBSE": range(1, 13),
+}
+
+
 def test_textbooks_full_coverage(client):
-    for board in ["Maharashtra SSC", "Maharashtra HSC", "CBSE"]:
-        for grade in range(1, 13):
+    for board, grades in VALID_COMBOS.items():
+        for grade in grades:
             r = client.get("/textbooks", params={"class_grade": grade, "board": board})
             assert r.status_code == 200, (board, grade, r.text)
             assert len(r.json()) >= 1, f"no textbooks for {board} class {grade}"
+    # ...while phantom combos stay empty instead of showing dead rows.
+    assert client.get("/textbooks", params={
+        "class_grade": 5, "board": "Maharashtra HSC"}).json() == []
+    assert client.get("/textbooks", params={
+        "class_grade": 11, "board": "Maharashtra SSC"}).json() == []
 
 
 def test_textbooks_portals_and_coverage(client):
