@@ -119,6 +119,12 @@ integration — pushes to `main` deploy Render only, and that is intentional
 - [ ] Password reset: real address receives mail (SMTP); unknown address gets
       the same `200` (no account enumeration); code is single-use
 - [ ] Student login works; `/api/admin/users` answers `403` for a student
+- [ ] Frontend headers: `curl -sI https://gramshiksha-academy.vercel.app/` shows
+      `Content-Security-Policy`, `X-Content-Type-Options: nosniff`,
+      `Referrer-Policy`, `Permissions-Policy` and `X-Frame-Options: DENY`
+- [ ] Reader still frames: `curl -sI '<frontend>/api/textbooks/<id>/open'` shows
+      `X-Frame-Options: SAMEORIGIN` — the SPA's headers must never reach
+      `/api/*`, or every book opens to a blank frame
 
 ## 6. Day-2 notes
 
@@ -136,6 +142,14 @@ integration — pushes to `main` deploy Render only, and that is intentional
   not auto-deploy** — no Git integration by design (see step 4); ship
   frontend changes with the CLI command above. Manual fallback remains:
   dashboard → Deploys → Manual Deploy → Deploy latest commit.
+- **Frontend delivery headers live in `frontend/vercel.json`** (CSP, nosniff,
+  Referrer-Policy, Permissions-Policy, COOP, HSTS). The CSP and
+  `X-Frame-Options` rules intentionally match only `/` and `/index.html`: the
+  `/api/*` proxy must pass the backend's own `X-Frame-Options: SAMEORIGIN`
+  through untouched, because the textbook reader is a same-origin `<iframe>` and
+  a blanket `DENY` would blank it. `frontend/src/__tests__/deployConfig.test.ts`
+  fails the build if either rule regresses, and also guards the file against a
+  UTF-8 BOM — Vercel's config parser rejects one outright.
 - **Rotating `JWT_SECRET`** logs every user out (all tokens are signed with it).
 - **Rate limits are in-process**: they reset on restart and are per-instance —
   fine for a single free instance; move to a shared store before scaling out.
