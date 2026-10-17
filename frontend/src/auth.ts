@@ -116,32 +116,94 @@ export function cacheLessons(json: string): void {
 }
 export const getCachedLessons = () => localStorage.getItem(CACHE_KEY);
 
+/** Stable, opaque account scope for offline records on shared devices. */
+export function offlineStorageScope(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  let identity = token;
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, '='))) as { sub?: unknown };
+    if (typeof claims.sub === 'string' && claims.sub) identity = claims.sub.toLowerCase();
+  } catch { /* opaque fallback token still isolates this session */ }
+  let a = 2166136261;
+  let b = 5381;
+  for (let i = 0; i < identity.length; i += 1) {
+    const code = identity.charCodeAt(i);
+    a = Math.imul(a ^ code, 16777619);
+    b = Math.imul(b, 33) ^ code;
+  }
+  return `acct-${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
+}
+
+function scopedStorageKey(base: string): string | null {
+  // Older releases wrote these stores without an owner. They cannot safely be
+  // attributed on a shared phone, so discard them rather than expose them.
+  try {
+    localStorage.removeItem('gs_sync_queue');
+    localStorage.removeItem('gs_downloads');
+  } catch { /* storage unavailable */ }
+  const scope = offlineStorageScope();
+  return scope ? `${base}:${scope}` : null;
+}
+
 /** Offline sync queue for progress made while offline */
 const QUEUE_KEY = 'gs_sync_queue';
 
 export interface QueueItem {
+  queue_id: string;
   kind: 'lesson_complete' | 'practice_answer';
   lesson_id?: number;
   question_id?: number;
   payload: Record<string, unknown>;
 }
 
-export function enqueue(item: QueueItem): void {
+function queueId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function writeQueue(key: string, items: QueueItem[]): void {
+  try {
+    if (items.length) localStorage.setItem(key, JSON.stringify(items));
+    else localStorage.removeItem(key);
+  } catch { /* storage full or unavailable */ }
+}
+
+export function enqueue(item: Omit<QueueItem, 'queue_id'>): boolean {
+  const key = scopedStorageKey(QUEUE_KEY);
+  if (!key) return false;
   const q = getQueue();
-  q.push(item);
-  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch { /* full */ }
+  q.push({ ...item, queue_id: queueId() });
+  writeQueue(key, q);
+  return true;
 }
 
 export function getQueue(): QueueItem[] {
+  const key = scopedStorageKey(QUEUE_KEY);
+  if (!key) return [];
   try {
-    return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]') as QueueItem[];
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]') as Partial<QueueItem>[];
+    if (!Array.isArray(parsed)) return [];
+    const normalized = parsed.map((item) => ({ ...item, queue_id: item.queue_id || queueId() })) as QueueItem[];
+    if (normalized.some((item, i) => item.queue_id !== parsed[i]?.queue_id)) writeQueue(key, normalized);
+    return normalized;
   } catch {
     return [];
   }
 }
 
 export function clearQueue(): void {
-  localStorage.removeItem(QUEUE_KEY);
+  const key = scopedStorageKey(QUEUE_KEY);
+  if (key) localStorage.removeItem(key);
+}
+
+/** Remove confirmed queue records while retaining failed and newly-added work. */
+export function settleQueue(batchIds: string[], failedIds: string[]): void {
+  const key = scopedStorageKey(QUEUE_KEY);
+  if (!key) return;
+  const batch = new Set(batchIds);
+  const failed = new Set(failedIds);
+  writeQueue(key, getQueue().filter((item) => !batch.has(item.queue_id) || failed.has(item.queue_id)));
 }
 
 /** Downloaded material index (My Downloads) */
@@ -151,23 +213,30 @@ export interface DownloadEntry {
   material_id: number;
   title: string;
   saved_at: string;
-  text?: string; // cached text content for offline reading
+  mime_type?: string;
+  size_bytes?: number;
 }
 
-export function saveDownload(entry: DownloadEntry): void {
+export function saveDownload(entry: DownloadEntry): boolean {
+  const key = scopedStorageKey(DL_KEY);
+  if (!key) return false;
   const list = getDownloads().filter((d) => d.material_id !== entry.material_id);
   list.push(entry);
-  try { localStorage.setItem(DL_KEY, JSON.stringify(list)); } catch { /* full */ }
+  try { localStorage.setItem(key, JSON.stringify(list)); return true; } catch { return false; }
 }
 
 export function getDownloads(): DownloadEntry[] {
+  const key = scopedStorageKey(DL_KEY);
+  if (!key) return [];
   try {
-    return JSON.parse(localStorage.getItem(DL_KEY) || '[]') as DownloadEntry[];
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(parsed) ? parsed as DownloadEntry[] : [];
   } catch {
     return [];
   }
 }
 
 export function removeDownload(id: number): void {
-  localStorage.setItem(DL_KEY, JSON.stringify(getDownloads().filter((d) => d.material_id !== id)));
+  const key = scopedStorageKey(DL_KEY);
+  if (key) localStorage.setItem(key, JSON.stringify(getDownloads().filter((d) => d.material_id !== id)));
 }

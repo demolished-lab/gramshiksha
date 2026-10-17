@@ -15,6 +15,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
+from ..authorization import visible_students
 from ..db import get_session
 from ..models import Batch, Progress, Quiz, QuizAttempt, User
 from ..schemas import BatchIn, ProgressOut
@@ -70,9 +71,10 @@ def teacher_overview(session: Session = Depends(get_session),
     Separate from dashboards.*/teacher/overview (which reports course
     ownership and pending queues) — this one is attempt-level.
     """
-    students = session.exec(select(User).where(User.role == "student")
-                            .order_by(User.id)).all()
-    attempts = session.exec(select(QuizAttempt)).all()
+    students = visible_students(teacher, session)
+    student_ids = [s.id for s in students]
+    attempts = session.exec(select(QuizAttempt).where(
+        QuizAttempt.user_id.in_(student_ids))).all() if student_ids else []
     by_student: dict[int, list[QuizAttempt]] = {}
     for a in attempts:
         by_student.setdefault(a.user_id, []).append(a)
@@ -84,7 +86,7 @@ def teacher_overview(session: Session = Depends(get_session),
     for s in students:
         mine = by_student.get(s.id, [])
         per_student.append({
-            "id": s.id, "name": s.name, "email": s.email,
+            "id": s.id, "name": s.name,
             "attempts": len(mine),
             "avg_score": round(sum(pct(a) for a in mine) / len(mine), 1) if mine else None,
         })

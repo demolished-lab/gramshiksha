@@ -112,6 +112,7 @@ export default function Practice({ lang }: { lang: Lang }) {
                 {q.type === 'multi' && !feedback && (
                   <p className="muted" style={{ margin: '6px 0 0' }}>{t('selectAll', lang)}</p>
                 )}
+                <div role="group" aria-label={q.prompt}>
                 {q.options.map((o, oi) => {
                   const picked: number[] = q.type === 'multi' && Array.isArray(chosen) ? chosen : [];
                   const isPicked = q.type === 'multi' ? picked.includes(oi) : chosen === oi;
@@ -124,7 +125,7 @@ export default function Practice({ lang }: { lang: Lang }) {
                     else if (isPicked) cls += ' wrong';
                   }
                   return (
-                    <div key={oi} className={cls} onClick={() => {
+                    <button key={oi} type="button" className={cls} aria-pressed={isPicked} disabled={!!feedback} onClick={() => {
                       if (feedback) return;
                       if (q.type === 'multi') {
                         setChosen(picked.includes(oi) ? picked.filter((x) => x !== oi) : [...picked, oi]);
@@ -133,9 +134,10 @@ export default function Practice({ lang }: { lang: Lang }) {
                       }
                     }}>
                       {String.fromCharCode(65 + oi)}. {o}
-                    </div>
+                    </button>
                   );
                 })}
+                </div>
                 {q.type === 'multi' && !feedback && (
                   <button className="btn" style={{ marginTop: 10 }} onClick={() => answer(Array.isArray(chosen) ? chosen : [])}>{t('submit', lang)}</button>
                 )}

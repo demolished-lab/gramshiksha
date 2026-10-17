@@ -92,6 +92,23 @@ def test_reset_request_is_rate_limited(client):
     assert codes[-1].status_code == 429
 
 
+def test_reset_confirm_locks_out_repeated_guesses_for_the_account(client, monkeypatch):
+    email = _signup(client, "reset-lockout@gramshiksha.in")
+    monkeypatch.setattr(auth_router.secrets, "randbelow", lambda _n: 999999)
+    monkeypatch.setattr(auth_router, "send_reset_email", lambda _to, _code: True)
+    monkeypatch.setattr(auth_router, "settings", Settings(smtp_host="smtp.test"))
+    assert client.post("/auth/reset-request", json={"email": email}).status_code == 200
+
+    for index in range(auth_router.RESET_CONFIRM_LIMIT):
+        response = client.post("/auth/reset-confirm", json={
+            "email": email, "code": f"{index:06d}", "new_password": "NewPass@1234"})
+        assert response.status_code == 400
+
+    blocked = client.post("/auth/reset-confirm", json={
+        "email": email, "code": "999999", "new_password": "NewPass@1234"})
+    assert blocked.status_code == 429
+
+
 def test_undeliverable_reset_answers_503_for_everyone(client, monkeypatch):
     """Production without SMTP must fail loudly — and identically for existing
     and non-existing accounts, or the status code alone would enumerate users."""

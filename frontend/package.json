@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "e2e:mobile": "playwright test --project mobile-chrome mobile-compact",
     "e2e:cypress": "cypress run",
     "e2e:ui": "playwright test --ui",
     "a11y": "playwright test e2e/mobile-drawer.spec.ts --grep \"WCAG\"",

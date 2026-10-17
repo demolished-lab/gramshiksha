@@ -167,10 +167,10 @@ def test_offline_sync_replays_the_queue(client):
     assert practice, "question bank should answer a practice request"
 
     items = [
-        {"kind": "lesson_complete", "lesson_id": lesson_id, "payload": {"minutes": 7}},
-        {"kind": "practice_answer", "question_id": practice[0]["id"],
+        {"event_id": "sync-lesson-1", "kind": "lesson_complete", "lesson_id": lesson_id, "payload": {"minutes": 7}},
+        {"event_id": "sync-practice-1", "kind": "practice_answer", "question_id": practice[0]["id"],
          "payload": {"answer": 0, "minutes": 2}},
-        {"kind": "something_else", "payload": {}},
+        {"event_id": "sync-unsupported-1", "kind": "something_else", "payload": {}},
     ]
     r = client.post("/learn/sync", json=items, headers=h)
     assert r.status_code == 200, r.text
@@ -181,12 +181,19 @@ def test_offline_sync_replays_the_queue(client):
     # The replayed work actually landed: lesson done, lesson count on the dashboard.
     summary = client.get("/progress/summary", headers=h).json()
     assert summary["lessons_completed"] == 1
+    xp_after_first_sync = summary["xp"]
+    replay = client.post("/learn/sync", json=items, headers=h)
+    assert replay.status_code == 200
+    assert replay.json()["synced"][0] == {"ok": True, "duplicate": True}
+    assert replay.json()["synced"][1] == {"ok": True, "duplicate": True}
+    assert client.get("/progress/summary", headers=h).json()["xp"] == xp_after_first_sync
 
     # A missing lesson id reports the failure instead of exploding.
     bad = client.post("/learn/sync", json=[
-        {"kind": "lesson_complete", "lesson_id": 999999, "payload": {}}], headers=h)
+        {"event_id": "sync-missing-lesson", "kind": "lesson_complete", "lesson_id": 999999, "payload": {}}], headers=h)
     assert bad.status_code == 200
     assert bad.json()["synced"][0] == {"ok": False, "error": "Lesson not found"}
+    assert client.post("/learn/sync", json=items * 17, headers=h).status_code == 413
 
     # Queues are per-student: teachers cannot replay one.
     t = login(client, "teacher1@gramshiksha.in", "Teach@1234")
@@ -283,7 +290,7 @@ def test_notes_crud(client):
 # ---------- notifications ----------
 
 def test_notifications_and_school_announcement(client):
-    student, _ = signup(client, "notify@x.in")
+    student, _ = signup(client, "notify@x.in", school_name="Zilla Parishad Prathamik Shala, Rampur")
     school_admin = login(client, "school@gramshiksha.in", "School@1234")
     platform_admin = login(client, "admin@gramshiksha.in", "Admin@1234")
 
@@ -301,7 +308,7 @@ def test_notifications_and_school_announcement(client):
 
     notes = client.get("/notifications", headers=student).json()
     mine = [n for n in notes if n["type"] == "announcement"]
-    assert mine, "announcement should reach every student"
+    assert mine, "school-only notice should reach its assigned student"
     assert mine[0]["payload"] == {"title": "Holiday tomorrow", "body": "School closed"}
     assert mine[0]["read"] is False
 
@@ -315,6 +322,9 @@ def test_notifications_and_school_announcement(client):
     # Platform admins can announce too.
     r = client.post("/school/announce", params={"title": "Exam timetable"}, headers=platform_admin)
     assert r.status_code == 200
+    platform_notes = client.get("/notifications", headers=student).json()
+    assert any(n["type"] == "announcement" and n["payload"]["title"] == "Exam timetable"
+               for n in platform_notes)
     assert client.post("/notifications/read-all").status_code == 401
 
 
@@ -369,33 +379,45 @@ def test_teacher_overview(client):
 
 def test_parent_link_flow(client):
     parent, _ = signup(client, "link-parent@x.in", role="parent", name="Linking Parent")
+    other_parent, _ = signup(client, "other-parent@x.in", role="parent", name="Other Parent")
     child, child_id = signup(client, "link-child@x.in", name="Linked Kid", grade=7)
     teacher = login(client, "teacher1@gramshiksha.in", "Teach@1234")
 
     assert client.get("/parent/children", headers=parent).json() == []
 
-    r = client.post("/parent/link", params={"child_email": "link-child@x.in"}, headers=parent)
+    # The student initiates consent, and the signed invite is bound to this
+    # exact registered parent account rather than being guessable by email.
+    invited = client.post("/parent/invite", json={"parent_email": "link-parent@x.in"}, headers=child)
+    assert invited.status_code == 200, invited.text
+    token = invited.json()["invite"]
+    assert invited.json()["expires_in_seconds"] == 1800
+    alternate = client.post("/parent/invite", json={"parent_email": "other-parent@x.in"}, headers=child)
+    assert alternate.status_code == 200
+    assert client.post("/parent/link", json={"invite": token}, headers=other_parent).status_code == 400
+    r = client.post("/parent/link", json={"invite": token}, headers=parent)
     assert r.status_code == 200, r.text
     assert r.json() == {"ok": True, "child": "Linked Kid"}
+    assert client.post("/parent/link", json={"invite": alternate.json()["invite"]},
+                       headers=other_parent).status_code == 409
 
     kids = client.get("/parent/children", headers=parent).json()
     assert [k["id"] for k in kids] == [child_id]
     assert kids[0]["lessons_completed"] >= 0 and "weak_subjects" in kids[0]
 
-    # Unknown address, a non-student address, and a missing parameter all fail
-    # the same way a typo should.
-    assert client.post("/parent/link", params={"child_email": "nobody@x.in"},
-                       headers=parent).status_code == 404
-    assert client.post("/parent/link", params={"child_email": "teacher1@gramshiksha.in"},
-                       headers=parent).status_code == 404
+    # Invalid tokens and attempts to create a second parent relationship fail.
+    assert client.post("/parent/link", json={"invite": "not-a-signed-invitation"},
+                       headers=parent).status_code == 400
+    assert client.post("/parent/invite", json={"parent_email": "link-parent@x.in"},
+                       headers=child).status_code == 409
     assert client.post("/parent/link", headers=parent).status_code == 422
 
-    # Only parents may link.
-    assert client.post("/parent/link", params={"child_email": "link-parent@x.in"},
-                       headers=child).status_code == 403
-    assert client.post("/parent/link", params={"child_email": "link-child@x.in"},
+    # Only students can create invitations; only parent accounts can accept.
+    assert client.post("/parent/invite", json={"parent_email": "link-parent@x.in"},
+                       headers=parent).status_code == 403
+    assert client.post("/parent/invite", json={"parent_email": "link-parent@x.in"},
                        headers=teacher).status_code == 403
-    assert client.post("/parent/link", params={"child_email": "link-child@x.in"}).status_code == 401
+    assert client.post("/parent/link", json={"invite": token}, headers=child).status_code == 403
+    assert client.post("/parent/link", json={"invite": token}).status_code == 401
 
 
 # ---------- school admin ----------
@@ -415,6 +437,41 @@ def test_school_stats(client):
     assert client.get("/school/stats", headers=platform_admin).status_code == 200
     assert client.get("/school/stats", headers=student).status_code == 403
     assert client.get("/school/stats").status_code == 401
+
+
+def test_teacher_and_school_views_are_tenant_scoped(client):
+    teacher = login(client, "teacher1@gramshiksha.in", "Teach@1234")
+    school_admin = login(client, "school@gramshiksha.in", "School@1234")
+    before = client.get("/school/stats", headers=school_admin).json()
+    outsider, outsider_id = signup(client, "outside-student@x.in", school_name="A Different School")
+    signup(client, "outside-teacher@x.in", role="teacher", school_name="A Different School")
+    outside_doubt = client.post("/doubts", json={
+        "subject_name": "Science", "chapter_title": "Private question",
+        "text": "Please explain this topic from class today."}, headers=outsider)
+    assert outside_doubt.status_code == 201
+    doubt_id = outside_doubt.json()["id"]
+
+    # Teacher rosters are based on owned-course enrollments, not every account.
+    roster = client.get("/teacher/students", headers=teacher)
+    assert roster.status_code == 200
+    assert outsider_id not in {row["id"] for row in roster.json()}
+    attempts = client.get("/progress/teacher/overview", headers=teacher).json()
+    assert outsider_id not in {row["id"] for row in attempts["students"]}
+    assert all("email" not in row for row in attempts["students"])
+    assert doubt_id not in {row["id"] for row in client.get("/doubts", headers=teacher).json()}
+    assert client.post(f"/doubts/{doubt_id}/reply", json={"body": "Out of scope"},
+                       headers=teacher).status_code == 403
+    assert doubt_id not in {row["id"] for row in client.get("/doubts", headers=school_admin).json()}
+
+    # School metrics and announcements are limited to the admin's school.
+    assert client.get("/school/stats", headers=school_admin).json() == before
+    managed_users = client.get("/admin/users", headers=school_admin)
+    assert managed_users.status_code == 200, managed_users.text
+    assert outsider_id not in {row["id"] for row in managed_users.json()}
+    announcement = client.post("/school/announce", params={"title": "School-only notice"}, headers=school_admin)
+    assert announcement.status_code == 200, announcement.text
+    assert announcement.json()["notified"] == before["students"]
+    assert client.get("/notifications", headers=outsider).json() == []
 
 
 # ---------- moderation reports ----------

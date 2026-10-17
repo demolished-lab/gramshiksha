@@ -25,13 +25,18 @@ export default function LessonPage({ lang, go, lessonId }: { lang: Lang; go: (p:
   }, [lessonId, lang]);
 
   const complete = async () => {
+    if (!getToken()) {
+      setXpMsg(t('loginToSaveProgress', lang));
+      return;
+    }
     try {
-      if (navigator.onLine && getToken()) {
+      if (navigator.onLine) {
         const r = await apiCompleteLesson(lessonId, lesson?.duration_min ?? 10);
         setXpMsg(`+${r.xp} XP · 🔥 ${r.streak_days}`);
       } else {
-        enqueue({ kind: 'lesson_complete', lesson_id: lessonId, payload: { minutes: lesson?.duration_min ?? 10 } });
-        setXpMsg('saved offline — will sync');
+        const saved = enqueue({ kind: 'lesson_complete', lesson_id: lessonId, payload: { minutes: lesson?.duration_min ?? 10 } });
+        if (!saved) { setXpMsg(t('loginToSaveProgress', lang)); return; }
+        setXpMsg(t('savedProgressOffline', lang));
       }
       setDone(true);
     } catch (e) { setError(String(e)); }
@@ -155,6 +160,7 @@ function InlineQuiz({ lang, quiz, onDone, result }: {
                 {q.type === 'multi' && !result && (
                   <p className="muted" style={{ margin: '6px 0 0' }}>{t('selectAll', lang)}</p>
                 )}
+                <div role="group" aria-label={q.prompt}>
                 {q.options.map((o, oi) => {
                   const cur = answers[q.id];
                   const picked: number[] = q.type === 'multi' && Array.isArray(cur) ? cur : [];
@@ -167,7 +173,7 @@ function InlineQuiz({ lang, quiz, onDone, result }: {
                     else if (isPicked) cls += ' wrong';
                   }
                   return (
-                    <div key={oi} className={cls} onClick={() => {
+                    <button key={oi} type="button" className={cls} aria-pressed={isPicked} disabled={!!result} onClick={() => {
                       if (result) return;
                       if (q.type === 'multi') {
                         setAnswers({ ...answers, [q.id]: picked.includes(oi) ? picked.filter((x) => x !== oi) : [...picked, oi] });
@@ -176,9 +182,10 @@ function InlineQuiz({ lang, quiz, onDone, result }: {
                       }
                     }}>
                       {String.fromCharCode(65 + oi)}. {o}
-                    </div>
+                    </button>
                   );
                 })}
+                </div>
               </>
             )}
             {result && res && <p className="explanation muted">{res.correct ? '✅' : '❌'} {res.explanation}</p>}

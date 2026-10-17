@@ -102,6 +102,9 @@ textarea { min-height: 88px; resize: vertical; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.table-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll table { min-width: 680px; }
+.table-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 8px; }
 
 .progressbar { height: 8px; background: #E2E8F0; border-radius: 999px; overflow: hidden; }
 .progressbar > div { height: 100%; background: var(--success); border-radius: 999px; }
@@ -155,10 +158,12 @@ body.data-saver .cover-shimmer { animation: none; background: #E2E8F0; }
   padding: 12px; margin: 8px 0;
   border: 2px solid var(--border); border-radius: 10px;
   cursor: pointer; background: #fff;
+  width: 100%; font: inherit; color: var(--text); text-align: left;
 }
 .opt.selected { border-color: var(--primary); background: #EFF6FF; }
 .opt.correct { border-color: var(--success); background: #F0FDF4; }
 .opt.wrong { border-color: var(--error); background: #FEF2F2; }
+.opt:disabled { cursor: default; opacity: 1; }
 
 /* hero (landing) */
 .hero { text-align: center; padding: 40px 16px 32px; background: linear-gradient(180deg, #EFF6FF 0%, var(--bg) 100%); }

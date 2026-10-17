@@ -1,35 +1,45 @@
 # Permanent auto-deploy for the backend. Render's native GitHub integration
-# stopped delivering webhooks ("we don't have access to your repo"), so pushes
-# never reached Render and every deploy needed a manual click. This workflow
-# POSTs the service's private deploy hook instead — same result as native
-# auto-deploy, $0, and no OAuth repair needed.
+# stopped delivering webhooks ("we don't have access to your repo"), so the
+# deploy follows the repository's CI workflow instead. This workflow POSTs the
+# service's private deploy hook only after CI has passed on the current main.
 #
 # The hook URL is a credential: it lives in the RENDER_DEPLOY_HOOK Actions
 # secret (encrypted) and only its HTTP status is ever printed.
 name: deploy-backend
 
 on:
-  push:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'backend/**'
-      - 'render.yaml'
-      - '.github/workflows/deploy-backend.yml'
-  workflow_dispatch:   # manual trigger to test the wiring
 
 permissions:
   contents: read
 
 jobs:
   trigger-render:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Trigger Render deploy via hook
         env:
           HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
+          set -euo pipefail
           if [ -z "$HOOK" ]; then echo "RENDER_DEPLOY_HOOK secret not set"; exit 1; fi
+          # Check immediately before the POST so a superseded CI run is skipped.
+          current_sha=$(curl -fsSL \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
+            | jq -er '.object.sha')
+          if [ "$current_sha" != "$TESTED_SHA" ]; then
+            echo "Skipping superseded CI run for $TESTED_SHA; current main is $current_sha"
+            exit 0
+          fi
           # Status code only — never the URL.
           code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 -X POST "$HOOK" || echo 000)
           echo "render hook -> $code"

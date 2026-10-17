@@ -6,13 +6,14 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import delete as sqlalchemy_delete
 from sqlmodel import Session, select
 
 from ..config import settings
 from ..db import get_session
 from ..gamification import seed_badges
 from ..mailer import send_reset_email
-from ..models import PasswordResetCode, User
+from ..models import PasswordResetAttempt, PasswordResetCode, User
 # NOT dead code: tests clear the limiter and read its config through this
 # module (auth_router._RATE / auth_router.RATE_LIMIT) — keep the aliases.
 from ..ratelimit import DEFAULT_LIMIT as RATE_LIMIT, DEFAULT_WINDOW_S as RATE_WINDOW_S  # noqa: F401
@@ -26,6 +27,7 @@ log = logging.getLogger("gramshiksha")
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 RESET_TTL_MIN = 15  # reset codes live 15 minutes
+RESET_CONFIRM_LIMIT = 5
 
 
 class RegisterIn(BaseModel):
@@ -205,6 +207,7 @@ def update_me(payload: ProfileUpdate, user: User = Depends(get_current_user),
 @router.post("/reset-request")
 def reset_request(payload: ResetRequest, request: Request, session: Session = Depends(get_session)):
     _check_rate(request, "reset-request")
+    email = str(payload.email).strip().lower()
     # Answer *before* touching the account: if the server can't deliver codes
     # at all, every address must get the identical response, or the status
     # code itself would reveal which accounts exist.
@@ -217,22 +220,22 @@ def reset_request(payload: ResetRequest, request: Request, session: Session = De
     # Always the same 200 shape — never reveal whether the account exists
     # (account enumeration).
     ok = {"ok": True}
-    if not session.exec(select(User).where(User.email == payload.email)).first():
+    if not session.exec(select(User).where(User.email == email)).first():
         return ok
 
     # 6 cryptographically-random digits; only a salted hash is persisted.
     code = f"{secrets.randbelow(1_000_000):06d}"
     for stale in session.exec(select(PasswordResetCode).where(
-            PasswordResetCode.email == payload.email,
+            PasswordResetCode.email == email,
             PasswordResetCode.used_at.is_(None))).all():
         session.delete(stale)  # one live code per account
     session.add(PasswordResetCode(
-        email=payload.email,
-        code_hash=_hash_code(payload.email, code),
+        email=email,
+        code_hash=_hash_code(email, code),
         expires_at=(datetime.now(timezone.utc) + timedelta(minutes=RESET_TTL_MIN)).isoformat()))
     session.commit()
 
-    if send_reset_email(payload.email, code):
+    if send_reset_email(email, code):
         return ok
 
     # Not delivered. Dev logs the code so local testing works; production
@@ -241,21 +244,36 @@ def reset_request(payload: ResetRequest, request: Request, session: Session = De
     # for existing accounts and leak their existence.
     if settings.is_production:
         log.error("Reset code for %s could not be delivered (SMTP failure); "
-                  "it remains valid for %d minutes.", payload.email, RESET_TTL_MIN)
+                  "it remains valid for %d minutes.", email, RESET_TTL_MIN)
     else:
-        log.info("password-reset code for %s: %s (dev SQLite only)", payload.email, code)
+        log.info("password-reset code for %s: %s (dev SQLite only)", email, code)
     return ok
 
 
 @router.post("/reset-confirm")
 def reset_confirm(payload: ResetConfirm, request: Request, session: Session = Depends(get_session)):
     _check_rate(request, "reset-confirm")
-    want = _hash_code(payload.email, payload.code)
     now = datetime.now(timezone.utc)
+    email = str(payload.email).strip().lower()
+    window_start = now - timedelta(minutes=RESET_TTL_MIN)
+    # Retain only the rolling window. The row log makes lockout shared across
+    # workers and client IPs rather than another process-local limiter.
+    session.exec(sqlalchemy_delete(PasswordResetAttempt).where(
+        PasswordResetAttempt.created_at < window_start))
+    recent = session.exec(select(PasswordResetAttempt).where(
+        PasswordResetAttempt.email == email,
+        PasswordResetAttempt.created_at >= window_start)).all()
+    if len(recent) >= RESET_CONFIRM_LIMIT:
+        session.commit()
+        raise HTTPException(429, "Too many reset-code guesses. Request a new code after 15 minutes.")
+    session.add(PasswordResetAttempt(email=email, created_at=now))
+    session.commit()
+
+    want = _hash_code(email, payload.code)
 
     live: list[PasswordResetCode] = []
     for row in session.exec(select(PasswordResetCode).where(
-            PasswordResetCode.email == payload.email,
+            PasswordResetCode.email == email,
             PasswordResetCode.used_at.is_(None))).all():
         if datetime.fromisoformat(row.expires_at) <= now:
             session.delete(row)  # housekeeping: expired codes don't linger
@@ -264,9 +282,10 @@ def reset_confirm(payload: ResetConfirm, request: Request, session: Session = De
 
     match = next((r for r in live if r.code_hash == want), None)
     if match is None:
+        session.commit()
         raise HTTPException(400, "Invalid or expired code")
 
-    user = session.exec(select(User).where(User.email == payload.email)).first()
+    user = session.exec(select(User).where(User.email == email)).first()
     if not user:
         raise HTTPException(404, "User not found")
 

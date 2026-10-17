@@ -31,9 +31,14 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
 
   const ask = async () => {
     if (text.trim().length < 5) return;
-    await apiAskDoubt(subject, '', text.trim()).catch((e) => setError(String(e)));
-    setText('');
-    load();
+    setError('');
+    try {
+      await apiAskDoubt(subject, '', text.trim());
+      setText('');
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
   };
 
   return (

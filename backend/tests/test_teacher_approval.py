@@ -43,6 +43,16 @@ def first_chapter_id(client):
     return client.get(f"/courses/{courses['items'][0]['id']}").json()["chapters"][0]["id"]
 
 
+def first_course_id(client):
+    return client.get("/courses", params={"class_grade": 8, "board": "Maharashtra SSC"}).json()["items"][0]["id"]
+
+
+def assign_course(client, admin, course_id, teacher_id):
+    response = client.post(f"/admin/courses/{course_id}/assign-teacher",
+                           json={"teacher_id": teacher_id}, headers=admin)
+    assert response.status_code == 200, response.text
+
+
 def lesson_payload(chapter_id, title="Approval payload"):
     return {"chapter_id": chapter_id, "title_en": title,
             "title_hi": "स्वीकृति", "title_mr": "मान्यता", "body_en": "body"}
@@ -125,6 +135,9 @@ def test_pending_teacher_upload_goes_through_review(client):
 def test_admin_approval_grants_teacher_powers(client):
     pending, pending_id = register_teacher(client, "promoted@x.in")
     admin = login(client, "admin@gramshiksha.in", "Admin@1234")
+    course_id = first_course_id(client)
+    original_owner_id = client.get("/auth/me", headers=login(
+        client, "teacher1@gramshiksha.in", "Teach@1234")).json()["id"]
     chapter_id = first_chapter_id(client)
 
     assert client.post("/lessons", json=lesson_payload(chapter_id),
@@ -133,10 +146,13 @@ def test_admin_approval_grants_teacher_powers(client):
     # Approve through the production mount, so the /api twin is exercised too.
     r = client.post(f"/api/admin/users/{pending_id}/approve", headers=admin)
     assert r.status_code == 200, r.text
+    assignable = client.get("/admin/courses/assignable", headers=admin)
+    assert assignable.status_code == 200 and any(row["id"] == course_id for row in assignable.json())
     assert r.json() == {"ok": True, "id": pending_id, "email": "promoted@x.in",
                         "role": "teacher", "role_status": "active"}
 
     assert client.get("/auth/me", headers=pending).json()["role_status"] == "active"
+    assign_course(client, admin, course_id, pending_id)
     assert client.post("/lessons", json=lesson_payload(chapter_id),
                        headers=pending).status_code == 201
     assert client.post("/progress/batches", json={"name": "Approved batch"},
@@ -149,6 +165,7 @@ def test_admin_approval_grants_teacher_powers(client):
     # Approval is idempotent.
     assert client.post(f"/admin/users/{pending_id}/approve",
                        headers=admin).status_code == 200
+    assign_course(client, admin, course_id, original_owner_id)
 
 
 def test_approve_endpoint_is_platform_admin_only(client):
@@ -179,11 +196,15 @@ def test_suspension_withdraws_powers_and_is_reversible(client):
     """
     teacher, teacher_id = register_teacher(client, "revoked@x.in")
     admin = login(client, "admin@gramshiksha.in", "Admin@1234")
+    course_id = first_course_id(client)
+    original_owner_id = client.get("/auth/me", headers=login(
+        client, "teacher1@gramshiksha.in", "Teach@1234")).json()["id"]
     chapter_id = first_chapter_id(client)
 
     # Approve, and confirm the powers actually work first...
     assert client.post(f"/admin/users/{teacher_id}/approve",
                        headers=admin).status_code == 200
+    assign_course(client, admin, course_id, teacher_id)
     assert client.post("/lessons", json=lesson_payload(chapter_id, "Revocable lesson"),
                        headers=teacher).status_code == 201
 
@@ -217,6 +238,7 @@ def test_suspension_withdraws_powers_and_is_reversible(client):
     assert client.post(f"/admin/users/{teacher_id}/approve",
                        headers=admin).status_code == 200
     assert client.get("/teacher/overview", headers=teacher).status_code == 200
+    assign_course(client, admin, course_id, original_owner_id)
 
 
 def test_status_changes_are_admin_only_and_never_self_targeted(client):

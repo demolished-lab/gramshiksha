@@ -1,16 +1,33 @@
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from jose import JWTError, jwt
+from pydantic import BaseModel, EmailStr
+from sqlalchemy import update as sqlalchemy_update
 from sqlmodel import Session, select
 
+from ..authorization import visible_students, visible_teacher_ids
+from ..config import settings
 from ..db import get_session
 from ..models import (BadgeDef, Course, DailyActivity, Doubt, Lesson, Material, Notification, Progress, Question,
                       QuizAttempt, TopicStats, User, UserBadge, Certificate)
 from ..security import get_current_user, require_roles
 
 router = APIRouter(tags=["dashboards"])
+
+
+class ParentInviteIn(BaseModel):
+    parent_email: EmailStr
+
+
+class ParentLinkIn(BaseModel):
+    invite: str
+
+
+class CourseTeacherIn(BaseModel):
+    teacher_id: int
 
 
 # ---------- Student: progress + gamification ----------
@@ -66,7 +83,7 @@ def progress_weekly(user=Depends(require_roles("student")),
 @router.get("/teacher/students")
 def teacher_students(user=Depends(require_roles("teacher", "school_admin", "platform_admin")),
                      session: Session = Depends(get_session)):
-    students = session.exec(select(User).where(User.role == "student")).all()
+    students = visible_students(user, session)
     out = []
     for s in students:
         done = session.exec(select(Progress.id).where(
@@ -91,10 +108,21 @@ def teacher_students(user=Depends(require_roles("teacher", "school_admin", "plat
 @router.get("/teacher/overview")
 def teacher_overview(user=Depends(require_roles("teacher", "school_admin", "platform_admin")),
                      session: Session = Depends(get_session)):
-    courses = session.exec(select(Course).where(Course.teacher_id == user.id)).all()
-    pending = session.exec(select(Material).where(Material.status == "pending")).all()
-    doubts = session.exec(select(Doubt).where(Doubt.status == "pending")).all()
-    students = session.exec(select(User).where(User.role == "student")).all()
+    students = visible_students(user, session)
+    student_ids = [s.id for s in students]
+    teacher_ids = visible_teacher_ids(user, session)
+    courses = session.exec(select(Course).where(Course.teacher_id.in_(teacher_ids))).all() if teacher_ids else []
+    visible_uploader_ids = set(student_ids) | set(teacher_ids)
+    if user.role == "platform_admin":
+        pending = session.exec(select(Material).where(Material.status == "pending")).all()
+        doubts = session.exec(select(Doubt).where(Doubt.status == "pending")).all()
+    elif visible_uploader_ids:
+        pending = session.exec(select(Material).where(
+            Material.status == "pending", Material.uploader_id.in_(visible_uploader_ids))).all()
+        doubts = session.exec(select(Doubt).where(
+            Doubt.status == "pending", Doubt.student_id.in_(student_ids))).all() if student_ids else []
+    else:
+        pending, doubts = [], []
     return {"my_courses": [{"id": c.id, "title_en": c.title_en, "students": c.students_count}
                            for c in courses],
             "pending_material_reviews": len(pending),
@@ -135,14 +163,55 @@ def parent_children(user=Depends(require_roles("parent")),
     return out
 
 
+@router.post("/parent/invite")
+def parent_invite(payload: ParentInviteIn, user=Depends(require_roles("student")),
+                  session: Session = Depends(get_session)):
+    if user.parent_of_id is not None:
+        raise HTTPException(409, "A parent is already linked to this account")
+    parent_email = str(payload.parent_email).strip().lower()
+    parent = session.exec(select(User).where(User.email == parent_email)).first()
+    if not parent or parent.role != "parent":
+        raise HTTPException(404, "Create a parent account with this email before requesting an invite")
+    now = datetime.now(timezone.utc)
+    invite = jwt.encode({
+        "sub": str(user.id), "parent_email": parent_email,
+        "purpose": "parent_link", "iat": now,
+        "exp": now + timedelta(minutes=30),
+    }, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return {"invite": invite, "expires_in_seconds": 1800}
+
+
 @router.post("/parent/link")
-def parent_link(child_email: str = Query(...), user=Depends(require_roles("parent")),
+def parent_link(payload: ParentLinkIn, user=Depends(require_roles("parent")),
                 session: Session = Depends(get_session)):
-    child = session.exec(select(User).where(User.email == child_email)).first()
+    try:
+        claims = jwt.decode(payload.invite, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except JWTError:
+        raise HTTPException(400, "Invalid or expired student invitation")
+    if claims.get("purpose") != "parent_link" or claims.get("parent_email") != user.email.strip().lower():
+        raise HTTPException(400, "This invitation is not for your parent account")
+    try:
+        student_id = int(claims.get("sub", ""))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Invalid student invitation")
+    child = session.get(User, student_id)
     if not child or child.role != "student":
         raise HTTPException(404, "Student not found")
-    child.parent_of_id = user.id
-    session.add(child)
+    if child.parent_of_id is not None and child.parent_of_id != user.id:
+        raise HTTPException(409, "This student already has a linked parent")
+    if child.parent_of_id == user.id:
+        return {"ok": True, "child": child.name}
+    # Compare-and-set prevents concurrent invitations from replacing the first
+    # accepted parent on databases where two requests race.
+    updated = session.exec(sqlalchemy_update(User).where(
+        User.id == student_id, User.role == "student", User.parent_of_id.is_(None)
+    ).values(parent_of_id=user.id))
+    if updated.rowcount != 1:
+        session.rollback()
+        current = session.get(User, student_id)
+        if current and current.parent_of_id == user.id:
+            return {"ok": True, "child": current.name}
+        raise HTTPException(409, "This student already has a linked parent")
     session.commit()
     return {"ok": True, "child": child.name}
 
@@ -152,16 +221,13 @@ def parent_link(child_email: str = Query(...), user=Depends(require_roles("paren
 @router.get("/school/stats")
 def school_stats(user=Depends(require_roles("school_admin", "platform_admin")),
                  session: Session = Depends(get_session)):
-    school_id = user.school_id
-    students = session.exec(select(User).where(
-        User.role == "student",
-        User.school_id == school_id if school_id else User.id == User.id)).all()
-    teachers = session.exec(select(User).where(User.role == "teacher")).all()
+    students = visible_students(user, session)
+    teacher_ids = visible_teacher_ids(user, session)
     total_done = 0
     for s in students:
         total_done += len(session.exec(select(Progress.id).where(
             Progress.user_id == s.id, Progress.completed == True)).all())  # noqa: E712
-    return {"students": len(students), "teachers": len(teachers),
+    return {"students": len(students), "teachers": len(teacher_ids),
             "lessons_completed_total": total_done}
 
 
@@ -169,7 +235,7 @@ def school_stats(user=Depends(require_roles("school_admin", "platform_admin")),
 def school_announce(title: str = Query(...), body: str = Query(""),
                     user=Depends(require_roles("school_admin", "platform_admin")),
                     session: Session = Depends(get_session)):
-    students = session.exec(select(User).where(User.role == "student")).all()
+    students = visible_students(user, session)
     for s in students:
         session.add(Notification(user_id=s.id, type="announcement",
                                  payload=json.dumps({"title": title, "body": body})))
@@ -180,10 +246,13 @@ def school_announce(title: str = Query(...), body: str = Query(""),
 # ---------- Platform admin ----------
 
 @router.get("/admin/users")
-def admin_users(role: Optional[str] = None, limit: int = 50, offset: int = 0,
-                user=Depends(require_roles("platform_admin")),
+def admin_users(role: Optional[str] = None, limit: int = Query(50, ge=1, le=200),
+                offset: int = Query(0, ge=0),
+                user=Depends(require_roles("school_admin", "platform_admin")),
                 session: Session = Depends(get_session)):
     q = select(User)
+    if user.role == "school_admin":
+        q = q.where(User.school_id == user.school_id) if user.school_id is not None else q.where(User.id == -1)
     if role:
         q = q.where(User.role == role)
     rows = session.exec(q.offset(offset).limit(limit)).all()
@@ -208,6 +277,44 @@ def _get_target(user_id: int, session: Session) -> User:
     if not target:
         raise HTTPException(404, "User not found")
     return target
+
+
+@router.get("/admin/courses/assignable")
+def assignable_courses(user=Depends(require_roles("school_admin", "platform_admin")),
+                       session: Session = Depends(get_session)):
+    if user.role == "platform_admin":
+        rows = session.exec(select(Course).order_by(Course.id)).all()
+    elif user.school_id is None:
+        rows = []
+    else:
+        teacher_ids = visible_teacher_ids(user, session)
+        q = select(Course)
+        q = q.where(Course.teacher_id.in_(teacher_ids) | Course.teacher_id.is_(None)) if teacher_ids else q.where(Course.teacher_id.is_(None))
+        rows = session.exec(q.order_by(Course.id)).all()
+    return [{"id": course.id, "title_en": course.title_en,
+             "class_grade": course.class_grade, "board": course.board,
+             "teacher_id": course.teacher_id} for course in rows]
+
+
+@router.post("/admin/courses/{course_id}/assign-teacher")
+def assign_course_teacher(course_id: int, payload: CourseTeacherIn,
+                          user=Depends(require_roles("school_admin", "platform_admin")),
+                          session: Session = Depends(get_session)):
+    course = session.get(Course, course_id)
+    if not course:
+        raise HTTPException(404, "Course not found")
+    teacher = session.get(User, payload.teacher_id)
+    if not teacher or teacher.role != "teacher" or teacher.role_status != "active":
+        raise HTTPException(400, "Choose an approved teacher account")
+    if user.role == "school_admin":
+        current_owner = session.get(User, course.teacher_id) if course.teacher_id else None
+        if (user.school_id is None or teacher.school_id != user.school_id
+                or (current_owner and current_owner.school_id != user.school_id)):
+            raise HTTPException(403, "You may only assign courses and teachers in your school")
+    course.teacher_id = teacher.id
+    session.add(course)
+    session.commit()
+    return {"ok": True, "course_id": course.id, "teacher_id": teacher.id}
 
 
 def _set_status(target: User, status: str, session: Session) -> dict:
@@ -255,7 +362,17 @@ def suspend_user(user_id: int, user=Depends(require_roles("platform_admin")),
 def admin_reports(user=Depends(require_roles("platform_admin", "school_admin", "teacher")),
                   session: Session = Depends(get_session)):
     from ..models import MaterialReport
-    rows = session.exec(select(MaterialReport)).all()
+    if user.role == "platform_admin":
+        rows = session.exec(select(MaterialReport)).all()
+    elif user.role == "school_admin" and user.school_id is not None:
+        school_user_ids = session.exec(select(User.id).where(User.school_id == user.school_id)).all()
+        material_ids = session.exec(select(Material.id).where(Material.uploader_id.in_(school_user_ids))).all() if school_user_ids else []
+        rows = session.exec(select(MaterialReport).where(MaterialReport.material_id.in_(material_ids))).all() if material_ids else []
+    elif user.role == "teacher":
+        material_ids = session.exec(select(Material.id).where(Material.uploader_id == user.id)).all()
+        rows = session.exec(select(MaterialReport).where(MaterialReport.material_id.in_(material_ids))).all() if material_ids else []
+    else:
+        rows = []
     out = []
     for r in rows:
         m = session.get(Material, r.material_id)

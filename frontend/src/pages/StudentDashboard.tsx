@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { apiMyCourses, apiNotifications, apiProgressSummary, apiReadingList, apiToday, apiWeakTopics } from '../api';
+import { useEffect, useState, type FormEvent } from 'react';
+import { apiCreateParentInvite, apiMyCourses, apiNotifications, apiProgressSummary, apiReadingList, apiToday, apiWeakTopics } from '../api';
 import { getUser, getToken } from '../auth';
 import { monthLabel, t } from '../i18n';
 import { streamName } from '../components/StreamPicker';
@@ -15,6 +15,10 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
   const [picks, setPicks] = useState<ReadingPick[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [parentEmail, setParentEmail] = useState('');
+  const [parentInvite, setParentInvite] = useState('');
+  const [parentInviteError, setParentInviteError] = useState('');
+  const [creatingInvite, setCreatingInvite] = useState(false);
 
   useEffect(() => {
     if (!getToken()) { go('home'); return; }
@@ -75,6 +79,20 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
       open: p.readable && p.textbook_id ? p.textbook_id : undefined,
     });
     go('textbooks');
+  };
+
+  const createParentInvite = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!parentEmail.trim()) return;
+    setCreatingInvite(true);
+    setParentInviteError('');
+    setParentInvite('');
+    try {
+      const result = await apiCreateParentInvite(parentEmail.trim());
+      setParentInvite(result.invite);
+    } catch (e) {
+      setParentInviteError(e instanceof Error ? e.message : String(e));
+    } finally { setCreatingInvite(false); }
   };
 
   const overall = courses.length
@@ -243,6 +261,18 @@ export default function StudentDashboard({ lang, go }: { lang: Lang; go: (p: str
           </div>
         </>
       )}
+
+      <section className="card" aria-labelledby="parent-link-title">
+        <h2 id="parent-link-title">{t('parentInviteTitle', lang)}</h2>
+        <p className="muted">{t('parentInviteDescription', lang)}</p>
+        <form onSubmit={createParentInvite}>
+          <label htmlFor="parent-email">{t('parentEmailLabel', lang)}</label>
+          <input id="parent-email" type="email" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} required autoComplete="email" />
+          <button className="btn small" type="submit" disabled={creatingInvite || !parentEmail.trim()}>{creatingInvite ? t('checking', lang) : t('createParentInvite', lang)}</button>
+        </form>
+        {parentInviteError && <p className="error" role="alert">{parentInviteError}</p>}
+        {parentInvite && <div className="invite-result"><p className="success" role="status">{t('parentInviteCreated', lang)}</p><label htmlFor="parent-invite-code">{t('parentInviteCodeLabel', lang)}</label><textarea id="parent-invite-code" value={parentInvite} readOnly rows={3} onFocus={(e) => e.currentTarget.select()} /><p className="muted">{t('parentInviteShare', lang)}</p></div>}
+      </section>
     </div>
   );
 }

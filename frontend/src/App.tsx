@@ -2,8 +2,10 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { dataSaver, getLang, getUser, landingAfterAuth, logout, setDataSaver, setLang, SessionUser } from './auth';
 import { t } from './i18n';
 import type { Lang } from './types';
+import { parseRoute } from './routing';
 import Landing from './pages/Landing';
 import { captureReferral } from './growth';
+import { syncQueuedProgress } from './offlineSync';
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
 const Courses = lazy(() => import('./pages/Courses'));
 const CourseDetail = lazy(() => import('./pages/CourseDetail'));
@@ -23,21 +25,10 @@ const StudentLogin = lazy(() => import('./pages/StudentLogin'));
 import AuthModal from './AuthModal';
 import ApprovalNotice from './ApprovalNotice';
 
-type Route = { page: string; sub?: string; id?: number };
-
-function parseHash(): Route {
-  const h = location.hash.replace(/^#\/?/, '');
-  const [page, second] = h.split('/');
-  // #/login/teacher and #/login/student carry the role in the second slot,
-  // where course/lesson carry a numeric id — never mix the two.
-  if (page === 'login') return { page, sub: second };
-  return { page: page || 'home', id: second ? Number(second) : undefined };
-}
-
 export default function App() {
   const [lang, setLangState] = useState<Lang>(getLang());
   const [user, setUser] = useState<SessionUser | null>(getUser());
-  const [route, setRoute] = useState<Route>(parseHash());
+  const [route, setRoute] = useState(() => parseRoute(location.hash));
   const [online, setOnline] = useState(navigator.onLine);
   const [saver, setSaver] = useState(dataSaver());
   const [showAuth, setShowAuth] = useState(false);
@@ -46,9 +37,9 @@ export default function App() {
 
   useEffect(() => {
     captureReferral();
-    const onHash = () => setRoute(parseHash());
+    const onHash = () => setRoute(parseRoute(location.hash));
     window.addEventListener('hashchange', onHash);
-    const on = () => setOnline(true);
+    const on = () => { setOnline(true); void syncQueuedProgress().catch(() => {}); };
     const off = () => setOnline(false);
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
@@ -58,6 +49,10 @@ export default function App() {
       window.removeEventListener('offline', off);
     };
   }, []);
+
+  useEffect(() => {
+    if (user?.role === 'student') void syncQueuedProgress().catch(() => {});
+  }, [user?.role]);
 
   useEffect(() => {
     const pageTitles: Record<string, string> = {
@@ -118,6 +113,7 @@ export default function App() {
   const isParent = user?.role === 'parent';
   const isAdmin = user?.role === 'platform_admin' || user?.role === 'school_admin';
 
+  const authenticated = Boolean(user);
   const navItems: [string, string][] = [
     ['home', t('home', lang)],
     ['explore', t('explore', lang)],
@@ -125,8 +121,8 @@ export default function App() {
     ['textbooks', t('textbooks', lang)],
     ['practice', t('practice', lang)],
     ['doubts', t('doubts', lang)],
-    ['downloads', t('downloads', lang)],
   ];
+  if (authenticated) navItems.push(['downloads', t('downloads', lang)]);
   const navIcons: Record<string, string> = { home: '⌂', explore: '▦', materials: '▤', textbooks: '▥', practice: '✎', doubts: '?', downloads: '⇩', dashboard: '◉', progress: '↗', teacher: '▣', parent: '♧', admin: '⚙' };
   const tabs: [string, string, string][] = [
     ['home', '🏠', t('home', lang)],
@@ -166,7 +162,10 @@ export default function App() {
     case 'materials': page = <Materials lang={lang} user={user} />; break;
     case 'textbooks': page = <Textbooks lang={lang} user={user} />; break;
     case 'doubts': page = <Doubts lang={lang} user={user} />; break;
-    case 'downloads': page = <Downloads lang={lang} go={go} />; break;
+    case 'downloads': page = user
+      ? <Downloads lang={lang} go={go} />
+      : <div className="card empty-state"><div className="icon">🔒</div><p>{t('privateDownloadsLogin', lang)}</p><button className="btn" onClick={() => setShowAuth(true)}>{t('login', lang)}</button></div>;
+      break;
     case 'progress': page = <ProgressPage lang={lang} />; break;
     case 'teacher': page = approvalGated(<TeacherDashboard lang={lang} />); break;
     case 'parent': page = <ParentDashboard lang={lang} />; break;
@@ -192,7 +191,6 @@ export default function App() {
     );
   }
 
-  const authenticated = Boolean(user);
   const roleHome = user?.role === 'student' ? 'dashboard' : user?.role === 'parent' ? 'parent' : isTeacher ? 'teacher' : 'admin';
   const sidebarItems: [string, string][] = authenticated
     ? user?.role === 'student'

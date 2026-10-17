@@ -54,7 +54,13 @@ const mockApi = async (page: Page) => {
     };
     else if (pathname.endsWith('/teacher/students')) body = [];
     else if (pathname.endsWith('/school/stats')) body = { students: 2450, teachers: 120, lessons_completed_total: 5100 };
-    else if (pathname.endsWith('/admin/users')) body = [];
+    else if (pathname.endsWith('/admin/users')) body = [{
+      id: 8, email: 'teacher@example.com', name: 'Approved Teacher', role: 'teacher',
+      role_status: 'active', class_grade: 10, board: 'CBSE', xp: 0,
+    }];
+    else if (pathname.endsWith('/admin/courses/assignable')) body = [{
+      id: 1, title_en: 'Mathematics', class_grade: 10, board: 'CBSE', teacher_id: null,
+    }];
     else if (pathname.endsWith('/learn/lessons/1/complete')) body = { ok: true, xp: 10, streak_days: 12 };
     else if (pathname.endsWith('/doubts/1/reply') || pathname.endsWith('/doubts/1/resolve')) body = { ok: true };
     else if (pathname.endsWith('/catalog/availability')) body = {
@@ -79,7 +85,9 @@ test('homepage matches the reference and loads original classroom photography', 
   await expect(page.getByRole('heading', { name: /Popular classes/i })).toBeVisible();
   const hero = page.getByRole('img', { name: /Students learning together/i });
   await expect(hero).toBeVisible();
-  await expect.poll(() => hero.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(1000);
+  const photograph = page.locator('.student-illustration img');
+  await photograph.scrollIntoViewIfNeeded();
+  await expect.poll(() => photograph.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(1000);
   await expect(page.locator('.band-image img')).toHaveCount(4);
 });
 
@@ -152,6 +160,9 @@ test('teacher and admin dashboards render their operational sections', async ({ 
   });
   await expect(page.getByRole('heading', { name: /Admin/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /staff/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Assign courses to approved teachers/i })).toBeVisible();
+  await expect(page.getByLabel('Course', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Approved teacher', { exact: true })).toBeVisible();
 });
 
 test('login, language switching, offline notice, progress certificates, and 404 remain reachable', async ({ page }) => {

@@ -277,7 +277,10 @@ def ready() -> dict:
         return {"status": "ready"}
     except Exception as exc:  # noqa: BLE001 — readiness must report, not crash
         log.warning("readiness DB check failed: %s", exc)
-        return {"status": "degraded", "reason": "db_unreachable"}
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "reason": "db_unreachable"},
+        )
 
 
 @app.get("/api/ready")

@@ -24,9 +24,9 @@ from sqlmodel import Session, select
 
 from ..db import get_session
 from ..gamification import log_study_time
-from ..models import Chapter, Lesson, Progress, Question, User, utcnow
+from ..models import Chapter, Course, Lesson, Progress, Question, User, utcnow
 from ..schemas import AttemptIn, AttemptOut, LessonCreate, LessonRead, QuestionIn, QuestionOut
-from ..security import get_current_user, has_role, require_student, require_teacher
+from ..security import get_current_user, require_student, require_teacher
 from .learn import _grade, _record_topic
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
@@ -34,7 +34,20 @@ router = APIRouter(prefix="/lessons", tags=["lessons"])
 LESSON_TYPES = ("text", "video", "audio", "mixed")
 QUESTION_TYPES = ("mcq", "truefalse", "multi", "fill")
 DIFFICULTIES = ("easy", "medium", "hard")
-MODERATOR_ROLES = ("teacher", "school_admin", "platform_admin")
+
+
+def _can_manage_course(actor: User, course: Course, session: Session) -> bool:
+    if actor.role == "platform_admin":
+        return True
+    if actor.role == "school_admin":
+        owner = session.get(User, course.teacher_id) if course.teacher_id else None
+        return bool(actor.school_id is not None and owner and owner.school_id == actor.school_id)
+    return actor.role == "teacher" and course.teacher_id == actor.id
+
+
+def _lesson_course(lesson: Lesson, session: Session) -> Optional[Course]:
+    chapter = session.get(Chapter, lesson.chapter_id)
+    return session.get(Course, chapter.course_id) if chapter else None
 
 
 def _options(raw: str) -> list[str]:
@@ -130,17 +143,24 @@ def get_lesson(lesson_id: int, session: Session = Depends(get_session),
     lesson = session.get(Lesson, lesson_id)
     if not lesson:
         raise HTTPException(404, "Lesson not found")
-    # Drafts stay invisible to students, but a teacher can preview their own.
-    if not lesson.published and not has_role(user, *MODERATOR_ROLES):
-        raise HTTPException(404, "Lesson not found")
+    # Drafts stay visible only to the course owner and authorized admins.
+    if not lesson.published:
+        course = _lesson_course(lesson, session)
+        if not course or not _can_manage_course(user, course, session):
+            raise HTTPException(404, "Lesson not found")
     return lesson
 
 
 @router.get("/{lesson_id}/questions", response_model=list[QuestionOut])
 def get_questions(lesson_id: int, session: Session = Depends(get_session),
                   user: User = Depends(get_current_user)) -> list[dict]:
-    if not session.get(Lesson, lesson_id):
+    lesson = session.get(Lesson, lesson_id)
+    if not lesson:
         raise HTTPException(404, "Lesson not found")
+    if not lesson.published:
+        course = _lesson_course(lesson, session)
+        if not course or not _can_manage_course(user, course, session):
+            raise HTTPException(404, "Lesson not found")
     rows = session.exec(select(Question)
                         .where(Question.lesson_id == lesson_id)
                         .order_by(Question.id)).all()
@@ -155,8 +175,12 @@ def create_lesson(payload: LessonCreate, session: Session = Depends(get_session)
                   teacher: User = Depends(require_teacher)) -> Lesson:
     if payload.type not in LESSON_TYPES:
         raise HTTPException(422, f"type must be one of {LESSON_TYPES}")
-    if not session.get(Chapter, payload.chapter_id):
+    chapter = session.get(Chapter, payload.chapter_id)
+    if not chapter:
         raise HTTPException(404, "Chapter not found")
+    course = session.get(Course, chapter.course_id)
+    if not course or not _can_manage_course(teacher, course, session):
+        raise HTTPException(403, "You may only author lessons in a course you manage")
     dup = session.exec(select(Lesson).where(
         Lesson.chapter_id == payload.chapter_id,
         Lesson.title_en == payload.title_en)).first()
@@ -176,8 +200,12 @@ def create_lesson(payload: LessonCreate, session: Session = Depends(get_session)
 def add_question(lesson_id: int, payload: QuestionIn,
                  session: Session = Depends(get_session),
                  teacher: User = Depends(require_teacher)) -> dict:
-    if not session.get(Lesson, lesson_id):
+    lesson = session.get(Lesson, lesson_id)
+    if not lesson:
         raise HTTPException(404, "Lesson not found")
+    course = _lesson_course(lesson, session)
+    if not course or not _can_manage_course(teacher, course, session):
+        raise HTTPException(403, "You may only add questions to a lesson in a course you manage")
     _validate_question(payload)
     q = Question(
         lesson_id=lesson_id, type=payload.type,

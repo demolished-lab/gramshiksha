@@ -79,6 +79,7 @@ describe('session', () => {
 
 describe('offline queue', () => {
   it('persists and clears progress recorded while offline', () => {
+    saveSession(login);
     expect(getQueue()).toEqual([]);
 
     enqueue({ kind: 'lesson_complete', lesson_id: 5, payload: { xp: 10 } });
@@ -94,12 +95,38 @@ describe('offline queue', () => {
 
 describe('downloads', () => {
   it('saves and removes offline copies by material id', () => {
+    saveSession(login);
     saveDownload({ material_id: 1, title: 'Notes', saved_at: '2026-01-01T00:00:00Z' });
     saveDownload({ material_id: 2, title: 'Slides', saved_at: '2026-01-02T00:00:00Z' });
     expect(getDownloads()).toHaveLength(2);
 
     removeDownload(1);
     expect(getDownloads().map((d) => d.material_id)).toEqual([2]);
+  });
+
+  it('isolates queued progress and saved materials between accounts on a shared device', () => {
+    const tokenFor = (sub: string) => `header.${btoa(JSON.stringify({ sub }))}.signature`;
+    saveSession({ ...login, access_token: tokenFor('asha@example.test') });
+    enqueue({ kind: 'lesson_complete', lesson_id: 5, payload: { minutes: 10 } });
+    saveDownload({ material_id: 8, title: 'Asha notes', saved_at: '2026-01-01T00:00:00Z' });
+
+    saveSession({ ...login, name: 'Ravi', access_token: tokenFor('ravi@example.test') });
+    expect(getQueue()).toEqual([]);
+    expect(getDownloads()).toEqual([]);
+
+    saveSession({ ...login, access_token: tokenFor('asha@example.test') });
+    expect(getQueue()).toHaveLength(1);
+    expect(getDownloads().map((d) => d.title)).toEqual(['Asha notes']);
+  });
+
+  it('discards legacy offline stores that have no account owner', () => {
+    saveSession(login);
+    localStorage.setItem('gs_sync_queue', JSON.stringify([{ kind: 'lesson_complete', lesson_id: 5 }]));
+    localStorage.setItem('gs_downloads', JSON.stringify([{ material_id: 9, title: 'Old private file' }]));
+    expect(getQueue()).toEqual([]);
+    expect(getDownloads()).toEqual([]);
+    expect(localStorage.getItem('gs_sync_queue')).toBeNull();
+    expect(localStorage.getItem('gs_downloads')).toBeNull();
   });
 });
 

@@ -137,6 +137,22 @@ def test_lesson_detail_hides_drafts_from_students(client):
     assert client.get(f"/lessons/{published_id}").status_code == 401
 
 
+def test_unpublished_lesson_questions_cannot_be_practiced_or_completed(client):
+    teacher = login(client, "teacher1@gramshiksha.in", "Teach@1234")
+    student, _ = signup(client, "draftpractice@x.in")
+    chapter_id, _, _, _ = grade8_context(client)
+    draft_id = make_lesson(client, teacher, chapter_id, title_en="Private practice draft", published=False)
+    question = add_question(client, teacher, draft_id, topic="private_draft_topic")
+    assert question.status_code == 201, question.text
+    question_id = question.json()["id"]
+
+    practice = client.get("/learn/practice/questions", params={"topic": "private_draft_topic"}, headers=student)
+    assert practice.status_code == 200 and question_id not in {row["id"] for row in practice.json()}
+    assert client.post("/learn/practice/answer", json={"question_id": question_id, "answer": "0"},
+                       headers=student).status_code == 404
+    assert client.post(f"/learn/lessons/{draft_id}/complete", headers=student).status_code == 404
+
+
 def test_lesson_questions_never_leak_answers(client):
     teacher = login(client, "teacher1@gramshiksha.in", "Teach@1234")
     student, _ = signup(client, "qreader@x.in")
@@ -202,6 +218,25 @@ def test_teacher_creates_a_lesson(client):
     # missing translation is a schema error, not a half-written row
     assert client.post("/lessons", json={"chapter_id": chapter_id, "title_en": "only english"},
                        headers=teacher).status_code == 422
+
+
+def test_teacher_course_ownership_guards_authoring_and_draft_reads(client):
+    owner = login(client, "teacher1@gramshiksha.in", "Teach@1234")
+    other_teacher = login(client, "teacher2@gramshiksha.in", "Teach@1234")
+    student, _ = signup(client, "ownership-reader@x.in")
+    chapter_id, _, _, _ = grade8_context(client)
+    draft_id = make_lesson(client, owner, chapter_id, published=False)
+
+    payload = {
+        "chapter_id": chapter_id, "type": "text",
+        "title_en": "Unauthorized cross-course lesson", "title_hi": "पाठ", "title_mr": "धडा",
+    }
+    assert client.post("/lessons", json=payload, headers=other_teacher).status_code == 403
+    assert client.get(f"/lessons/{draft_id}", headers=owner).status_code == 200
+    assert client.get(f"/lessons/{draft_id}", headers=other_teacher).status_code == 404
+    assert client.get(f"/lessons/{draft_id}", headers=student).status_code == 404
+    assert client.get(f"/lessons/{draft_id}/questions", headers=other_teacher).status_code == 404
+    assert add_question(client, other_teacher, draft_id).status_code == 403
 
 
 def test_question_validation_matches_the_grader(client):
@@ -368,7 +403,7 @@ def test_teacher_attempt_overview(client):
     assert set(body) == {"students", "total_attempts", "overall_avg_score"}
     assert body["students"], "seeded students must be listed"
     row = body["students"][0]
-    assert set(row) == {"id", "name", "email", "attempts", "avg_score"}
+    assert set(row) == {"id", "name", "attempts", "avg_score"}
     assert row["attempts"] >= 0
     if row["attempts"]:
         assert 0.0 <= row["avg_score"] <= 100.0

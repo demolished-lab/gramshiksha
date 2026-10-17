@@ -46,7 +46,7 @@ test('locks scroll and closes the drawer through the backdrop', async ({ page })
   await page.locator('.drawer-close').click();
   await expect(page.locator('body')).not.toHaveClass(/nav-drawer-open/);
   await page.getByRole('button', { name: 'Open navigation' }).click();
-  await page.mouse.click(380, 20);
+  await page.mouse.click((page.viewportSize()?.width ?? 390) - 10, 20);
   await expect(page.getByRole('complementary', { name: 'Workspace navigation' })).not.toHaveClass(/drawer-open/);
 });
 

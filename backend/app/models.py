@@ -3,6 +3,7 @@ materials with approval workflow, doubts, gamification, multi-role users."""
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -199,6 +200,17 @@ class PracticeAttempt(SQLModel, table=True):
     correct: bool = False
     topic: str = Field(default="general", index=True)
     subject_name: str = "general"
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class OfflineSyncEvent(SQLModel, table=True):
+    """Idempotency key for one student's queued offline action."""
+    __table_args__ = (UniqueConstraint("user_id", "event_id", name="uq_offlinesyncevent_user_event"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    event_id: str = Field(max_length=80)
+    kind: str = Field(max_length=40)
     created_at: datetime = Field(default_factory=utcnow)
 
 
@@ -448,3 +460,10 @@ class PasswordResetCode(SQLModel, table=True):
     expires_at: str  # ISO-8601 UTC
     used_at: Optional[str] = None
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class PasswordResetAttempt(SQLModel, table=True):
+    """Recent reset-confirm attempts, shared across workers and client IPs."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(index=True)
+    created_at: datetime = Field(default_factory=utcnow, index=True)

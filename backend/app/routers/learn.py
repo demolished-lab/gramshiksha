@@ -3,12 +3,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from ..db import get_session
 from ..gamification import log_study_time, on_course_complete, on_lesson_complete, on_practice, on_quiz
-from ..models import (Chapter, Course, Enrollment, Lesson, PracticeAttempt, Progress,
+from ..models import (Chapter, Course, Enrollment, Lesson, OfflineSyncEvent, PracticeAttempt, Progress,
                       Question, Quiz, QuizAttempt, QuizQuestion, TopicStats, User, utcnow)
+from ..ratelimit import rate_limit
 from ..security import get_current_user, optional_user, require_student
 
 router = APIRouter(prefix="/learn", tags=["learn"])
@@ -16,6 +18,20 @@ router = APIRouter(prefix="/learn", tags=["learn"])
 
 def _pick(lang: str, en: str, hi: str, mr: str) -> str:
     return {"en": en, "hi": hi, "mr": mr}.get(lang, en)
+
+
+def _question_is_available(question: Question, session: Session) -> bool:
+    if question.lesson_id is None:
+        return True
+    lesson = session.get(Lesson, question.lesson_id)
+    return bool(lesson and lesson.published)
+
+
+def _quiz_is_available(quiz: Quiz, session: Session) -> bool:
+    if quiz.lesson_id is None:
+        return True
+    lesson = session.get(Lesson, quiz.lesson_id)
+    return bool(lesson and lesson.published)
 
 
 # ---------- Lessons ----------
@@ -52,7 +68,7 @@ def complete_lesson(lesson_id: int, minutes: int = Query(10, le=120),
                     user: User = Depends(require_student),
                     session: Session = Depends(get_session)):
     lesson = session.get(Lesson, lesson_id)
-    if not lesson:
+    if not lesson or not lesson.published:
         raise HTTPException(404, "Lesson not found")
     prog = session.exec(select(Progress).where(
         Progress.user_id == user.id, Progress.lesson_id == lesson_id)).first()
@@ -80,7 +96,7 @@ def _update_course_progress(session: Session, user: User, lesson: Lesson) -> Non
         return
     all_lessons = session.exec(
         select(Lesson.id).join(Chapter, Chapter.id == Lesson.chapter_id).where(
-            Chapter.course_id == course.id)).all()
+            Chapter.course_id == course.id, Lesson.published.is_(True))).all()
     done = session.exec(
         select(Progress.lesson_id).where(Progress.user_id == user.id,
                                          Progress.completed == True)).all()  # noqa: E712
@@ -122,15 +138,17 @@ def get_quiz_by_chapter(chapter_id: int, lang: str = "en", session: Session = De
 def get_quiz(quiz_id: int, lang: str = "en", session: Session = Depends(get_session),
              user: User = Depends(get_current_user)):
     quiz = session.get(Quiz, quiz_id)
-    if not quiz:
+    if not quiz or not _quiz_is_available(quiz, session):
         raise HTTPException(404, "Quiz not found")
     rows = session.exec(select(QuizQuestion).where(
         QuizQuestion.quiz_id == quiz_id).order_by(QuizQuestion.order)).all()
     qs = []
     for rq in rows:
         q = session.get(Question, rq.question_id)
-        if q:
+        if q and _question_is_available(q, session):
             qs.append(_question_out(q, lang, hide_answer=True))
+    if not qs:
+        raise HTTPException(404, "Quiz has no published questions")
     return {"id": quiz.id, "title": _pick(lang, quiz.title_en, quiz.title_hi, quiz.title_mr),
             "time_limit_min": quiz.time_limit_min, "questions": qs}
 
@@ -140,11 +158,13 @@ def submit_quiz(quiz_id: int, payload: QuizSubmit, lang: str = "en",
                 user: User = Depends(require_student),
                 session: Session = Depends(get_session)):
     quiz = session.get(Quiz, quiz_id)
-    if not quiz:
+    if not quiz or not _quiz_is_available(quiz, session):
         raise HTTPException(404, "Quiz not found")
     rows = session.exec(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id)).all()
     questions = [session.get(Question, r.question_id) for r in rows]
-    questions = [q for q in questions if q]
+    questions = [q for q in questions if q and _question_is_available(q, session)]
+    if not questions:
+        raise HTTPException(404, "Quiz has no published questions")
 
     by_id = {a.get("question_id"): a.get("answer") for a in payload.answers}
     score = 0.0
@@ -184,7 +204,15 @@ def practice_questions(class_grade: Optional[int] = Query(None, ge=1, le=12),
                        user: Optional[User] = Depends(optional_user)):
     # Free content: anyone may read questions (answers stay hidden server-side
     # and grading still needs a signed-in student).
-    q = select(Question).where(Question.difficulty.isnot(None))
+    q = (select(Question).outerjoin(Lesson, Lesson.id == Question.lesson_id)
+         .where(Question.difficulty.isnot(None))
+         .where(Question.lesson_id.is_(None) | Lesson.published.is_(True)))
+    if class_grade is not None or board:
+        q = q.join(Chapter, Chapter.id == Lesson.chapter_id).join(Course, Course.id == Chapter.course_id)
+    if class_grade is not None:
+        q = q.where(Course.class_grade == class_grade)
+    if board:
+        q = q.where(Course.board == board)
     if subject_name:
         q = q.where(Question.subject_name == subject_name)
     if topic:
@@ -204,9 +232,10 @@ class PracticeSubmit(BaseModel):
 @router.post("/practice/answer")
 def practice_answer(payload: PracticeSubmit, lang: str = "en",
                     user: User = Depends(require_student),
-                    session: Session = Depends(get_session)):
+                    session: Session = Depends(get_session),
+                    _rl: None = Depends(rate_limit("learn.practice.answer", 60))):
     q = session.get(Question, payload.question_id)
-    if not q:
+    if not q or not _question_is_available(q, session):
         raise HTTPException(404, "Question not found")
     ok, correct_payload = _grade(q, payload.answer)
     session.add(PracticeAttempt(user_id=user.id, question_id=q.id,
@@ -253,7 +282,7 @@ def learning_path(lang: str = "en", user: User = Depends(require_student),
             Chapter.course_id == course.id).order_by(Chapter.order)).all()
         for ch in chapters:
             lessons = session.exec(select(Lesson).where(
-                Lesson.chapter_id == ch.id).order_by(Lesson.order)).all()
+                Lesson.chapter_id == ch.id, Lesson.published.is_(True)).order_by(Lesson.order)).all()
             for les in lessons:
                 prog = session.exec(select(Progress).where(
                     Progress.user_id == user.id, Progress.lesson_id == les.id)).first()
@@ -276,7 +305,9 @@ def learning_path(lang: str = "en", user: User = Depends(require_student),
         w = sorted(weak, key=lambda r: r.correct / r.attempted)[0]
         revision = {"kind": "revision", "subject": w.subject_name, "topic": w.topic,
                     "accuracy_pct": round(100 * w.correct / w.attempted, 1)}
-        q = select(Question).where(Question.topic == w.topic, Question.difficulty == "easy")
+        q = (select(Question).outerjoin(Lesson, Lesson.id == Question.lesson_id)
+             .where(Question.topic == w.topic, Question.difficulty == "easy")
+             .where(Question.lesson_id.is_(None) | Lesson.published.is_(True)))
         qrows = session.exec(q.limit(10)).all()
         recommended = {"kind": "practice", "topic": w.topic,
                        "count": len(qrows),
@@ -313,32 +344,68 @@ def today(lang: str = "en", user: User = Depends(require_student),
 # ---------- Offline sync ----------
 
 class SyncItem(BaseModel):
+    event_id: str = Field(min_length=1, max_length=80)
     kind: str  # lesson_complete | quiz_attempt | practice_answer
     lesson_id: Optional[int] = None
     quiz_id: Optional[int] = None
     question_id: Optional[int] = None
-    payload: dict = {}
+    payload: dict = Field(default_factory=dict)
 
 
 @router.post("/sync")
 def sync(items: list[SyncItem], user: User = Depends(require_student),
-         session: Session = Depends(get_session)):
+         session: Session = Depends(get_session),
+         _rl: None = Depends(rate_limit("learn.sync", 20))):
+    if len(items) > 50:
+        raise HTTPException(413, "Sync batches are limited to 50 items")
     results = []
     for item in items:
+        if item.kind not in ("lesson_complete", "practice_answer"):
+            results.append({"ok": False, "error": "unsupported"})
+            continue
+
+        existing = session.exec(select(OfflineSyncEvent).where(
+            OfflineSyncEvent.user_id == user.id,
+            OfflineSyncEvent.event_id == item.event_id)).first()
+        if existing:
+            results.append({"ok": True, "duplicate": True})
+            continue
+
+        session.add(OfflineSyncEvent(user_id=user.id, event_id=item.event_id, kind=item.kind))
         try:
+            # Flush the unique key before any learning action; completion and
+            # practice helpers commit the same session, making the event row
+            # atomic with XP/progress updates.
+            session.flush()
             if item.kind == "lesson_complete" and item.lesson_id:
-                complete_lesson(item.lesson_id, item.payload.get("minutes", 10), user, session)
+                minutes = min(15, max(0, int(item.payload.get("minutes", 10))))
+                complete_lesson(item.lesson_id, minutes, user, session)
                 results.append({"ok": True})
             elif item.kind == "practice_answer" and item.question_id:
+                minutes = min(15, max(0, int(item.payload.get("minutes", 0))))
                 practice_answer(PracticeSubmit(question_id=item.question_id,
                                                answer=item.payload.get("answer"),
-                                               minutes=item.payload.get("minutes", 0)),
+                                               minutes=minutes),
                                 "en", user, session)
                 results.append({"ok": True})
             else:
+                session.rollback()
                 results.append({"ok": False, "error": "unsupported"})
         except HTTPException as e:
+            session.rollback()
             results.append({"ok": False, "error": e.detail})
+        except (ValueError, TypeError):
+            session.rollback()
+            results.append({"ok": False, "error": "minutes must be an integer"})
+        except IntegrityError:
+            session.rollback()
+            duplicate = session.exec(select(OfflineSyncEvent).where(
+                OfflineSyncEvent.user_id == user.id,
+                OfflineSyncEvent.event_id == item.event_id)).first()
+            if duplicate:
+                results.append({"ok": True, "duplicate": True})
+            else:
+                raise
     return {"synced": results}
 
 

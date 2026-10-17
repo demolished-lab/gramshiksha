@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { apiAvailability, apiMaterials, apiMaterialUrl, apiPendingMaterials, apiReportMaterial, apiReviewMaterial, apiUploadMaterial } from '../api';
+import { apiAvailability, apiMaterials, apiPendingMaterials, apiReportMaterial, apiReviewMaterial, apiUploadMaterial } from '../api';
 import StreamPicker, { streamName } from '../components/StreamPicker';
-import { getToken, saveDownload } from '../auth';
+import { getToken } from '../auth';
+import { saveMaterialOffline } from '../offlineMaterials';
 import { t } from '../i18n';
 import type { AvailabilityStream, Lang, Material } from '../types';
 
@@ -18,6 +19,8 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
   const [showUpload, setShowUpload] = useState(false);
   const [pending, setPending] = useState<Material[]>([]);
   const [error, setError] = useState('');
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [downloadState, setDownloadState] = useState<{ id: number; message: string; failed: boolean } | null>(null);
   const isTeacher = user && ['teacher', 'school_admin', 'platform_admin'].includes(user.role);
 
   const load = () => {
@@ -95,17 +98,16 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
           <div className="muted">source: {m.source_of_content} · ⬇ {m.downloads} · {Math.round(m.file_size / 1024)} KB</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
             {getToken() ? (
-              <button className="btn small" onClick={async () => {
+              <button className="btn small" disabled={savingId === m.id} onClick={async () => {
+                setSavingId(m.id);
+                setDownloadState(null);
                 try {
-                  const res = await fetch(apiMaterialUrl(m.id), {
-                    headers: { Authorization: `Bearer ${getToken() ?? ''}` },
-                  });
-                  if (!res.ok) throw new Error(`Download failed (${res.status})`);
-                  const text = await res.text();
-                  saveDownload({ material_id: m.id, title: m.title, saved_at: new Date().toISOString(), text: text.slice(0, 50000) });
-                  alert('Saved to My Downloads ✓');
-                } catch { window.open(apiMaterialUrl(m.id), '_blank'); }
-              }}>⬇ {t('download', lang)}</button>
+                  await saveMaterialOffline(m.id, m.title);
+                  setDownloadState({ id: m.id, message: t('savedOffline', lang), failed: false });
+                } catch (e) {
+                  setDownloadState({ id: m.id, message: e instanceof Error ? e.message : String(e), failed: true });
+                } finally { setSavingId(null); }
+              }}>⬇ {savingId === m.id ? t('saving', lang) : t('download', lang)}</button>
             ) : (
               <a className="btn small" href="#/login/student">⬇ {t('download', lang)} · {t('login', lang)}</a>
             )}
@@ -114,6 +116,7 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
               if (reason && REPORT_REASONS.includes(reason)) apiReportMaterial(m.id, reason, '').then(() => alert('Reported ✓'));
             }}>🚩 Report</button>
           </div>
+          {downloadState?.id === m.id && <p className={downloadState.failed ? 'error' : 'success'} role="status">{downloadState.message}</p>}
         </div>
       ))}
     </div>

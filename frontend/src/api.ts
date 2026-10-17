@@ -225,6 +225,10 @@ export const apiProgressWeekly = () => req<{ date: string; minutes: number }[]>(
 export const apiTeacherStudents = () => req<TeacherStudent[]>('/teacher/students');
 export const apiTeacherOverview = () => req<{ my_courses: { id: number; title_en: string; students: number }[]; pending_material_reviews: number; pending_doubts: number; total_students: number }>('/teacher/overview');
 export const apiParentChildren = () => req<ParentChild[]>('/parent/children');
+export const apiCreateParentInvite = (parentEmail: string) =>
+  post<{ invite: string; expires_in_seconds: number }>('/parent/invite', { parent_email: parentEmail });
+export const apiAcceptParentInvite = (invite: string) =>
+  post<{ ok: boolean; child: string }>('/parent/link', { invite });
 export const apiSchoolStats = () => req<{ students: number; teachers: number; lessons_completed_total: number }>('/school/stats');
 
 // ---------- admin (approval workflow) ----------
@@ -239,6 +243,12 @@ export const apiApproveUser = (id: number) =>
   post<{ ok: boolean; id: number; role_status: RoleStatus }>(`/admin/users/${id}/approve`);
 export const apiSuspendUser = (id: number) =>
   post<{ ok: boolean; id: number; role_status: RoleStatus }>(`/admin/users/${id}/suspend`);
+export interface AssignableCourse { id: number; title_en: string; class_grade: number; board: string; teacher_id: number | null }
+export const apiAssignableCourses = () => req<AssignableCourse[]>('/admin/courses/assignable');
+export const apiAssignCourseTeacher = (courseId: number, teacherId: number) =>
+  post<{ ok: boolean; course_id: number; teacher_id: number }>(`/admin/courses/${courseId}/assign-teacher`, { teacher_id: teacherId });
+export const apiSchoolAnnounce = (title: string, body = '') =>
+  req<{ ok: boolean; notified: number }>(`/school/announce?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`, { method: 'POST' });
 export const apiSearch = (q: string) => req<Record<string, { id: number; title_en?: string; title?: string; prompt_en?: string }[]>>(`/search?q=${encodeURIComponent(q)}`);
 
 // ---------- growth (referrals, money config) ----------

@@ -92,12 +92,18 @@ integration — pushes to `main` deploy Render only, and that is intentional
    `VERCEL_PROJECT_ID`) — never in the repo.
 2. `VITE_API_URL` stays empty: `frontend/vercel.json` rewrites `/api/*` to
    `https://gramshiksha-backend.onrender.com/api/*`.
-3. Ship a frontend change:
+3. Ship a frontend change from the repository root:
 
    ```sh
-   cd frontend
-   npx vercel deploy --prod --yes --token "$VERCEL_TOKEN"   # with VERCEL_ORG_ID/PROJECT_ID set
+   scripts/deploy.sh --frontend
    ```
+
+   The script runs backend and frontend release checks (including mobile E2E at
+   both the iPhone 13 and compact iPhone SE viewport sizes), requires a clean
+   `main` revision already synced with `origin/main`, and asks for confirmation
+   before the Vercel production deploy. Export `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
+   and `VERCEL_PROJECT_ID` in the environment first; the token is never logged.
+   Run `scripts/deploy.sh --check` for the same checks without deploying.
 
 4. Production URL: `https://gramshiksha-academy.vercel.app` (the apex
    `gramshiksha.vercel.app` belongs to another team, so the project carries
@@ -138,6 +144,8 @@ integration — pushes to `main` deploy Render only, and that is intentional
   secret (sealed-box encrypted by `scripts/register_render_hook_secret.py`,
   source of truth `~/.gramshiksha/secrets.env`); only HTTP status codes
   reach logs. Migrations run at boot, so schema changes ship with the push.
+  For a local release, `scripts/deploy.sh --push` runs the release checks,
+  confirms the clean `main` push, and leaves the Render deployment gated on CI.
   CI must be green first (SQLite + Postgres + frontend jobs). **Vercel does
   not auto-deploy** — no Git integration by design (see step 4); ship
   frontend changes with the CLI command above. Manual fallback remains:
