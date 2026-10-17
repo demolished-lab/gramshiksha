@@ -76,6 +76,13 @@ export default function App() {
     document.body.classList.toggle('data-saver', saver);
   }, [saver]);
 
+  // Keep the document language in sync with the UI language: screen readers
+  // and translation engines read <html lang>, which stayed "en" even when the
+  // whole interface was switched to हिंदी or मराठी.
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   useEffect(() => {
     if (!mobileNavOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {

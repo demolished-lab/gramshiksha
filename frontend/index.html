@@ -10,16 +10,22 @@
     <link rel="canonical" href="https://gramshiksha-academy.vercel.app/" />
     <meta name="robots" content="index, follow" />
     <!-- Open Graph / Twitter cards: plain static tags so every share preview
-         works with zero JS. Hash routes (#/courses) share the same preview. -->
+         works with zero JS. Hash routes (#/courses) share the same preview.
+         og:image must be a raster image — most scrapers (WhatsApp, Facebook,
+         X) ignore SVG, which silently produced a text-less preview. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="GramShiksha" />
     <meta property="og:title" content="GramShiksha — free Class 1-12 learning in English, हिंदी, मराठी" />
     <meta property="og:description" content="Free lessons, quizzes, study material and official textbooks for Class 1-12 (SSC, HSC, CBSE). Low-data mode, works offline." />
     <meta property="og:url" content="https://gramshiksha-academy.vercel.app/" />
-    <meta property="og:image" content="https://gramshiksha-academy.vercel.app/favicon.svg" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content="https://gramshiksha-academy.vercel.app/images/gramshiksha-hero-classroom.jpg" />
+    <meta property="og:image:width" content="1600" />
+    <meta property="og:image:height" content="900" />
+    <meta property="og:image:alt" content="Students learning together in a bright classroom" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="GramShiksha — free Class 1-12 learning" />
     <meta name="twitter:description" content="Free trilingual lessons, quizzes and textbooks. Works offline on slow networks." />
+    <meta name="twitter:image" content="https://gramshiksha-academy.vercel.app/images/gramshiksha-hero-classroom.jpg" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",

@@ -62,16 +62,16 @@ cd frontend && npm install && npm run dev   # http://localhost:5174 (proxies /ap
 ## Tests
 
 ```bash
-# Backend — 100 tests: API behaviour, password reset, authorization limits,
-# every registered endpoint, migrations and the production boot gates.
+# Backend — API behaviour, password reset, authorization limits, every
+# registered endpoint, migrations and the production boot gates.
 # test_route_coverage_canary.py fails the build if a route is ever
 # registered without a test calling it, or if the bare and /api mounts
 # of a router drift apart.
 .venv/Scripts/python -m pytest -q
 
-# Frontend — 38 unit tests (request framing, session/offline storage,
-# approval workflow API actions, growth helpers, explore availability
-# filters and cross-page prefs)
+# Frontend — unit tests (request framing, session/offline storage, approval
+# workflow API actions, growth helpers, explore availability filters and
+# cross-page prefs)
 cd frontend && npm test
 npm run build                       # typecheck + production build
 
@@ -158,7 +158,7 @@ time out from most foreign networks (verified Sep 2026).
 cheapest first: this class's catalog (milliseconds) → a live scan of the
 official portal for that class (reported as `eta_seconds` *and* the real
 `elapsed_s`) → a request queue. A miss is a queue position, not an error:
-keep-warm's Job 3 POSTs `/api/library/scan-requests` every 10 minutes, so a
+the `warm-ping` workflow POSTs `/api/library/scan-requests` every 5 minutes, so a
 queued book that turns up in the catalog fills itself and notifies the
 requester (`book_available`). Everything renders inside the page — no visible
 redirect, only the final result.

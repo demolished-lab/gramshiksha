@@ -249,3 +249,19 @@ def test_recheck_updates_flags(client):
 def test_recheck_requires_platform_admin(client):
     s = login(client, "student1@gramshiksha.in", "Learn@1234")
     assert client.post("/admin/textbooks/recheck", headers=s).status_code == 403
+
+
+def test_oversized_request_body_is_rejected_before_it_is_read(client, monkeypatch):
+    """A declared body over the cap must 413 up front — not after Starlette has
+    already buffered megabytes onto a free-tier instance."""
+    import app.main as main
+    monkeypatch.setattr(main, "MAX_REQUEST_BODY_BYTES", 32)
+    r = client.post("/auth/token",
+                    data={"username": "x" * 100, "password": "y" * 100})
+    assert r.status_code == 413
+    assert r.json()["detail"] == "Request body too large"
+    # The guard is innermost, so the response still passes back out through the
+    # security-headers and request-id middleware.
+    assert r.headers.get("X-Content-Type-Options") == "nosniff"
+    assert r.headers.get("X-Request-ID")
+

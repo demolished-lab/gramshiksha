@@ -67,6 +67,33 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return resp
 
 
+# Material uploads cap at 10 MB (storage.save_upload) — 12 MB leaves room for
+# the multipart envelope without letting a single request fill a free-tier box.
+MAX_REQUEST_BODY_BYTES = 12 * 1024 * 1024
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject an oversized body before it is buffered.
+
+    `save_upload` only checks the size *after* Starlette has received the whole
+    body (SpooledTemporaryFile), so without this a single large POST could
+    still exhaust a free-tier instance's memory and disk. A declared
+    Content-Length over the cap is refused with 413 up front; chunked uploads
+    carry no header and still fall through to the per-file cap.
+    """
+
+    async def dispatch(self, request, call_next):
+        declared = request.headers.get("content-length")
+        if declared and declared.isdigit() and int(declared) > MAX_REQUEST_BODY_BYTES:
+            rid = getattr(request.state, "request_id", "-")
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Request body too large", "request_id": rid},
+                headers={"X-Request-ID": rid},
+            )
+        return await call_next(request)
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     """Stamps every request with an id, echoes it as `X-Request-ID`, times it
     and writes one log line — so "student says it errored" turns into an exact
@@ -184,6 +211,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
+app.add_middleware(BodySizeLimitMiddleware)  # innermost: 413s still get our headers/id
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
