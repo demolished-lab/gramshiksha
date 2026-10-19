@@ -204,3 +204,35 @@ def test_probe_does_not_retry_a_timeout(monkeypatch):
     monkeypatch.setattr(httpx, "head", fake_head)
     assert catalog.chapter_exists("jesc1", 1) is None
     assert len(calls) == 1
+
+
+class _FakeStream:
+    def __init__(self, status, ctype):
+        self.status_code = status
+        self.headers = {"content-type": ctype}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_probe_falls_back_to_a_header_only_get(monkeypatch):
+    """NCERT refuses HEAD (405) while GET serves the file: read GET headers
+    and hang up, so a refused HEAD can never report a live chapter as down."""
+    heads, streams = [], []
+
+    def fake_head(url, **kwargs):
+        heads.append(url)
+        return types.SimpleNamespace(status_code=405, headers={})
+
+    def fake_stream(method, url, **kwargs):
+        streams.append((method, kwargs.get("headers", {}).get("Range")))
+        return _FakeStream(206, "application/pdf")
+
+    monkeypatch.setattr(httpx, "head", fake_head)
+    monkeypatch.setattr(httpx, "stream", fake_stream)
+    assert catalog.chapter_exists("jesc1", 1) is True
+    assert len(heads) == 2                     # HEAD + one retry
+    assert streams == [("GET", "bytes=0-0")]

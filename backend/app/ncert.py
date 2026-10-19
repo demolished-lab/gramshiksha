@@ -169,7 +169,7 @@ CHAPTER_MISSING = "missing"
 CHAPTER_UNAVAILABLE = "unavailable"
 
 
-def _probe(url: str):
+def _head(url: str):
     """One HEAD against the portal; None when it could not be reached."""
     import httpx
 
@@ -180,22 +180,43 @@ def _probe(url: str):
         return None
 
 
-def _probe_chapter(url: str):
-    """HEAD with one retry when the portal answered with a transient status.
+def _probe_chapter(url: str) -> tuple[int, str] | None:
+    """Ask the portal whether it will serve `url`: `(status, content-type)`.
 
-    NCERT intermittently answers 403/429/5xx to a HEAD it serves fine on the
-    next request (observed ~1 in 8 probes). Retrying only a *received* non-200
-    — never a timeout — keeps this bounded: one extra cheap request, never a
-    doubled wait.
+    HEAD first because it is the cheapest question. NCERT intermittently
+    refuses HEAD (403/405, observed on ~1 in 4 probes from a datacenter IP)
+    while serving the very same URL to GET, so: retry a *received* non-200
+    once, then ask with a 1-byte ranged GET and hang up after the headers.
+    That last step costs no bandwidth and uses the method the portal accepts.
+    A request that never got an answer (timeout/reset) returns None — retrying
+    it would only double an already spent timeout.
     """
-    head = _probe(url)
-    if head is not None and head.status_code not in (200, 404, 410):
-        head = _probe(url)
-    return head
+    p = _head(url)
+    if p is None:
+        return None
+    status, ctype = p.status_code, p.headers.get("content-type", "").lower()
+    if status not in (200, 404, 410):
+        again = _head(url)
+        if again is None:
+            return None
+        status, ctype = again.status_code, again.headers.get("content-type", "").lower()
+    if status in (200, 404, 410):
+        return (status, ctype)
+
+    import httpx
+
+    try:
+        with httpx.stream("GET", url, timeout=NCERT_TIMEOUT_S,
+                          follow_redirects=True,
+                          headers={"User-Agent": NCERT_UA,
+                                   "Range": "bytes=0-0"}) as r:
+            return (r.status_code, r.headers.get("content-type", "").lower())
+    except Exception:
+        return None
 
 
 def chapter_exists(code: str, chapter: int) -> bool | None:
-    """Light existence probe: HEAD only, no bytes.
+    """Light existence probe: no body downloaded.
 
     Returns True/False when the portal answered, or None when the answer
     itself could not be obtained (timeout, connection reset, 5xx). The pager
@@ -203,24 +224,29 @@ def chapter_exists(code: str, chapter: int) -> bool | None:
     """
     if chapter < 1 or chapter > 99:
         return False
-    head = _probe_chapter(chapter_url(code, chapter))
-    if head is None:
+    p = _probe_chapter(chapter_url(code, chapter))
+    if p is None:
         return None
-    if head.status_code in (404, 410):
+    status, ctype = p
+    if status in (404, 410):
         return False
-    if head.status_code != 200:
+    if status not in (200, 206):
         return None
-    ctype = head.headers.get("content-type", "").lower()
     return "pdf" in ctype or "octet-stream" in ctype
 
 
 def fetch_ncert_chapter(code: str, chapter: int) -> tuple[bytes | None, str]:
-    """HEAD-verify then download one NCERT chapter.
+    """Download one NCERT chapter and say what happened.
 
     Returns `(data, CHAPTER_OK)` or `(None, reason)`. A wrong content-type or
     an HTML-200 soft-404 means the chapter is missing; a timeout, a reset or
     a 5xx means the portal is unavailable and the caller should answer 503 so
     the reader can offer a retry instead of pretending the book ended.
+
+    One GET, no HEAD gate: the reader has already probed existence (that is
+    what the pager and the reader's own check call), and NCERT's HEAD is the
+    less reliable of the two methods. The body is still bounded, and the
+    content-type is checked before a single byte is read.
 
     Same honesty contract as the eBalbharati proxy: neither junk nor a silent
     "no such chapter" for what is merely a bad minute upstream.
@@ -230,16 +256,6 @@ def fetch_ncert_chapter(code: str, chapter: int) -> tuple[bytes | None, str]:
     if chapter < 1 or chapter > 99:
         return (None, CHAPTER_MISSING)
     url = chapter_url(code, chapter)
-    head = _probe_chapter(url)
-    if head is None:
-        return (None, CHAPTER_UNAVAILABLE)
-    if head.status_code in (404, 410):
-        return (None, CHAPTER_MISSING)
-    if head.status_code != 200:
-        return (None, CHAPTER_UNAVAILABLE)
-    ctype = head.headers.get("content-type", "").lower()
-    if "pdf" not in ctype and "octet-stream" not in ctype:
-        return (None, CHAPTER_MISSING)
     try:
         with httpx.stream("GET", url, timeout=NCERT_TIMEOUT_S, follow_redirects=True,
                           headers={"User-Agent": NCERT_UA}) as r:
@@ -247,6 +263,9 @@ def fetch_ncert_chapter(code: str, chapter: int) -> tuple[bytes | None, str]:
                 return (None, CHAPTER_MISSING)
             if r.status_code != 200:
                 return (None, CHAPTER_UNAVAILABLE)
+            ctype = r.headers.get("content-type", "").lower()
+            if "pdf" not in ctype and "octet-stream" not in ctype:
+                return (None, CHAPTER_MISSING)
             chunks: list[bytes] = []
             total = 0
             for chunk in r.iter_bytes():
