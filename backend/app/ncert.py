@@ -169,6 +169,31 @@ CHAPTER_MISSING = "missing"
 CHAPTER_UNAVAILABLE = "unavailable"
 
 
+def _probe(url: str):
+    """One HEAD against the portal; None when it could not be reached."""
+    import httpx
+
+    try:
+        return httpx.head(url, timeout=NCERT_TIMEOUT_S, follow_redirects=True,
+                          headers={"User-Agent": NCERT_UA})
+    except Exception:
+        return None
+
+
+def _probe_chapter(url: str):
+    """HEAD with one retry when the portal answered with a transient status.
+
+    NCERT intermittently answers 403/429/5xx to a HEAD it serves fine on the
+    next request (observed ~1 in 8 probes). Retrying only a *received* non-200
+    — never a timeout — keeps this bounded: one extra cheap request, never a
+    doubled wait.
+    """
+    head = _probe(url)
+    if head is not None and head.status_code not in (200, 404, 410):
+        head = _probe(url)
+    return head
+
+
 def chapter_exists(code: str, chapter: int) -> bool | None:
     """Light existence probe: HEAD only, no bytes.
 
@@ -176,15 +201,10 @@ def chapter_exists(code: str, chapter: int) -> bool | None:
     itself could not be obtained (timeout, connection reset, 5xx). The pager
     must not clamp a book just because NCERT was briefly unreachable.
     """
-    import httpx
-
     if chapter < 1 or chapter > 99:
         return False
-    try:
-        head = httpx.head(chapter_url(code, chapter), timeout=NCERT_TIMEOUT_S,
-                          follow_redirects=True,
-                          headers={"User-Agent": NCERT_UA})
-    except Exception:
+    head = _probe_chapter(chapter_url(code, chapter))
+    if head is None:
         return None
     if head.status_code in (404, 410):
         return False
@@ -210,10 +230,8 @@ def fetch_ncert_chapter(code: str, chapter: int) -> tuple[bytes | None, str]:
     if chapter < 1 or chapter > 99:
         return (None, CHAPTER_MISSING)
     url = chapter_url(code, chapter)
-    try:
-        head = httpx.head(url, timeout=NCERT_TIMEOUT_S, follow_redirects=True,
-                          headers={"User-Agent": NCERT_UA})
-    except Exception:
+    head = _probe_chapter(url)
+    if head is None:
         return (None, CHAPTER_UNAVAILABLE)
     if head.status_code in (404, 410):
         return (None, CHAPTER_MISSING)

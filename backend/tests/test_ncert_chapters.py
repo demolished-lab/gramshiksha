@@ -13,6 +13,9 @@ Contract under test:
 Every path is a bare string literal because the route-coverage canary
 parses test source with `ast`.
 """
+import types
+
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -160,3 +163,44 @@ def test_chapter_refuses_unmapped_boards(client, monkeypatch):
     r = client.get(f"/textbooks/{tid}/open", params={"chapter": 1},
                    follow_redirects=False)
     assert r.status_code == 404
+
+
+def test_probe_retries_once_on_a_transient_status(monkeypatch):
+    """NCERT intermittently answers 503/429 to a HEAD it serves on the next
+    request; one retry keeps a working chapter from reading as unavailable."""
+    calls = []
+
+    def fake_head(url, **kwargs):
+        calls.append(url)
+        code = 503 if len(calls) == 1 else 200
+        return types.SimpleNamespace(
+            status_code=code, headers={"content-type": "application/pdf"})
+
+    monkeypatch.setattr(httpx, "head", fake_head)
+    assert catalog.chapter_exists("jesc1", 1) is True
+    assert len(calls) == 2
+
+
+def test_probe_does_not_retry_a_definitive_miss(monkeypatch):
+    calls = []
+
+    def fake_head(url, **kwargs):
+        calls.append(url)
+        return types.SimpleNamespace(status_code=404, headers={})
+
+    monkeypatch.setattr(httpx, "head", fake_head)
+    assert catalog.chapter_exists("jesc1", 99) is False
+    assert len(calls) == 1
+
+
+def test_probe_does_not_retry_a_timeout(monkeypatch):
+    """A timeout already cost the full budget - retrying would double it."""
+    calls = []
+
+    def fake_head(url, **kwargs):
+        calls.append(url)
+        raise httpx.ConnectTimeout("slow")
+
+    monkeypatch.setattr(httpx, "head", fake_head)
+    assert catalog.chapter_exists("jesc1", 1) is None
+    assert len(calls) == 1
