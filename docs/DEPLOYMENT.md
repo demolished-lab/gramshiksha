@@ -167,51 +167,47 @@ integration — pushes to `main` deploy Render only, and that is intentional
   returns `{"detail": "Internal server error", "request_id": "…"}`.
 - **Free-tier realities**: Render's free instance sleeps on inactivity (a cold
   start costs the first visitor 50+ s) and the disk is ephemeral — both are
-  accounted for. `.github/workflows/keep-warm.yml` pings `/ready`,
-  `/api/growth/config` and `/api/feed.xml` every 10 minutes (under Render's
-  ~15 min idle cutoff), so the container never sleeps and no visitor eats a
-  cold start. It costs $0 — the repo is public, so Actions minutes are
-  unlimited — and it keeps the whole path hot (proxy → app → Postgres), not
-  just the socket. `workflow_dispatch` is on it for a manual kick; the
-  Actions tab's `keep-warm` badge is the health signal (if it ever goes red
-  the backend is truly unreachable, since the job fails on connection error).
+  accounted for.
+  **Measured 2026-10 (corrects the earlier "schedule never fired" note):**
+  GitHub *does* run this repo's scheduled workflows, but it throttles
+  high-frequency crons on a quiet repository — both the `*/5` and `*/10`
+  schedules fired about every **219 minutes (~6 runs/day)**, not every 5–10.
+  That is far too sparse to beat Render's ~15 min idle cutoff, so
+  `.github/workflows/warm-ping.yml` is **not a keep-warm**: it is a
+  low-frequency liveness probe (the green badge proves `/ready` answers) that
+  also ticks the library scan queue and the fork watch. A visitor arriving
+  after an idle period still pays the cold start.
+  To actually keep the instance awake, point an external free pinger
+  (UptimeRobot, cron-job.org) at
+  `https://gramshiksha-backend.onrender.com/ready` every 10 minutes. That
+  needs the owner's account — it is the one remaining setup step for
+  zero-cold-start, and nothing in the repo can substitute for it.
   Caveats: GitHub runs schedules only from `main` and pauses them after ~60
   days without repo activity, so keep committing (the loop already does).
-  **Known bug (2026-10-02):** this repo's `schedule` event has never fired
-  since creation — `workflow_dispatch` and CI run fine, but
-  `runs?event=schedule` stays `total_count: 0` across missed ticks, two cron
-  expressions and workflow-file touches, while other repositories' schedules
-  fire on the same minutes (community discussion 202602: the scheduler's
-  cron binding gets stuck on brand-new repos and no YAML change re-registers
-  it). `.github/workflows/warm-ping.yml` is the one remaining self-serve
-  fix — a brand-new workflow path with its own `*/5` schedule. If it stays
-  silent too, file a GitHub Support ticket with the evidence pack (repo,
-  default branch, missed UTC ticks, empty `event=schedule` filter): support
-  re-syncs the scheduler server-side.
+  `workflow_dispatch` is on both workflows for a manual kick.
   **Retired 2026-10-03 (owner request: no cron on the local machine):**
   `%USERPROFILE%\.gramshiksha\keep-warm.ps1` ran from Windows Task Scheduler
-  ("GramShiksha Keep Warm", every 10 min) until warm-ping.yml's schedule was
-  proven firing (3/3 ticks). The Task Scheduler task is now **Disabled** (not
+  ("GramShiksha Keep Warm", every 10 min). The task is **Disabled** (not
   deleted — re-enable with `Enable-ScheduledTask -TaskName "GramShiksha Keep
-  Warm"` if the cloud schedule ever goes silent). Its three jobs moved
-  server-side: `.github/workflows/warm-ping.yml` pings `/ready` every 5 min,
-  POSTs `/api/library/scan-requests` on the same tick, and runs
-  `scripts/watch_forks.py` on Mondays 06:00 UTC. Loop audits no longer check
-  `keep-warm.log` or the task state; they check the Actions tab instead
-  (warm-ping green + a fresh fork-watch issue only when a new fork exists).
+  Warm"` if a local cron is ever wanted again). Its three jobs moved
+  server-side into `.github/workflows/warm-ping.yml`: ping `/ready`, POST
+  `/api/library/scan-requests`, and run `scripts/watch_forks.py` on each
+  scheduled tick. Loop audits no longer check `keep-warm.log` or the task
+  state; they check the Actions tab instead (warm-ping green + a fresh
+  fork-watch issue only when a new fork exists).
   **Historical note:** Task Scheduler's default "do not start on batteries"
   silently skipped **14 runs** on 2026-10-03 (02:37 → 04:57,
   `NumberOfMissedRuns = 14`) — part of why the cloud move happened.
-  The same task also drives `forks.yml`: that workflow was schedule-only
-  (Mondays 06:00 UTC) and would otherwise never run, so the script dispatches
-  it itself at most once per 24 h via the stored git credential (marker file
-  `forks-last-dispatch.txt`, advances only on HTTP 204; failures retry every
-  10 min and appear in `keep-warm.log`). Daily cadence beats the original
-  weekly one, so the commercial-rights fork watch is at least as tight as
-  designed. The same script's Job 3 POSTs `/api/library/scan-requests` on
-  the same 10-minute cadence: it re-scans Smart Book Finder's pending asks
-  (library first, official government portal second) and notifies the
-  requester when the book lands, so "not cataloged yet" resolves itself with
-  no manual step. The endpoint holds its own 120 s module cooldown, so
-  back-to-back runs can never become a crawl cannon — a 200 that answered
-  `{"skipped":true}` inside the cooldown is healthy too.
+  **Fork watch**: `warm-ping.yml` runs `scripts/watch_forks.py` on *every*
+  scheduled tick. It used to be gated to a 06:00–06:05 UTC Monday window,
+  which GitHub's throttling made effectively unreachable; the script is
+  idempotent (one issue per unreported fork, nothing on a repeat), so
+  running it on each tick is both safe and strictly more reliable.
+  `forks.yml` keeps its Monday cron for manual dispatch only.
+  **Scan queue**: the same tick POSTs `/api/library/scan-requests`, which
+  re-scans Smart Book Finder's pending asks (library first, official
+  government portal second) and notifies the requester when the book lands,
+  so "not cataloged yet" resolves itself with no manual step. The endpoint
+  holds its own 120 s module cooldown, so back-to-back runs can never become
+  a crawl cannon — a 200 that answered `{"skipped":true}` inside the
+  cooldown is healthy too.

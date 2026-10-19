@@ -1,20 +1,16 @@
-# Keep-warm ping + schedule probe, deliberately minimal.
+# Liveness ping + fork watch, deliberately minimal.
 #
-# Why this file exists: since repo creation (2026-09-27) keep-warm.yml's
-# schedule NEVER fired — workflow_dispatch and CI runs work, only the
-# 'schedule' event is dead (API: runs?event=schedule -> total_count 0 across
-# 10+ missed ticks, two cron expressions, and file touches), while other
-# repositories' schedules fire normally at the same minutes. This matches the
-# known bug "scheduler fails to register cron jobs for brand-new
-# repositories" (github.com/orgs/community/discussions/202602): the repo's
-# cron daemon binding is stuck server-side and no YAML change un-sticks it
-# for an existing path. A BRAND-NEW workflow path forces a fresh registration
-# attempt, which is the one self-serve fix not yet tried here.
+# Measured behaviour (corrects the earlier "schedule never fired" note):
+# GitHub *does* run this workflow, but it throttles a `*/5` cron on a quiet
+# repository to only a few runs a day (observed ~219 min apart, ~6/day). That
+# is far too sparse to keep Render awake (it idles at ~15 min), so **this is
+# not a keep-warm**: it is a low-frequency liveness probe whose green badge
+# proves the backend answers.
 #
-# If this schedule fires: this file becomes the permanent keep-warm (5 min,
-# safely under Render's ~15 min idle cutoff) and keep-warm.yml keeps only
-# its manual dispatch. If it never fires either: repo-level scheduler bug is
-# confirmed -> GitHub Support ticket (evidence in docs/DEPLOYMENT.md).
+# Real keep-warm needs a scheduler that is not subject to GitHub's cron
+# throttling — an external pinger (UptimeRobot / cron-job.org) hitting
+# /ready every 10 min. Until one is configured, the first visitor after an
+# idle period pays a Render cold start.
 #
 # Public repo => Actions minutes unlimited => $0 forever.
 name: warm-ping
@@ -52,12 +48,16 @@ jobs:
             "https://gramshiksha-backend.onrender.com/api/library/scan-requests" || echo '{}')
           echo "scan-requests -> $body"
 
-  # Weekly fork watch, embedded here because this file's schedule is the one
-  # proven to fire (3/3 ticks). forks.yml keeps its dead Monday cron for
-  # manual dispatch only. Gate: Monday 06:00-06:05 UTC ticks the script once;
-  # the script itself is idempotent (one open issue per new fork), so even a
-  # double tick files nothing twice.
+  # Weekly fork watch, embedded here because this file's schedule does run
+  # (throttled, but it runs). forks.yml keeps its Monday cron for manual
+  # dispatch only. Gate: the first Monday tick after 06:00 UTC ticks the
+  # script once; the script itself is idempotent (one open issue per new
+  # fork), so a late or repeated tick files nothing twice.
   fork-watch:
+    # Runs on every scheduled tick, not in a narrow Monday window: GitHub
+    # throttles this cron to a few unpredictable runs a day, so a
+    # 06:00-06:05 gate would almost never match. The script is idempotent —
+    # one issue per unreported fork, nothing on a repeat run.
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -65,23 +65,11 @@ jobs:
       contents: read
       issues: write
     steps:
-      - name: Gate to Monday 06:00 UTC
-        id: gate
-        run: |
-          slot=$(date -u +%u%H%M)
-          if [ "$slot" -ge 10600 ] && [ "$slot" -lt 10605 ]; then
-            echo "run=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=no (slot $slot)" >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.run == 'yes'
       - uses: actions/setup-python@v5
-        if: steps.gate.outputs.run == 'yes'
         with:
           python-version: "3.12"
       - name: File an issue per new public fork
-        if: steps.gate.outputs.run == 'yes'
         run: python scripts/watch_forks.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

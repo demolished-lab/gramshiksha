@@ -1,7 +1,11 @@
-# Always-warm backend: Render's free instance spins down after ~15 minutes of
-# inactivity and cold starts cost visitors 50+ seconds. This workflow pings the
-# live API every 10 minutes — any HTTP traffic resets Render's idle timer, so
-# the container never sleeps and no visitor ever eats a cold start.
+# Liveness ping for the Render backend. Render's free instance spins down
+# after ~15 min of inactivity and a cold start costs visitors 50+ seconds.
+#
+# Measured 2026-10: GitHub throttles this `*/10` cron on a quiet repo to about
+# every 219 minutes (~6 runs/day), so it does NOT keep the instance awake.
+# It is a liveness signal (a green run proves the API answers), not a
+# keep-warm. Real keep-warm needs an external pinger (UptimeRobot /
+# cron-job.org) hitting /ready every 10 min — see docs/DEPLOYMENT.md.
 #
 # Repo is public => Actions minutes are unlimited and this costs $0 forever.
 # Schedule only runs on the default branch (main); GitHub pauses schedules
@@ -11,7 +15,7 @@ name: keep-warm
 
 on:
   schedule:
-    # Every 10 min (:00, :10, :20…) — under Render's ~15 min idle cutoff.
+    # Nominally every 10 min; throttled in practice (see above).
     # Simple */N form on purpose: GitHub re-indexes this cron whenever the
     # file changes, which also re-registers a schedule that went quiet.
     - cron: '*/10 * * * *'

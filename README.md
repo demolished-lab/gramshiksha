@@ -25,7 +25,7 @@ slow internet, shared phones and limited data.
 | **Reading list** | Monthly Reading List — a teacher posts one pick a month, **every** student sees it (book club): "Read now" in the reader, or "Find this book" into the finder |
 | **Doubts** | Ask → teacher replies → resolve, with notifications |
 | **Dashboards** | Student, Teacher (monitor + doubts), Parent (weekly child summary), School, Admin |
-| **Rural-first** | Data Saver mode, offline service worker, My Downloads, offline sync queue, <65 KB gzip JS |
+| **Rural-first** | Data Saver mode, offline service worker, My Downloads, offline sync queue, ~69 KB gzip entry JS |
 
 ## Docs
 
