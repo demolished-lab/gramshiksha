@@ -161,10 +161,21 @@ def chapter_url(code: str, chapter: int) -> str:
     return f"{NCERT_BASE}/{code}{chapter:02d}.pdf"
 
 
-def chapter_exists(code: str, chapter: int) -> bool:
-    """Light existence probe: HEAD only, no bytes. What the pager's HEAD
-    route calls before paging — a full download just to learn "yes" would
-    burn the free tier for nothing."""
+# What a chapter lookup actually learned. "The portal says it is not there"
+# and "we could not ask the portal" are different answers: a missing chapter
+# is permanent (the pager clamps), an unavailable one deserves a retry (503).
+CHAPTER_OK = "ok"
+CHAPTER_MISSING = "missing"
+CHAPTER_UNAVAILABLE = "unavailable"
+
+
+def chapter_exists(code: str, chapter: int) -> bool | None:
+    """Light existence probe: HEAD only, no bytes.
+
+    Returns True/False when the portal answered, or None when the answer
+    itself could not be obtained (timeout, connection reset, 5xx). The pager
+    must not clamp a book just because NCERT was briefly unreachable.
+    """
     import httpx
 
     if chapter < 1 or chapter > 99:
@@ -173,46 +184,60 @@ def chapter_exists(code: str, chapter: int) -> bool:
         head = httpx.head(chapter_url(code, chapter), timeout=NCERT_TIMEOUT_S,
                           follow_redirects=True,
                           headers={"User-Agent": NCERT_UA})
-        if head.status_code != 200:
-            return False
-        ctype = head.headers.get("content-type", "").lower()
-        return "pdf" in ctype or "octet-stream" in ctype
     except Exception:
+        return None
+    if head.status_code in (404, 410):
         return False
+    if head.status_code != 200:
+        return None
+    ctype = head.headers.get("content-type", "").lower()
+    return "pdf" in ctype or "octet-stream" in ctype
 
 
-def fetch_ncert_chapter(code: str, chapter: int) -> bytes | None:
-    """HEAD-verify then download one NCERT chapter, or None.
+def fetch_ncert_chapter(code: str, chapter: int) -> tuple[bytes | None, str]:
+    """HEAD-verify then download one NCERT chapter.
 
-    Same honesty contract as the eBalbharati proxy: wrong content-type,
-    oversize bodies and HTML-200 soft-404s all come back None so the caller
-    answers 404 ("no such chapter") instead of serving junk.
+    Returns `(data, CHAPTER_OK)` or `(None, reason)`. A wrong content-type or
+    an HTML-200 soft-404 means the chapter is missing; a timeout, a reset or
+    a 5xx means the portal is unavailable and the caller should answer 503 so
+    the reader can offer a retry instead of pretending the book ended.
+
+    Same honesty contract as the eBalbharati proxy: neither junk nor a silent
+    "no such chapter" for what is merely a bad minute upstream.
     """
     import httpx
 
     if chapter < 1 or chapter > 99:
-        return None
+        return (None, CHAPTER_MISSING)
     url = chapter_url(code, chapter)
     try:
         head = httpx.head(url, timeout=NCERT_TIMEOUT_S, follow_redirects=True,
-                           headers={"User-Agent": NCERT_UA})
-        if head.status_code != 200:
-            return None
-        ctype = head.headers.get("content-type", "").lower()
-        if "pdf" not in ctype and "octet-stream" not in ctype:
-            return None
+                          headers={"User-Agent": NCERT_UA})
+    except Exception:
+        return (None, CHAPTER_UNAVAILABLE)
+    if head.status_code in (404, 410):
+        return (None, CHAPTER_MISSING)
+    if head.status_code != 200:
+        return (None, CHAPTER_UNAVAILABLE)
+    ctype = head.headers.get("content-type", "").lower()
+    if "pdf" not in ctype and "octet-stream" not in ctype:
+        return (None, CHAPTER_MISSING)
+    try:
         with httpx.stream("GET", url, timeout=NCERT_TIMEOUT_S, follow_redirects=True,
                           headers={"User-Agent": NCERT_UA}) as r:
+            if r.status_code in (404, 410):
+                return (None, CHAPTER_MISSING)
             if r.status_code != 200:
-                return None
+                return (None, CHAPTER_UNAVAILABLE)
             chunks: list[bytes] = []
             total = 0
             for chunk in r.iter_bytes():
                 total += len(chunk)
                 if total > NCERT_MAX_BYTES:
-                    return None
+                    # A real file, just too big for this instance — not missing.
+                    return (None, CHAPTER_UNAVAILABLE)
                 chunks.append(chunk)
-        data = b"".join(chunks)
-        return data if b"%PDF" in data[:1024] else None
     except Exception:
-        return None
+        return (None, CHAPTER_UNAVAILABLE)
+    data = b"".join(chunks)
+    return (data, CHAPTER_OK) if b"%PDF" in data[:1024] else (None, CHAPTER_MISSING)

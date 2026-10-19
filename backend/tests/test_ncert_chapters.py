@@ -5,8 +5,9 @@ Contract under test:
   chapters (`has_chapters`), gated additionally on board == "CBSE" so a
   same-named Balbharati row can never serve the wrong curriculum;
 * `?chapter=N` proxies the HEAD-verified chapter PDF from our own origin
-  (same frame headers as whole-book /open); a fetch failure is an honest
-  404 the reader treats as "no further chapters" — never a redirect;
+  (same frame headers as whole-book /open); a chapter the portal says does
+  not exist is a 404 the reader treats as "no further chapters" — never a
+  redirect — while an unreachable portal is a 503 so the reader can retry;
 * `?chapter=N&dl=1` saves that chapter as an attachment.
 
 Every path is a bare string literal because the route-coverage canary
@@ -73,7 +74,8 @@ def test_chapter_proxies_from_our_origin(client, monkeypatch):
     seen: list[tuple[str, int]] = []
     monkeypatch.setattr(
         catalog, "fetch_ncert_chapter",
-        lambda code, n: seen.append((code, n)) or b"%PDF-1.7\nfake chapter\n%%EOF")
+        lambda code, n: seen.append((code, n)) or
+        (b"%PDF-1.7\nfake chapter\n%%EOF", "ok"))
     r = client.get(f"/textbooks/{tid}/open", params={"chapter": 1},
                    follow_redirects=False)
     assert r.status_code == 200, r.text
@@ -83,6 +85,8 @@ def test_chapter_proxies_from_our_origin(client, monkeypatch):
     assert seen == [("jesc1", 1)]
     assert r.headers["x-frame-options"] == "SAMEORIGIN"
     assert "frame-ancestors 'self'" in r.headers["content-security-policy"]
+    # No cache behind the proxy: ranges would re-download the whole chapter.
+    assert r.headers["accept-ranges"] == "none"
     assert "ch1" in r.headers["content-disposition"]
     # save mode travels with the chapter
     d = client.get(f"/textbooks/{tid}/open", params={"chapter": 2, "dl": 1})
@@ -99,7 +103,8 @@ def test_chapter_proxies_from_our_origin(client, monkeypatch):
 
 def test_chapter_miss_is_404_not_redirect(client, monkeypatch):
     tid = cbse_science_10_id()
-    monkeypatch.setattr(catalog, "fetch_ncert_chapter", lambda code, n: None)
+    monkeypatch.setattr(catalog, "fetch_ncert_chapter",
+                        lambda code, n: (None, "missing"))
     monkeypatch.setattr(catalog, "chapter_exists", lambda code, n: False)
     r = client.get(f"/textbooks/{tid}/open", params={"chapter": 99},
                    follow_redirects=False)
@@ -108,6 +113,40 @@ def test_chapter_miss_is_404_not_redirect(client, monkeypatch):
     # the pager's HEAD probe sees the same answer, without counting a click
     h = client.head(f"/textbooks/{tid}/open", params={"chapter": 99})
     assert h.status_code == 404
+
+
+def test_unreachable_portal_is_503_not_404(client, monkeypatch):
+    """A timeout is not a missing chapter: 404 would clamp the book and hide
+    chapters that still exist. GET and the pager's HEAD must both say 503 and
+    ask the client to retry."""
+    tid = cbse_science_10_id()
+    monkeypatch.setattr(catalog, "fetch_ncert_chapter",
+                        lambda code, n: (None, "unavailable"))
+    monkeypatch.setattr(catalog, "chapter_exists", lambda code, n: None)
+    r = client.get(f"/textbooks/{tid}/open", params={"chapter": 1},
+                   follow_redirects=False)
+    assert r.status_code == 503
+    assert r.headers["retry-after"] == "30"
+    assert "location" not in r.headers
+    h = client.head(f"/textbooks/{tid}/open", params={"chapter": 1})
+    assert h.status_code == 503
+    assert h.headers["retry-after"] == "30"
+
+
+def test_whole_book_head_never_downloads(client, monkeypatch):
+    """HEAD is an existence probe: resolving it must not pull the PDF."""
+    books = client.get("/textbooks", params={
+        "class_grade": 8, "board": "Maharashtra SSC"}).json()
+    tid = books[0]["id"]
+    monkeypatch.setattr(
+        catalog, "_fetch_pdf",
+        lambda url: (_ for _ in ()).throw(AssertionError("HEAD must not fetch")))
+    monkeypatch.setattr(
+        catalog, "_resolve_open",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("HEAD must not resolve")))
+    h = client.head(f"/textbooks/{tid}/open")
+    assert h.status_code == 200
+    assert h.content == b""
 
 
 def test_chapter_refuses_unmapped_boards(client, monkeypatch):

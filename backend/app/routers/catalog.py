@@ -5,7 +5,8 @@ from sqlmodel import Session, or_, select
 
 from ..db import get_session
 from ..models import Board, Chapter, Course, Enrollment, Lesson, Subject, Textbook, User
-from ..ncert import chapter_exists, fetch_ncert_chapter, ncert_code
+from ..ncert import (CHAPTER_UNAVAILABLE, chapter_exists,
+                     fetch_ncert_chapter, ncert_code)
 from ..ratelimit import rate_limit
 from ..security import get_current_user, require_student
 from ..streams import STREAM_CODES, STREAMS
@@ -464,6 +465,11 @@ def open_textbook(textbook_id: int,
     kind, payload = _resolve_open(textbook_id, dl, ext, chapter, session)
     if kind == "miss":
         raise HTTPException(404, payload)
+    if kind == "unavailable":
+        # Upstream did not answer (timeout / reset / 5xx). That is not the
+        # same as "no such chapter": answering 404 would make the reader
+        # clamp the book and hide content that still exists.
+        raise HTTPException(503, payload, headers={"Retry-After": "30"})
     if kind == "redirect":
         return RedirectResponse(payload, status_code=302)
     data, title = payload
@@ -473,6 +479,12 @@ def open_textbook(textbook_id: int,
             "Content-Disposition": _pdf_disposition(title, inline=not dl),
             # private: student traffic must not be parked in a shared cache.
             "Cache-Control": "private, max-age=300",
+            # This proxy keeps no copy of the PDF, so a byte range would be
+            # answered by re-downloading all of it upstream — several times
+            # over, for one book. Saying so lets the viewer take the single
+            # full response and cache it instead of probing for ranges it
+            # cannot get cheaply.
+            "Accept-Ranges": "none",
             "X-Content-Type-Options": "nosniff",
             # The in-app viewer frames this from our own origin (/api is a
             # Vercel same-origin rewrite). The global DENY would blank that
@@ -489,34 +501,36 @@ def open_textbook_head(textbook_id: int,
                        ext: int = Query(0),
                        chapter: int = Query(0, ge=0, le=99),
                        session: Session = Depends(get_session)):
-    """Existence probe for the chapter pager: same resolution as GET, headers
-    only, no bytes, no click counted. The reader HEADs chapter N+1 before
-    paging — a 404 clamps the pager at the last chapter instead of opening
-    an error page."""
+    """Existence probe for the reader: headers only, no bytes, no click.
+
+    The pager HEADs chapter N+1 before paging — 200 continues, 404 clamps at
+    the last chapter, 503 means the portal could not be asked (keep the book
+    open for a retry instead of pretending it ended).
+
+    The whole-book branch is deliberately DB-only: resolving it through
+    `_resolve_open` would download the entire PDF just to answer a HEAD,
+    which is exactly the waste this route exists to avoid.
+    """
     from fastapi.responses import Response
+    t = session.get(Textbook, textbook_id)
+    if t is None:
+        raise HTTPException(404, "Textbook not found")
     if chapter:
-        # Pager probe: existence only, no bytes, no click. A past-end chapter
-        # is 404 so the pager clamps instead of opening an error page.
-        t = session.get(Textbook, textbook_id)
         code = (ncert_code(t.class_grade, t.subject_name, t.lang)
-                if t is not None and t.board == "CBSE" else None)
-        if code is None or not chapter_exists(code, chapter):
+                if t.board == "CBSE" else None)
+        if code is None:
+            raise HTTPException(404, "No such chapter edition")
+        exists = chapter_exists(code, chapter)
+        if exists is None:
+            raise HTTPException(503, "Chapter lookup temporarily unavailable",
+                                headers={"Retry-After": "30"})
+        if not exists:
             raise HTTPException(404, "No such chapter edition")
         return Response(status_code=200, media_type="application/pdf")
-    kind, payload = _resolve_open(textbook_id, dl, ext, chapter, session)
-    if kind == "miss":
-        raise HTTPException(404, payload)
-    if kind == "redirect":
-        # A redirect target exists (portal page / deep URL) — the resource
-        # the reader asked about is reachable.
-        return Response(status_code=200)
-    data, title = payload
-    return Response(
-        status_code=200, media_type="application/pdf",
-        headers={
-            "Content-Disposition": _pdf_disposition(title, inline=not dl),
-            "Content-Length": str(len(data)),
-        })
+    # Inline, attachment and ?ext=1 all resolve to something the reader can
+    # reach (the PDF proxy, or the portal-page fallback); only a missing row
+    # is a 404.
+    return Response(status_code=200)
 
 
 def _resolve_open(textbook_id: int, dl: int, ext: int, chapter: int,
@@ -533,7 +547,11 @@ def _resolve_open(textbook_id: int, dl: int, ext: int, chapter: int,
         # treats that as "no further chapters".
         code = (ncert_code(t.class_grade, t.subject_name, t.lang)
                 if t.board == "CBSE" else None)
-        data = fetch_ncert_chapter(code, chapter) if code else None
+        if code is None:
+            return ("miss", "No such chapter edition")
+        data, status = fetch_ncert_chapter(code, chapter)
+        if status == CHAPTER_UNAVAILABLE:
+            return ("unavailable", "Chapter source temporarily unavailable")
         if data is None:
             return ("miss", "No such chapter edition")
         return ("pdf", (data, f"{t.title} ch{chapter}"))
