@@ -38,7 +38,7 @@ export default function Practice({ lang }: { lang: Lang }) {
       // No fake "saved offline": without a session nothing will ever sync.
       // The questions stay readable; grading needs the free login.
       setChosen(val);
-      setFeedback({ correct: false, explanation: t('needLogin', lang), needsLogin: true });
+      setFeedback({ correct: false, explanation: t('needLoginCheck', lang), needsLogin: true });
       return;
     }
     setChosen(val);
@@ -117,8 +117,10 @@ export default function Practice({ lang }: { lang: Lang }) {
                   const picked: number[] = q.type === 'multi' && Array.isArray(chosen) ? chosen : [];
                   const isPicked = q.type === 'multi' ? picked.includes(oi) : chosen === oi;
                   let cls = 'opt';
-                  if (!feedback && isPicked) cls += ' selected';
-                  if (feedback) {
+                  // A signed-out answer is never graded, so it must not look
+                  // wrong: keep the pick neutral until a session exists.
+                  if ((!feedback || feedback.needsLogin) && isPicked) cls += ' selected';
+                  if (feedback && !feedback.needsLogin) {
                     const r = feedback as unknown as { correct_answer?: unknown };
                     const arr = Array.isArray(r.correct_answer) ? r.correct_answer as number[] : r.correct_answer === oi ? [oi] : [];
                     if (arr.includes(oi)) cls += ' correct';

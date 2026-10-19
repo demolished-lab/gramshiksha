@@ -248,9 +248,14 @@ const S: Record<string, [string, string, string]> = {
   actions: ['Actions', 'कार्रवाई', 'कृती'],
   classLabel: ['Class', 'कक्षा', 'इयत्ता'],
   needLogin: [
-    'Log in to ask doubts and check your answers.',
-    'प्रश्न पूछने और अपने उत्तर जाँचने के लिए लॉग इन करें।',
-    'प्रश्न विचारण्यासाठी आणि तुमची उत्तरे तपासण्यासाठी लॉग इन करा.',
+    'Log in to ask doubts.',
+    'प्रश्न पूछने के लिए लॉग इन करें।',
+    'प्रश्न विचारण्यासाठी लॉग इन करा.',
+  ],
+  needLoginCheck: [
+    'Log in to check your answer.',
+    'अपना उत्तर जाँचने के लिए लॉग इन करें।',
+    'तुमचे उत्तर तपासण्यासाठी लॉग इन करा.',
   ],
 };
 
