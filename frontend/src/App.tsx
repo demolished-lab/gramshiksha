@@ -194,7 +194,7 @@ export default function App() {
   const roleHome = user?.role === 'student' ? 'dashboard' : user?.role === 'parent' ? 'parent' : isTeacher ? 'teacher' : 'admin';
   const sidebarItems: [string, string][] = authenticated
     ? user?.role === 'student'
-      ? [['dashboard', t('todaysLearning', lang)], ['explore', t('explore', lang)], ['textbooks', t('textbooks', lang)], ['practice', t('practice', lang)], ['doubts', t('doubts', lang)], ['progress', t('progress', lang)], ['downloads', t('downloads', lang)]]
+      ? [['dashboard', t('todaysLearning', lang)], ['explore', t('explore', lang)], ['textbooks', t('textbooks', lang)], ['practice', t('practice', lang)], ['doubts', t('doubts', lang)], ['progress', t('progress', lang)]]
       : [['home', t('home', lang)], ['explore', t('explore', lang)], ['materials', t('materials', lang)], ['doubts', t('doubts', lang)], [roleHome, roleHome === 'teacher' ? t('teacher', lang) : roleHome === 'parent' ? t('parent', lang) : 'Admin']]
     : [];
 

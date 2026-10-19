@@ -7,7 +7,7 @@ import type { Lang, Question, WeakTopics } from '../types';
 export default function Practice({ lang }: { lang: Lang }) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [idx, setIdx] = useState(0);
-  const [feedback, setFeedback] = useState<{ correct: boolean; explanation: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ correct: boolean; explanation: string; needsLogin?: boolean } | null>(null);
   const [chosen, setChosen] = useState<unknown>(null);
   const [fillText, setFillText] = useState('');
   const [stats, setStats] = useState({ attempted: 0, correct: 0 });
@@ -38,7 +38,7 @@ export default function Practice({ lang }: { lang: Lang }) {
       // No fake "saved offline": without a session nothing will ever sync.
       // The questions stay readable; grading needs the free login.
       setChosen(val);
-      setFeedback({ correct: false, explanation: t('needLogin', lang) || 'Log in to check your answer.' });
+      setFeedback({ correct: false, explanation: t('needLogin', lang), needsLogin: true });
       return;
     }
     setChosen(val);
@@ -145,8 +145,8 @@ export default function Practice({ lang }: { lang: Lang }) {
             )}
             {feedback && (
               <>
-                <p className={feedback.correct ? 'success' : 'error'}>
-                  {feedback.correct ? '✅ ' + t('completed', lang) : '❌'}
+                <p className={feedback.correct ? 'success' : feedback.needsLogin ? 'muted' : 'error'}>
+                  {feedback.correct ? '✅ ' + t('completed', lang) : feedback.needsLogin ? 'ℹ️' : '❌'}
                 </p>
                 <p className="muted">{feedback.explanation}</p>
                 {anon && (

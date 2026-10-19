@@ -26,7 +26,13 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
   }, [doubts, stream]);
 
   if (!getToken()) {
-    return <div className="empty-state"><div className="icon">❓</div><p>{t('needLogin', lang) || 'Log in to ask doubts.'}</p></div>;
+    return (
+      <div className="empty-state">
+        <div className="icon">❓</div>
+        <p>{t('needLogin', lang)}</p>
+        <p><a className="btn small" href="#/login/student">{t('login', lang)}</a></p>
+      </div>
+    );
   }
 
   const ask = async () => {

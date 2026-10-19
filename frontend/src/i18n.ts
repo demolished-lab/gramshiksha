@@ -247,6 +247,11 @@ const S: Record<string, [string, string, string]> = {
   role: ['Role', 'भूमिका', 'भूमिका'],
   actions: ['Actions', 'कार्रवाई', 'कृती'],
   classLabel: ['Class', 'कक्षा', 'इयत्ता'],
+  needLogin: [
+    'Log in to ask doubts and check your answers.',
+    'प्रश्न पूछने और अपने उत्तर जाँचने के लिए लॉग इन करें।',
+    'प्रश्न विचारण्यासाठी आणि तुमची उत्तरे तपासण्यासाठी लॉग इन करा.',
+  ],
 };
 
 export function t(key: keyof typeof S | string, lang: Lang): string {
