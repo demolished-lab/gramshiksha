@@ -64,7 +64,10 @@ export default function App() {
       'login.student': 'Student login', 'login.teacher': 'Teacher login', login: 'Log in',
     };
     const key = route.sub ? `${route.page}.${route.sub}` : route.page;
-    document.title = `${pageTitles[key] ?? pageTitles[route.page] ?? 'Learn without limits'} · GramShiksha`;
+    // An unknown page is the 404 screen; calling it "Learn without limits"
+    // would be a lie in the tab and in browser history.
+    const title = pageTitles[key] ?? pageTitles[route.page] ?? 'Page not found';
+    document.title = `${title} · GramShiksha`;
   }, [route.page, route.sub]);
 
   useEffect(() => {

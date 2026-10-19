@@ -111,6 +111,16 @@ const S: Record<string, [string, string, string]> = {
   saveFile: ['Save file', 'फ़ाइल सहेजें', 'फाइल जतन करा'],
   close: ['Close', 'बंद करें', 'बंद करा'],
   opening: ['Opening your book…', 'आपकी पुस्तक खुल रही है…', 'तुमची पुस्तक उघडत आहे…'],
+  chapterUnavailable: [
+    'This chapter isn’t loading right now. Please try again.',
+    'यह अध्याय अभी लोड नहीं हो रहा है। कृपया फिर से प्रयास करें।',
+    'हा धडा आत्ता लोड होत नाही. कृपया पुन्हा प्रयत्न करा.',
+  ],
+  chapterMissing: [
+    'This chapter isn’t available.',
+    'यह अध्याय उपलब्ध नहीं है।',
+    'हा धडा उपलब्ध नाही.',
+  ],
   finder: ['Find any book', 'कोई भी पुस्तक खोजें', 'कोणतीही पुस्तक शोधा'],
   finderHint: ['Type a title: this class filters as you type, and anything missing is looked up on the official government portal right here — you are never sent to another site.',
     'शीर्षक लिखें: इस कक्षा की सूची टाइप करते ही छन जाती है, और जो नहीं मिलता उसे हम यहीं सरकारी पोर्टल पर खोजते हैं — आप किसी और साइट पर नहीं भेजे जाते।',
@@ -262,6 +272,13 @@ const S: Record<string, [string, string, string]> = {
 export function t(key: keyof typeof S | string, lang: Lang): string {
   const v = S[key as string];
   return v ? (lang === 'hi' ? v[1] : lang === 'mr' ? v[2] : v[0]) : (key as string);
+}
+
+/** Does the dictionary actually define `key`? `t()` cannot say: it returns
+ * the key when it does not know it, and some English strings equal their key
+ * ("books"), so a coverage test needs to ask this directly. */
+export function hasString(key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(S, key);
 }
 
 /** "2026-10" → "October 2026" in the reader's own language.

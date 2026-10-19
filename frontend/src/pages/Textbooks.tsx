@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiAvailability, apiLocate, apiMyRequests, apiReadingList, apiSubjects, apiTextbookOpenUrl, apiTextbooks } from '../api';
 import { booksIn, subjectLabel } from '../catalog';
 import { monthLabel, pick, t } from '../i18n';
@@ -55,6 +55,16 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   // NCERT chapter editions have no stored page count — the last chapter is
   // whatever 404s first, discovered live and then clamped.
   const [atEnd, setAtEnd] = useState(false);
+  // A chapter is probed before it is framed: a 404 (no such chapter) and a
+  // 503 (portal unreachable) both used to render an empty panel, because the
+  // error body is JSON and the frame policy blocks it.
+  const [chapterState, setChapterState] =
+    useState<'checking' | 'ok' | 'missing' | 'unavailable'>('ok');
+  const [probeNonce, setProbeNonce] = useState(0);
+  // `<id>:<chapter>` already confirmed by the pager, so the probe effect does
+  // not re-ask (and cannot flash an error over a chapter the pager just
+  // verified) on every page turn.
+  const probedRef = useRef('');
 
   const signedIn = !!user;
 
@@ -67,6 +77,31 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     // Anonymous visitors simply skip this — a 401 here is not an error state.
     apiMyRequests().then(setAsks).catch(() => setAsks([]));
   }, [signedIn]);
+
+  // Probe a chapter before framing it. Without this a 404 (no such chapter)
+  // or a 503 (NCERT unreachable) both ended as an empty panel: the error body
+  // is JSON and the frame policy blocks it. One cheap HEAD — the backend's
+  // probe downloads nothing — turns that into a message plus a Retry.
+  useEffect(() => {
+    if (!viewer || !viewer.chapters) { setChapterState('ok'); return; }
+    const key = `${viewer.id}:${viewer.chapter}`;
+    if (probedRef.current === key) { setChapterState('ok'); return; }
+    let cancelled = false;
+    setChapterState('checking');
+    setFrameReady(false);
+    fetch(apiTextbookOpenUrl(viewer.id, undefined, viewer.chapter), { method: 'HEAD' })
+      .then((r) => {
+        if (cancelled) return;
+        if (r.ok) { probedRef.current = key; setChapterState('ok'); return; }
+        setChapterState(r.status === 503 ? 'unavailable' : 'missing');
+      })
+      .catch(() => {
+        // Could not ask at all: treat like a portal hiccup, never like "the
+        // book ended" — the chapter may well exist.
+        if (!cancelled) setChapterState('unavailable');
+      });
+    return () => { cancelled = true; };
+  }, [viewer, probeNonce]);
 
   useEffect(() => {
     let live = true;
@@ -178,12 +213,17 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   const openBook = (b: Textbook) => {
     setFrameReady(false);
     setAtEnd(false);
+    // Set the probe state up front so the previous book's error panel cannot
+    // flash for a frame before the effect runs.
+    setChapterState(b.has_chapters ? 'checking' : 'ok');
     setViewer({ id: b.id, title: b.title, chapters: !!b.has_chapters, chapter: 1 });
   };
 
   /** Page one NCERT chapter edition. The backend 404s past the last chapter,
    * so Next probes ahead with a cheap HEAD first and clamps instead of
-   * opening an error page. Same-origin frame, so the check is allowed. */
+   * opening an error page. Same-origin frame, so the check is allowed. A 503
+   * (or no answer) means "could not ask", not "no more chapters": leave the
+   * pager open so a retry can succeed instead of ending the book short. */
   const frameUrl = (v: { id: number; chapters: boolean; chapter: number }) =>
     v.chapters ? apiTextbookOpenUrl(v.id, undefined, v.chapter) : apiTextbookOpenUrl(v.id);
   const goChapter = async (delta: -1 | 1) => {
@@ -193,11 +233,13 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     if (delta > 0) {
       try {
         const head = await fetch(apiTextbookOpenUrl(viewer.id, undefined, next), { method: 'HEAD' });
+        if (head.status === 503) return;
         if (!head.ok) { setAtEnd(true); return; }
-      } catch { setAtEnd(true); return; }
+      } catch { return; }
     } else {
       setAtEnd(false);
     }
+    probedRef.current = `${viewer.id}:${next}`;
     setFrameReady(false);
     setViewer({ ...viewer, chapter: next });
   };
@@ -207,6 +249,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     if (!p.textbook_id) return;
     setFrameReady(false);
     setAtEnd(false);
+    setChapterState('ok');
     setViewer({ id: p.textbook_id, title: p.title, chapters: false, chapter: 1 });
   };
 
@@ -510,15 +553,39 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
             {atEnd && viewer.chapters && (
               <p className="muted" style={{ margin: '6px 12px 0' }}>{t('lastChapter', lang)}</p>
             )}
-            {!frameReady && (
+            {viewer.chapters && chapterState === 'checking' && (
               <div className="viewer-loading">
                 <div className="skeleton" />
                 <p className="muted">{t('opening', lang)}</p>
               </div>
             )}
-            <iframe className="viewer-frame" title={viewer.title}
-              src={frameUrl(viewer)}
-              onLoad={() => setFrameReady(true)} />
+            {viewer.chapters && (chapterState === 'missing' || chapterState === 'unavailable') && (
+              <div className="viewer-loading">
+                <p className="error">
+                  {chapterState === 'unavailable' ? t('chapterUnavailable', lang) : t('chapterMissing', lang)}
+                </p>
+                {chapterState === 'unavailable' ? (
+                  <button type="button" className="btn small"
+                    onClick={() => setProbeNonce((n) => n + 1)}>{t('retry', lang)}</button>
+                ) : (
+                  <button type="button" className="btn small ghost"
+                    onClick={() => setViewer(null)}>{t('close', lang)}</button>
+                )}
+              </div>
+            )}
+            {(!viewer.chapters || chapterState === 'ok') && (
+              <>
+                {!frameReady && (
+                  <div className="viewer-loading">
+                    <div className="skeleton" />
+                    <p className="muted">{t('opening', lang)}</p>
+                  </div>
+                )}
+                <iframe className="viewer-frame" title={viewer.title}
+                  src={frameUrl(viewer)}
+                  onLoad={() => setFrameReady(true)} />
+              </>
+            )}
           </div>
         </div>
       )}
