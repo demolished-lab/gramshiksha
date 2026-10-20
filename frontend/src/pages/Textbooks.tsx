@@ -52,6 +52,13 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   // re-fetching a whole Textbook row.
   const [viewer, setViewer] = useState<{ id: number; title: string; chapters: boolean; chapter: number } | null>(null);
   const [frameReady, setFrameReady] = useState(false);
+  // Phones do not all render a PDF inside an iframe (Android Chrome in
+  // particular has no inline PDF plugin), and the white "Opening" overlay can
+  // otherwise sit over a blank frame forever. On a small or touch screen we
+  // hand the same-origin PDF URL to the phone's own reader instead.
+  const [phoneReader, setPhoneReader] = useState(() =>
+    typeof window !== 'undefined'
+    && window.matchMedia('(max-width: 768px), (pointer: coarse)').matches);
   // NCERT chapter editions have no stored page count — the last chapter is
   // whatever 404s first, discovered live and then clamped.
   const [atEnd, setAtEnd] = useState(false);
@@ -182,6 +189,26 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [viewer]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px), (pointer: coarse)');
+    const apply = () => setPhoneReader(mq.matches);
+    apply();
+    if (mq.addEventListener) mq.addEventListener('change', apply);
+    else mq.addListener(apply);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', apply);
+      else mq.removeListener(apply);
+    };
+  }, []);
+
+  // If a browser never fires the frame's onLoad (inline PDFs are not rendered
+  // by every engine), do not trap the reader behind a white loading layer.
+  useEffect(() => {
+    if (!viewer || phoneReader) return;
+    const id = window.setTimeout(() => setFrameReady(true), 6000);
+    return () => window.clearTimeout(id);
+  }, [viewer, phoneReader]);
 
   /** Tier 1+2+3 happens server-side; the UI only ever shows a final state.
    * A miss is not an error — it is a queue position with an honest ETA.
@@ -562,10 +589,17 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
                     onClick={() => void goChapter(1)} aria-label="Next chapter">›</button>
                 </span>
               )}
-              <a className="btn small"
-                href={viewer.chapters ? apiTextbookOpenUrl(viewer.id, 'dl', viewer.chapter) : apiTextbookOpenUrl(viewer.id, 'dl')}>
-                ⬇ {t('saveFile', lang)}
-              </a>
+              {!phoneReader && (
+                <a className="btn small" href={frameUrl(viewer)} target="_blank" rel="noopener noreferrer">
+                  {t('openPdf', lang)}
+                </a>
+              )}
+              {!phoneReader && (
+                <a className="btn small"
+                  href={viewer.chapters ? apiTextbookOpenUrl(viewer.id, 'dl', viewer.chapter) : apiTextbookOpenUrl(viewer.id, 'dl')}>
+                  ⬇ {t('saveFile', lang)}
+                </a>
+              )}
               <button type="button" className="btn small ghost" onClick={() => setViewer(null)}>
                 ✕ {t('close', lang)}
               </button>
@@ -594,17 +628,32 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
               </div>
             )}
             {(!viewer.chapters || chapterState === 'ok') && (
-              <>
-                {!frameReady && (
-                  <div className="viewer-loading">
-                    <div className="skeleton" />
-                    <p className="muted">{t('opening', lang)}</p>
-                  </div>
-                )}
-                <iframe className="viewer-frame" title={viewer.title}
-                  src={frameUrl(viewer)}
-                  onLoad={() => setFrameReady(true)} />
-              </>
+              phoneReader ? (
+                <div className="viewer-phone">
+                  <div className="viewer-phone-icon" aria-hidden="true">📖</div>
+                  <p className="viewer-phone-title">{viewer.title}</p>
+                  <p className="muted">{t('phoneReaderHint', lang)}</p>
+                  <a className="btn" href={frameUrl(viewer)} target="_blank" rel="noopener noreferrer">
+                    📄 {t('openPdf', lang)}
+                  </a>
+                  <a className="btn ghost small"
+                    href={viewer.chapters ? apiTextbookOpenUrl(viewer.id, 'dl', viewer.chapter) : apiTextbookOpenUrl(viewer.id, 'dl')}>
+                    ⬇ {t('saveFile', lang)}
+                  </a>
+                </div>
+              ) : (
+                <>
+                  {!frameReady && (
+                    <div className="viewer-loading">
+                      <div className="skeleton" />
+                      <p className="muted">{t('opening', lang)}</p>
+                    </div>
+                  )}
+                  <iframe className="viewer-frame" title={viewer.title}
+                    src={frameUrl(viewer)}
+                    onLoad={() => setFrameReady(true)} />
+                </>
+              )
             )}
           </div>
         </div>

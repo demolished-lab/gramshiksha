@@ -109,6 +109,12 @@ const S: Record<string, [string, string, string]> = {
   chapter: ['Chapter', 'अध्याय', 'धडा'],
   lastChapter: ['Last chapter', 'अंतिम अध्याय', 'शेवटचा धडा'],
   saveFile: ['Save file', 'फ़ाइल सहेजें', 'फाइल जतन करा'],
+  openPdf: ['Open PDF', 'PDF खोलें', 'PDF उघडा'],
+  phoneReaderHint: [
+    'Your phone opens PDFs in its own reader. Tap the button below to start reading.',
+    'आपका फ़ोन PDF को अपने रीडर में खोलता है। पढ़ना शुरू करने के लिए नीचे दिए बटन पर टैप करें।',
+    'तुमचा फोन PDF त्याच्या रीडरमध्ये उघडतो. वाचायला सुरू करण्यासाठी खालील बटणावर टॅप करा.',
+  ],
   close: ['Close', 'बंद करें', 'बंद करा'],
   opening: ['Opening your book…', 'आपकी पुस्तक खुल रही है…', 'तुमची पुस्तक उघडत आहे…'],
   chapterUnavailable: [
