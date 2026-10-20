@@ -103,6 +103,8 @@ integration — pushes to `main` deploy Render only, and that is intentional
    `main` revision already synced with `origin/main`, and asks for confirmation
    before the Vercel production deploy. Export `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
    and `VERCEL_PROJECT_ID` in the environment first; the token is never logged.
+   The deploy targets `VERCEL_PROJECT_ID` explicitly (`--project`), so a missing
+   or stale local `.vercel` link can never send a build to another project.
    Run `scripts/deploy.sh --check` for the same checks without deploying.
 
 4. Production URL: `https://gramshiksha-academy.vercel.app` (the apex

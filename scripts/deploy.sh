@@ -124,7 +124,12 @@ case "$MODE" in
     confirm 'Deploy this verified, synced main revision to Vercel production?'
     (
       cd "$ROOT/frontend"
-      npx --yes vercel deploy --prod --yes --token "$VERCEL_TOKEN"
+      # Target the project explicitly. Without --project the CLI trusts the
+      # local .vercel link (gitignored), so a fresh clone — or a stale link —
+      # silently creates/uses a *different* project and the live site never
+      # changes. The env IDs the script already requires are now actually used.
+      npx --yes vercel deploy --prod --yes --token "$VERCEL_TOKEN" \
+        --project "$VERCEL_PROJECT_ID"
     )
     ;;
 esac
