@@ -50,7 +50,7 @@ describe('vercel.json delivery config', () => {
     const rewritten = new Map(config.rewrites.map((r) => [r.source, r.destination]));
     for (const path of ['/dashboard', '/progress', '/downloads', '/teacher',
       '/parent', '/admin', '/course/:id', '/lesson/:id']) {
-      expect(rewritten.get(path), `missing rewrite for ${path}`).toBe('/index.html');
+      expect(rewritten.get(path), `missing rewrite for ${path}`).toBe('/');
     }
     expect(rewritten.get('/ads.txt')).toBe('https://gramshiksha-backend.onrender.com/ads.txt');
     expect(config.cleanUrls, 'cleanUrls must serve /courses from courses.html').toBe(true);

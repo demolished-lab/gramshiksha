@@ -30,7 +30,7 @@ describe('SEO route table', () => {
 
   it('expands class pages and rejects classes outside 1-12', () => {
     expect(seoForPath('/explore/8')?.title).toContain('Class 8');
-    expect(seoForPath('/explore/8')?.h1).toBe('Class 8 learning');
+    expect(seoForPath('/explore/8')?.h1).toBe('Class 8 Courses, Lessons & Practice');
     expect(seoForPath('/explore/13')).toBeNull();
     expect(seoForPath('/explore/0')).toBeNull();
     expect(seoForPath('/explore/abc')).toBeNull();

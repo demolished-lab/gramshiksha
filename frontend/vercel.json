@@ -9,14 +9,14 @@
       "source": "/ads.txt",
       "destination": "https://gramshiksha-backend.onrender.com/ads.txt"
     },
-    { "source": "/dashboard", "destination": "/index.html" },
-    { "source": "/progress", "destination": "/index.html" },
-    { "source": "/downloads", "destination": "/index.html" },
-    { "source": "/teacher", "destination": "/index.html" },
-    { "source": "/parent", "destination": "/index.html" },
-    { "source": "/admin", "destination": "/index.html" },
-    { "source": "/course/:id", "destination": "/index.html" },
-    { "source": "/lesson/:id", "destination": "/index.html" }
+    { "source": "/dashboard", "destination": "/" },
+    { "source": "/progress", "destination": "/" },
+    { "source": "/downloads", "destination": "/" },
+    { "source": "/teacher", "destination": "/" },
+    { "source": "/parent", "destination": "/" },
+    { "source": "/admin", "destination": "/" },
+    { "source": "/course/:id", "destination": "/" },
+    { "source": "/lesson/:id", "destination": "/" }
   ],
   "headers": [
     {

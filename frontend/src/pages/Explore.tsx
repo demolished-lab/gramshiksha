@@ -88,8 +88,12 @@ export default function Explore({ lang, go, routeGrade, user }: {
 
   return (
     <div>
-      <h1>🧭 {t('explore', lang)}</h1>
-      <p className="muted">{t('exploreHint', lang)}</p>
+      <h1>{routeGrade
+        ? `Class ${grade} Courses, Lessons & Practice`
+        : 'Explore courses by class'}</h1>
+      <p className="muted">{routeGrade
+        ? `Free Class ${grade} courses, lessons, practice and study materials for SSC, HSC and CBSE, in English, Hindi and Marathi.`
+        : t('exploreHint', lang)}</p>
 
       <div className="card" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
         <select value={grade} onChange={(e) => pickGrade(Number(e.target.value))} aria-label="Class">

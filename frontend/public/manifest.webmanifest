@@ -1,11 +1,14 @@
 {
-  "name": "Gramshiksha — ग्राम शिक्षा",
-  "short_name": "Gramshiksha",
-  "description": "Free bilingual lessons and quizzes for village learners",
+  "name": "GramShiksha Academy — ग्राम शिक्षा",
+  "short_name": "GramShiksha",
+  "description": "Free English, Hindi and Marathi lessons, practice and official textbook links for Class 1–12.",
+  "lang": "en-IN",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#fdf8ef",
   "theme_color": "#1a7f37",
+  "categories": ["education"],
   "icons": [
     {
       "src": "/favicon.svg",

@@ -18,7 +18,7 @@
    - responses marked `no-store` or `private` are the server saying "don't
      keep this" — we only keep the private ones in the per-account cache,
      which is exactly the scope the header allows. */
-const CACHE = 'gramshiksha-v3';
+const CACHE = 'gramshiksha-v4';
 const API_PREFIX = 'gramshiksha-api:';
 const OFFLINE_MATERIALS = 'gramshiksha-offline-materials';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg'];
