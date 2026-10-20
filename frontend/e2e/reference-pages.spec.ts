@@ -78,6 +78,7 @@ const mockApi = async (page: Page) => {
     else if (pathname.endsWith('/materials') || pathname.endsWith('/textbooks')) body = [];
     else if (pathname.endsWith('/parent/children')) body = [];
     else if (pathname.endsWith('/auth/me')) body = { id: 42, name: 'Pravesh Kumar', role: 'student', role_status: 'active' };
+    else if (pathname.endsWith('/auth/reset-request') || pathname.endsWith('/auth/reset-confirm')) body = { ok: true };
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   });
 };
@@ -151,6 +152,26 @@ test('the auth dialog keeps focus inside and restores the opener on close', asyn
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
+});
+
+test('password reset request and confirmation work from the auth dialog', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/#/home');
+  await page.getByRole('button', { name: /log in/i }).first().click();
+
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: /forgot password/i }).click();
+  await dialog.locator('input[type="email"]').fill('learner@example.com');
+  await dialog.getByRole('button', { name: 'Send code' }).click();
+
+  await expect(dialog.getByText(/6-digit code has been sent/i)).toBeVisible();
+  await dialog.getByLabel('6-digit code').fill('123456');
+  await dialog.getByLabel('New password').fill('NewSecret@123');
+  await dialog.getByRole('button', { name: 'Update password' }).click();
+
+  await expect(dialog.getByText(/Password updated/i)).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Log in' })).toBeVisible();
+  await expect(dialog.locator('input[type="email"]')).toHaveValue('learner@example.com');
 });
 
 test('practice shows a retry instead of an endless skeleton when no questions exist', async ({ page }) => {

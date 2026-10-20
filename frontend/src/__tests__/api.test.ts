@@ -6,7 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   apiAdminUsers, apiApproveUser, apiCourses, apiDeletePick, apiLocate, apiLogin, apiMaterialUrl, apiMe,
-  apiMyRequests, apiReadingList, apiSavePick, apiSuspendUser, apiTextbookOpenUrl, apiUploadMaterial,
+  apiMyRequests, apiReadingList, apiResetConfirm, apiResetRequest, apiSavePick, apiSuspendUser,
+  apiTextbookOpenUrl, apiUploadMaterial,
 } from '../api';
 
 const jsonResponse = (status: number, body: unknown) =>
@@ -81,6 +82,34 @@ describe('request framing', () => {
     expect(headers['Content-Type']).toBe('application/x-www-form-urlencoded');
     expect(String(init.body)).toBe('username=learner%40x.in&password=Secret%40123');
     expect(headers.Authorization).toBeUndefined();
+  });
+});
+
+describe('password reset', () => {
+  it('posts the request and confirm payloads to the auth routes', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true }))
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+
+    await apiResetRequest('learner@x.in');
+    const request = lastCall();
+    expect(request.url).toBe('/api/auth/reset-request');
+    expect(JSON.parse(String(request.init.body))).toEqual({ email: 'learner@x.in' });
+
+    await apiResetConfirm('learner@x.in', '123456', 'NewSecret@123');
+    const confirm = lastCall();
+    expect(confirm.url).toBe('/api/auth/reset-confirm');
+    expect(JSON.parse(String(confirm.init.body))).toEqual({
+      email: 'learner@x.in', code: '123456', new_password: 'NewSecret@123',
+    });
+  });
+
+  it('shows the backend explanation when SMTP is not configured', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(503, {
+      detail: 'Password reset is temporarily unavailable. Please ask your school administrator to reset your password.',
+    }));
+
+    await expect(apiResetRequest('learner@x.in')).rejects.toThrow(/ask your school administrator/i);
   });
 });
 

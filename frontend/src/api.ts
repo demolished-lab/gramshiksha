@@ -142,6 +142,12 @@ const post = <T>(path: string, body?: unknown, settings: FetchSettings = {}) =>
 // ---------- auth ----------
 export const apiRegister = (payload: Record<string, unknown>) =>
   post<{ access_token: string }>('/auth/register', payload);
+export const apiResetRequest = (email: string) =>
+  post<{ ok: boolean }>('/auth/reset-request', { email });
+export const apiResetConfirm = (email: string, code: string, newPassword: string) =>
+  post<{ ok: boolean }>('/auth/reset-confirm', {
+    email, code, new_password: newPassword,
+  });
 
 /** Login is usually the first request after an idle period, so it is the most
  * likely one to meet a waking backend. It is safe to retry (a lost token

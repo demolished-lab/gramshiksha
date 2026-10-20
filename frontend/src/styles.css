@@ -246,6 +246,7 @@ main.container { --page-pad: 20px; max-width: 1160px; padding: 24px max(var(--pa
   background: rgba(15,23,42,.45);
 }
 .auth-card { width: min(380px, 100%); margin: auto; }
+.auth-forgot { display: inline-block; margin-top: 10px; padding: 4px 0; border: 0; background: none; color: var(--primary); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
 .viewer { position: fixed; inset: 0; z-index: 70; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: calc(14px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) calc(14px + env(safe-area-inset-left, 0px)); }
 .viewer-sheet { position: relative; display: flex; flex-direction: column; width: min(980px, 100%); height: min(92vh, 1100px); height: min(92dvh, 1100px); max-height: 100%; background: #fff; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-lg); }
 .viewer-bar { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-bottom: 1px solid var(--border); background: #fff; }
