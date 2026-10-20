@@ -85,6 +85,7 @@ describe('vercel.json delivery config', () => {
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("frame-src 'self'"); // same-origin textbook reader
     expect(csp).toContain('googlesyndication.com'); // AdSense, once enabled
+    expect(csp).toContain('fundingchoicesmessages.google.com'); // Google-certified CMP
     expect(csp).toContain('gramshiksha-backend.onrender.com'); // direct API base
     // AdSense injects inline bootstrap code; its publisher script cannot run
     // under a nonce-only policy. Keep the rest of the policy tight instead of
