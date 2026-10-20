@@ -30,16 +30,16 @@ def _save_file(file: UploadFile) -> tuple[str, int]:
 @router.post("", status_code=201)
 def upload_material(
     _rl: None = Depends(rate_limit("materials.upload", 30)),
-    title: str = Form(...),
-    description: str = Form(""),
-    type: str = Form("notes"),
+    title: str = Form(..., max_length=160),
+    description: str = Form("", max_length=2000),
+    type: str = Form("notes", max_length=20),
     class_grade: int = Form(...),
-    board: str = Form(...),
-    subject_name: str = Form(...),
-    chapter_title: str = Form(""),
-    lang: str = Form("en"),
-    visibility: str = Form("public"),
-    source_of_content: str = Form("Created by teacher"),
+    board: str = Form(..., max_length=40),
+    subject_name: str = Form(..., max_length=60),
+    chapter_title: str = Form("", max_length=160),
+    lang: str = Form("en", max_length=8),
+    visibility: str = Form("public", max_length=10),
+    source_of_content: str = Form("Created by teacher", max_length=160),
     file: UploadFile = File(...),
     user: User = Depends(require_any),
     session: Session = Depends(get_session),
@@ -48,12 +48,12 @@ def upload_material(
         raise HTTPException(422, f"type must be one of {MATERIAL_TYPES}")
     if visibility not in ("private", "school", "public"):
         raise HTTPException(422, "visibility must be private|school|public")
-    # Students' uploads always start pending; approved teachers publish
-    # immediately. A teacher still awaiting approval is treated like a
-    # student — otherwise self-signup would be a shortcut past moderation.
-    status = "pending" if user.role == "student" or user.role_status != "active" else "approved"
-    if user.role == "student" and visibility == "public":
-        visibility = "public"  # allowed, but gated behind approval
+    # Moderation is role-based, never display-based: an approved teacher (or
+    # admin) publishes immediately; a student, parent, or teacher awaiting
+    # approval starts pending. Previously a *parent* — a self-service account
+    # that is active the moment it is created — could publish anonymously to
+    # the whole platform.
+    status = "approved" if has_role(user, "teacher", "school_admin", "platform_admin") else "pending"
     path, size = _save_file(file)
     m = Material(
         title=title.strip(), description=description, type=type,
@@ -230,14 +230,23 @@ def report_material(material_id: int, reason: str = Form(...), detail: str = For
     return {"ok": True}
 
 
-@router.delete("/{material_id}")
+@router.delete("/{material_id}", dependencies=[Depends(rate_limit("materials.delete", 30))])
 def delete_material(material_id: int, user: User = Depends(get_current_user),
                     session: Session = Depends(get_session)):
     m = session.get(Material, material_id)
     if not m:
         raise HTTPException(404, "Material not found")
-    if m.uploader_id != user.id and not has_role(user, "teacher", "school_admin", "platform_admin"):
-        raise HTTPException(403, "Not allowed")
+    # Owner always; otherwise only staff, and (unless platform admin) only
+    # inside their own school — a teacher in school A must not be able to
+    # delete school B's material just because the URL was guessed.
+    if m.uploader_id != user.id:
+        if not has_role(user, "teacher", "school_admin", "platform_admin"):
+            raise HTTPException(403, "Not allowed")
+        if not has_role(user, "platform_admin"):
+            uploader = session.get(User, m.uploader_id)
+            if not (user.school_id is not None and uploader
+                    and uploader.school_id == user.school_id):
+                raise HTTPException(403, "Not allowed")
     delete_ref(m.file_path)  # local unlink or Cloudinary destroy (best-effort)
     session.delete(m)
     session.commit()

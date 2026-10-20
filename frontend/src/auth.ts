@@ -34,6 +34,21 @@ export function saveSession(tok: LoginResponse): void {
     streak_days: tok.streak_days,
   } satisfies SessionUser));
   if (tok.lang_pref) setLang(tok.lang_pref);
+  // A new account must never inherit the previous one's offline `/api` cache.
+  // Clear it, then tell the service worker which account owns the new one.
+  void clearCachedApi().then(() => postSession(offlineStorageScope()));
+}
+
+/** Hand the SW the opaque per-account id used for its private API cache. */
+function postSession(userId: string | null): void {
+  try {
+    navigator.serviceWorker?.controller?.postMessage({ type: 'gs-session', userId });
+  } catch { /* no service worker / private mode */ }
+}
+
+/** Called once at boot: with no token this clears any stale private cache. */
+export function syncServiceWorkerSession(): void {
+  postSession(offlineStorageScope());
 }
 
 export function getUser(): SessionUser | null {
@@ -107,6 +122,7 @@ export async function clearCachedApi(): Promise<void> {
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  postSession(null);
   void clearCachedApi();
 }
 

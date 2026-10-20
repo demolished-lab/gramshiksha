@@ -82,23 +82,20 @@ def first_lesson_and_chapter(client):
 def test_update_profile(client):
     h, _ = signup(client, "profile@x.in", name="Before Name")
 
+    before = client.get("/auth/me", headers=h).json()["school_id"]
     r = client.patch("/auth/me", json={
         "name": "After Name", "lang_pref": "mr", "class_grade": 9,
-        "board": "CBSE", "school_name": "Sunrise High"}, headers=h)
+        "board": "CBSE",
+        # H2: school membership is set at registration and cannot be moved by
+        # a self-service PATCH; the field is ignored rather than honoured.
+        "school_name": "Sunrise High"}, headers=h)
     assert r.status_code == 200 and r.json()["ok"]
 
     me = client.get("/auth/me", headers=h).json()
     assert me["name"] == "After Name"
     assert me["lang_pref"] == "mr"
     assert me["class_grade"] == 9 and me["board"] == "CBSE"
-    # school_name looks the school up (creating it when new) and links it.
-    assert me["school_id"]
-
-    # Re-sending the same school name reuses the row instead of forking a new one.
-    school_id = me["school_id"]
-    assert client.patch("/auth/me", json={"school_name": "Sunrise High"},
-                        headers=h).status_code == 200
-    assert client.get("/auth/me", headers=h).json()["school_id"] == school_id
+    assert me["school_id"] == before
 
     # Bad language code is rejected rather than stored.
     assert client.patch("/auth/me", json={"lang_pref": "de"}, headers=h).status_code == 422
@@ -219,10 +216,13 @@ def test_delete_material_permissions(client):
     assert client.delete(f"/materials/{mid}", headers=owner).status_code == 404
     assert client.get(f"/materials/{mid}/download", headers=owner).status_code == 404
 
-    # Moderators can pull material off the platform.
+    # A teacher outside the uploader's school cannot pull it (tenant scope),
+    # while a platform admin still can.
     mid2 = upload(client, owner, title="Reportable handout")
-    assert client.delete(f"/materials/{mid2}", headers=teacher).status_code == 200
-    assert client.delete("/materials/999999", headers=teacher).status_code == 404
+    assert client.delete(f"/materials/{mid2}", headers=teacher).status_code == 403
+    admin = login(client, "admin@gramshiksha.in", "Admin@1234")
+    assert client.delete(f"/materials/{mid2}", headers=admin).status_code == 200
+    assert client.delete("/materials/999999", headers=admin).status_code == 404
 
 
 # ---------- bookmarks ----------

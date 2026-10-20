@@ -1,3 +1,4 @@
+import threading
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -362,7 +363,7 @@ def _textbook_out(t: Textbook) -> dict:
             "part_label": t.part_label or None, "clicks": t.clicks}
 
 
-def check_url(url: str, timeout_s: float = 15.0) -> bool:
+def check_url(url: str, timeout_s: float = 8.0) -> bool:
     """Polite link check: HEAD, falling back to a 1-byte ranged GET."""
     import httpx
     try:
@@ -377,12 +378,14 @@ def check_url(url: str, timeout_s: float = 15.0) -> bool:
         return False
 
 
-# The proxy never buffers an unbounded body: 60 MB is far above any real
-# textbook (eB books are 3–15 MB) and keeps one bad URL from eating the
-# free-tier instance's 512 MB.
-PDF_MAX_BYTES = 60 * 1024 * 1024
-PDF_TIMEOUT_S = 30.0
+# The proxy never buffers an unbounded body: 20 MB is above every real
+# textbook (eB books are 3–15 MB) and keeps a handful of concurrent opens
+# inside the free-tier instance's 512 MB. Three simultaneous downloads is
+# plenty for the traffic this tier supports; the rest get an honest 503.
+PDF_MAX_BYTES = 20 * 1024 * 1024
+PDF_TIMEOUT_S = 15.0
 UA = "GramShiksha-book/1.0"
+_pdf_slots = threading.BoundedSemaphore(3)
 
 
 def _fetch_pdf(url: str) -> Optional[bytes]:
@@ -393,8 +396,15 @@ def _fetch_pdf(url: str) -> Optional[bytes]:
     bounce through books.ebalbharati.in / epathshala.nic.in. `url` comes from
     a verified `deep_url` row — never from request input — so this cannot be
     pointed at anything but a link our own crawler HEAD-checked.
+
+    Concurrency is bounded: the whole PDF is buffered in RAM (the viewer has
+    no range support in this design), so unbounded parallel opens could take
+    the instance down.
     """
     import httpx
+    if not _pdf_slots.acquire(blocking=False):
+        raise HTTPException(503, "Book server busy — retry shortly",
+                            headers={"Retry-After": "30"})
     try:
         with httpx.stream("GET", url, timeout=PDF_TIMEOUT_S, follow_redirects=True,
                           headers={"User-Agent": UA}) as r:
@@ -405,19 +415,21 @@ def _fetch_pdf(url: str) -> Optional[bytes]:
             if "pdf" not in ctype and "octet-stream" not in ctype \
                     and not url.split("?")[0].lower().endswith(".pdf"):
                 return None
-            chunks: list[bytes] = []
-            total = 0
+            # bytearray avoids the list-of-chunks + join double copy: peak
+            # memory is the PDF itself, not twice the PDF.
+            buf = bytearray()
             for chunk in r.iter_bytes():
-                total += len(chunk)
-                if total > PDF_MAX_BYTES:
+                if len(buf) + len(chunk) > PDF_MAX_BYTES:
                     return None  # refuse rather than melt the instance
-                chunks.append(chunk)
-        data = b"".join(chunks)
+                buf.extend(chunk)
+        data = bytes(buf)
         # PDF spec: %PDF lives in the first 1024 bytes. A 200 HTML error page
         # (soft-404) must never be handed to a viewer as a "PDF".
         return data if b"%PDF" in data[:1024] else None
     except Exception:
         return None
+    finally:
+        _pdf_slots.release()
 
 
 def _pdf_disposition(title: str, inline: bool) -> str:

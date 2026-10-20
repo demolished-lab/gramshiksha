@@ -3,6 +3,7 @@ from typing import Optional
 import hashlib
 import logging
 import secrets
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
@@ -19,6 +20,7 @@ from ..models import PasswordResetAttempt, PasswordResetCode, User
 from ..ratelimit import DEFAULT_LIMIT as RATE_LIMIT, DEFAULT_WINDOW_S as RATE_WINDOW_S  # noqa: F401
 from ..ratelimit import HITS as _RATE  # noqa: F401
 from ..ratelimit import check as _check_rate
+from ..ratelimit import rate_limit
 from ..security import create_access_token, get_current_user, hash_password, verify_password
 from pydantic import BaseModel, EmailStr, Field
 
@@ -34,23 +36,25 @@ class RegisterIn(BaseModel):
     email: EmailStr
     name: str = Field(min_length=1, max_length=80)
     password: str = Field(min_length=8, max_length=72)
-    role: str = "student"
-    lang_pref: str = "hi"
+    role: str = Field(default="student", max_length=20)
+    lang_pref: str = Field(default="hi", max_length=8)
     class_grade: Optional[int] = Field(default=None, ge=1, le=12)
-    board: Optional[str] = None
-    school_name: str = ""
+    board: Optional[str] = Field(default=None, max_length=40)
+    school_name: str = Field(default="", max_length=120)
     # Invite code ("GS000123") captured from ?ref= by the frontend. Unknown
     # or garbage codes are ignored — registration never fails over them.
-    ref: str = ""
+    ref: str = Field(default="", max_length=16)
 
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = Field(default=None, max_length=80)
-    lang_pref: Optional[str] = None
+    lang_pref: Optional[str] = Field(default=None, max_length=8)
     class_grade: Optional[int] = Field(default=None, ge=1, le=12)
-    board: Optional[str] = None
-    profile_pic: Optional[str] = None
-    school_name: Optional[str] = None
+    board: Optional[str] = Field(default=None, max_length=40)
+    profile_pic: Optional[str] = Field(default=None, max_length=500)
+    # `school_name` is deliberately absent: school membership is set once at
+    # registration and must not be self-editable afterwards, or any account
+    # could move itself into another school and read/write its scoped data.
 
 
 class ResetRequest(BaseModel):
@@ -124,10 +128,48 @@ def register(payload: RegisterIn, request: Request, session: Session = Depends(g
 def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
           session: Session = Depends(get_session)):
     _check_rate(request, "token")
-    user = session.exec(select(User).where(User.email == form.username)).first()
+    email = form.username.strip().lower()
+    _check_login_lock(email)
+    user = session.exec(select(User).where(User.email == email)).first()
     if not user or not verify_password(form.password, user.hashed_password):
+        _record_login_failure(email)
         raise HTTPException(401, "Incorrect email or password")
+    _LOGIN_FAILS.pop(email, None)
     return _login_payload(user)
+
+
+# Per-account brute-force guard, independent of the IP bucket: an attacker who
+# rotates X-Forwarded-For (or lands on another instance) still cannot try
+# unlimited passwords against one address. In-process, like the IP limiter;
+# a restart clears it, which is an acceptable trade for zero infrastructure.
+_LOGIN_FAILS: dict[str, list[float]] = {}
+_LOGIN_FAIL_LIMIT = 10
+_LOGIN_FAIL_WINDOW_S = 15 * 60.0
+
+
+def _recent_failures(email: str, now: float) -> list[float]:
+    return [t for t in _LOGIN_FAILS.get(email, []) if now - t < _LOGIN_FAIL_WINDOW_S]
+
+
+def _check_login_lock(email: str) -> None:
+    now = time.time()
+    hits = _recent_failures(email, now)
+    if len(hits) >= _LOGIN_FAIL_LIMIT:
+        wait = int(_LOGIN_FAIL_WINDOW_S - (now - hits[0])) + 1
+        raise HTTPException(
+            429, "Too many failed sign-in attempts for this account. Try again later.",
+            headers={"Retry-After": str(max(1, wait))})
+
+
+def _record_login_failure(email: str) -> None:
+    now = time.time()
+    hits = _recent_failures(email, now)
+    hits.append(now)
+    _LOGIN_FAILS[email] = hits
+    if len(_LOGIN_FAILS) > 5000:  # bound memory under a distributed spray
+        for key in [k for k, v in _LOGIN_FAILS.items()
+                    if not v or now - max(v) >= _LOGIN_FAIL_WINDOW_S]:
+            del _LOGIN_FAILS[key]
 
 
 def _login_payload(user: User) -> dict:
@@ -151,7 +193,8 @@ def _role_login(request: Request, form: OAuth2PasswordRequestForm,
     point the caller already owns the credential and /token would have told
     them the role anyway."""
     _check_rate(request, rate_key)
-    user = session.exec(select(User).where(User.email == form.username)).first()
+    email = form.username.strip().lower()
+    user = session.exec(select(User).where(User.email == email)).first()
     if not user or not verify_password(form.password, user.hashed_password):
         raise HTTPException(401, "Incorrect email or password")
     if user.role != role:
@@ -183,18 +226,9 @@ def me(user: User = Depends(get_current_user)):
 
 @router.patch("/me")
 def update_me(payload: ProfileUpdate, user: User = Depends(get_current_user),
-              session: Session = Depends(get_session)):
-    from ..models import School
-
+              session: Session = Depends(get_session),
+              _rl: None = Depends(rate_limit("auth.me.update", 30))):
     data = payload.model_dump(exclude_unset=True)
-    school_name = data.pop("school_name", None)
-    if school_name:
-        school = session.exec(select(School).where(School.name == school_name.strip())).first()
-        if not school:
-            school = School(name=school_name.strip())
-            session.add(school)
-            session.flush()
-        user.school_id = school.id
     if "lang_pref" in data and data["lang_pref"] not in ("en", "hi", "mr"):
         raise HTTPException(422, "lang must be en|hi|mr")
     for k, v in data.items():

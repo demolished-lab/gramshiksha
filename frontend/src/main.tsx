@@ -1,7 +1,7 @@
 import { Component, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { clearCachedApi } from './auth';
+import { clearCachedApi, syncServiceWorkerSession } from './auth';
 import './styles.css';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
@@ -39,6 +39,10 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>
 );
+
+// Tell the service worker which account (if any) may use its private API
+// cache. With no session this also clears caches left by a previous user.
+syncServiceWorkerSession();
 
 // A deploy replaces the hashed chunk files, so a tab that stayed open across
 // one can ask for a chunk that no longer exists and land on the error

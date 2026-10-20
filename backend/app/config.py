@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days, low-bandwidth friendly
     cors_origins: list[str] = ["http://localhost:5174", "http://127.0.0.1:5174"]
+    # Optional shared secret for POST /library/scan-requests. Empty = open
+    # (the in-process cooldown still applies); set it in Render + the GitHub
+    # workflow secret to keep the crawler off-limits to anonymous callers.
+    scan_token: str = ""
     # Upload storage: local disk by default. Set all three to use Cloudinary
     # (free tier) in production — required on multi-host/ephemeral disks.
     cloudinary_cloud_name: str = ""
@@ -84,6 +88,21 @@ class Settings(BaseSettings):
     # Referral virality loop. No monetary reward is attached (counts + a
     # leaderboard only), so fake-account farming buys an attacker nothing.
     referral_enabled: bool = True
+
+    @property
+    def cors_allow_origins(self) -> list[str]:
+        """Configured origins plus the canonical site.
+
+        The deploy env can lag behind a domain change; the canonical URL in
+        `site_url` is always allowed so a stale CORS_ORIGINS value can never
+        break the real frontend (the old value only *adds* origins, it never
+        removes this one).
+        """
+        origins = {o.strip().rstrip("/") for o in self.cors_origins if o.strip()}
+        canonical = self.site_url.strip().rstrip("/")
+        if canonical:
+            origins.add(canonical)
+        return sorted(origins)
 
     @property
     def is_production(self) -> bool:

@@ -18,11 +18,12 @@ government portals are ever scanned — never pirated mirrors.
 import json
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
@@ -32,7 +33,7 @@ from ..config import settings
 from ..db import get_session
 from ..models import BookRequest, Notification, ReadingPick, Textbook, User, utcnow
 from ..ratelimit import rate_limit
-from ..security import get_current_user, require_teacher
+from ..security import get_current_user, has_role, require_teacher
 from .catalog import _check_stream, _textbook_out, check_url
 from ..streams import stream_for
 
@@ -50,9 +51,14 @@ router = APIRouter(tags=["library"])
 
 SCAN_YEAR = "2026"        # eBalbharati catalog year (matches the crawler default)
 SCAN_FTYPE = "101"        # 101 = Text Books filter
-SCAN_BUDGET_S = 45.0      # hard deadline for one live scan
+SCAN_BUDGET_S = 20.0      # hard deadline for one live scan (was 45s: a slow
+                          # portal could pin two threadpool workers for most of
+                          # a minute each, starving every other request)
 SCAN_COOLDOWN_S = 120.0   # min gap between scan-requests passes
-MAX_SCAN_REQUESTS = 10    # pendings considered per pass
+MAX_SCAN_REQUESTS = 8     # pendings considered per pass
+# At most two outbound crawls at a time. locate() is a sync route (threadpool),
+# so a non-blocking acquire degrades to "queued" instead of hanging.
+_scan_slots = threading.BoundedSemaphore(2)
 PORTAL = "https://books.ebalbharati.in"
 PDF_BASE = "https://ebooks.ebalbharati.in/pdfs"
 COVER_BASE = "https://books.ebalbharati.in/BookCovers"
@@ -122,7 +128,7 @@ def scan_official(q: str, grade: int, pref_langs: list[str],
     class_code = str(200 + grade)  # 201..212 == 1st..12th (portal contract)
     scanned: list[str] = []
     out: list[dict] = []
-    with httpx.Client(headers=UA, follow_redirects=True) as client:
+    with httpx.Client(headers=UA, follow_redirects=True, timeout=8.0) as client:
         for code in order:
             if time.monotonic() >= deadline:
                 break
@@ -216,9 +222,14 @@ def _optional_user(token: Optional[str] = Depends(_optional_oauth2),
 class LocateIn(BaseModel):
     q: str = Field(min_length=1, max_length=120)
     class_grade: Optional[int] = Field(default=None, ge=1, le=12)
-    board: str = ""
-    lang: str = ""
-    stream: str = ""
+    board: str = Field(default="", max_length=40)
+    lang: str = Field(default="", max_length=8)
+    stream: str = Field(default="", max_length=20)
+
+
+def _teacher_name(u: User) -> str:
+    """Public display name — never the local part of an email address."""
+    return (u.name or "").strip() or "Teacher"
 
 
 def _eta_seconds(lang: str) -> int:
@@ -245,10 +256,13 @@ def locate(payload: LocateIn, session: Session = Depends(get_session),
                 "eta_seconds": 0, "elapsed_s": round(time.monotonic() - t0, 1)}
 
     scanned: list[str] = []
-    if payload.class_grade:
-        pref = [payload.lang] if payload.lang else ["mr", "hi", "en"]
-        hits, scanned = scan_official(q, payload.class_grade, pref,
-                                      t0 + SCAN_BUDGET_S)
+    if payload.class_grade and _scan_slots.acquire(blocking=False):
+        try:
+            pref = [payload.lang] if payload.lang else ["mr", "hi", "en"]
+            hits, scanned = scan_official(q, payload.class_grade, pref,
+                                          t0 + SCAN_BUDGET_S)
+        finally:
+            _scan_slots.release()
         if hits:
             h = hits[0]
             row = ingest_hit(session, title=h["title"], pdf=h["pdf"],
@@ -273,13 +287,26 @@ def locate(payload: LocateIn, session: Session = Depends(get_session),
 
 @router.post("/library/scan-requests",
              dependencies=[Depends(rate_limit("library.scan", 4, 60.0))])
-def scan_requests(session: Session = Depends(get_session)) -> dict:
+def scan_requests(session: Session = Depends(get_session),
+                  x_scan_token: str = Header("")) -> dict:
     """Keep-warm re-scan of pending asks (every 10 min in production).
 
     Tier order per request: library first (a later locate/apply may already
     have ingested it), then the official portal. A module-level cooldown
-    keeps this public endpoint from turning into a crawl cannon.
+    keeps this public endpoint from turning into a crawl cannon. Set
+    SCAN_TOKEN to also require the shared `X-Scan-Token` header.
     """
+    if settings.scan_token and x_scan_token != settings.scan_token:
+        raise HTTPException(403, "Invalid scan token")
+    if not _scan_slots.acquire(blocking=False):
+        return {"skipped": True, "busy": True}
+    try:
+        return _scan_pending(session)
+    finally:
+        _scan_slots.release()
+
+
+def _scan_pending(session: Session) -> dict:
     now = time.monotonic()
     if now - _last_scan_at[0] < SCAN_COOLDOWN_S:
         return {"skipped": True,
@@ -428,7 +455,7 @@ def reading_list(mine: bool = False,
         return []
     teacher_ids = {r.teacher_id for r in rows}
     book_ids = {r.textbook_id for r in rows if r.textbook_id}
-    teachers = {u.id: (u.name or u.email.split("@")[0]) for u in session.exec(
+    teachers = {u.id: _teacher_name(u) for u in session.exec(
         select(User).where(User.id.in_(teacher_ids))).all()}
     books = {b.id: b for b in session.exec(
         select(Textbook).where(Textbook.id.in_(book_ids))).all()} if book_ids else {}
@@ -499,7 +526,7 @@ def create_reading(payload: ReadingIn,
     session.add(row)
     session.commit()
     session.refresh(row)
-    return _pick_out(row, teacher.name or teacher.email.split("@")[0],
+    return _pick_out(row, _teacher_name(teacher),
                      bool(book and book.deep_url and book.last_ok)) | {"created": created}
 
 
@@ -512,9 +539,16 @@ def delete_reading(pick_id: int, user: User = Depends(get_current_user),
     row = session.get(ReadingPick, pick_id)
     if row is None:
         raise HTTPException(404, "Reading pick not found")
-    if row.teacher_id != user.id and user.role not in ("school_admin",
-                                                       "platform_admin"):
-        raise HTTPException(403, "Not your pick")
+    if row.teacher_id != user.id:
+        # Admins can withdraw any pick, but a school admin only inside their
+        # own school — role alone must not reach across tenants.
+        if not has_role(user, "school_admin", "platform_admin"):
+            raise HTTPException(403, "Not your pick")
+        if not has_role(user, "platform_admin"):
+            owner = session.get(User, row.teacher_id)
+            if not (user.school_id is not None and owner
+                    and owner.school_id == user.school_id):
+                raise HTTPException(403, "Not your pick")
     session.delete(row)
     session.commit()
     return {"deleted": pick_id}

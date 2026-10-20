@@ -227,10 +227,14 @@ def test_suspension_withdraws_powers_and_is_reversible(client):
     # The account itself survives: still logged in, still readable...
     assert client.get("/auth/me", headers=teacher).json()["role_status"] == "suspended"
     assert client.get("/courses", headers=teacher).status_code == 200
-    # ...but new uploads fall back to the review queue, like an unapproved
-    # teacher's — a suspended account must not be able to publish.
-    _, status = upload(client, teacher, title="Suspended teacher notes")
-    assert status == "pending"
+    # ...but a suspended account is fully read-only: even the normally
+    # approval-gated upload path (require_any) must refuse it.
+    r = client.post("/materials", data={
+        "title": "Suspended teacher notes", "type": "notes", "class_grade": 8,
+        "board": "Maharashtra SSC", "subject_name": "Science", "lang": "en",
+        "visibility": "public", "source_of_content": "test fixture"},
+        files={"file": ("a.pdf", PDF, "application/pdf")}, headers=teacher)
+    assert r.status_code == 403 and r.json()["detail"] == "Account suspended"
 
     # Idempotent in both directions; approve restores every power.
     assert client.post(f"/admin/users/{teacher_id}/suspend",

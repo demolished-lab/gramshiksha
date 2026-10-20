@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import update as sqlalchemy_update
+from sqlalchemy import or_, update as sqlalchemy_update
 from sqlmodel import Session, select
 
 from ..authorization import visible_students, visible_teacher_ids
@@ -13,6 +13,7 @@ from ..config import settings
 from ..db import get_session
 from ..models import (BadgeDef, Course, DailyActivity, Doubt, Lesson, Material, Notification, Progress, Question,
                       QuizAttempt, TopicStats, User, UserBadge, Certificate)
+from ..ratelimit import rate_limit
 from ..security import get_current_user, require_roles
 
 router = APIRouter(tags=["dashboards"])
@@ -163,15 +164,21 @@ def parent_children(user=Depends(require_roles("parent")),
     return out
 
 
-@router.post("/parent/invite")
+@router.post("/parent/invite",
+             dependencies=[Depends(rate_limit("parent.invite", 10))])
 def parent_invite(payload: ParentInviteIn, user=Depends(require_roles("student")),
                   session: Session = Depends(get_session)):
+    """Issue a parent-link invitation.
+
+    The same 200 answer is returned whether or not that email already has a
+    parent account: the token is bound to the *email*, and `parent_link`
+    verifies the caller's address, so it still works if the parent signs up
+    during the 30-minute window. This removes the account-enumeration oracle
+    the old 404 ("Create a parent account…") provided.
+    """
     if user.parent_of_id is not None:
         raise HTTPException(409, "A parent is already linked to this account")
     parent_email = str(payload.parent_email).strip().lower()
-    parent = session.exec(select(User).where(User.email == parent_email)).first()
-    if not parent or parent.role != "parent":
-        raise HTTPException(404, "Create a parent account with this email before requesting an invite")
     now = datetime.now(timezone.utc)
     invite = jwt.encode({
         "sub": str(user.id), "parent_email": parent_email,
@@ -232,9 +239,11 @@ def school_stats(user=Depends(require_roles("school_admin", "platform_admin")),
 
 
 @router.post("/school/announce")
-def school_announce(title: str = Query(...), body: str = Query(""),
+def school_announce(title: str = Query(..., min_length=1, max_length=120),
+                    body: str = Query("", max_length=2000),
                     user=Depends(require_roles("school_admin", "platform_admin")),
-                    session: Session = Depends(get_session)):
+                    session: Session = Depends(get_session),
+                    _rl: None = Depends(rate_limit("school.announce", 20))):
     students = visible_students(user, session)
     for s in students:
         session.add(Notification(user_id=s.id, type="announcement",
@@ -432,13 +441,22 @@ def search(q: str = Query(..., min_length=2, max_length=100), class_grade: Optio
             results["lessons"].append({"id": les.id, "title_en": les.title_en, "title_hi": les.title_hi})
             if len(results["lessons"]) >= limit:
                 break
-    mq = select(Material).where(Material.status == "approved")
+    # Materials follow the same visibility rules as the library list: public +
+    # own + own-school. Previously this searched every approved material,
+    # including private ones from other schools.
+    from .materials import _visible_query
+    mq = _visible_query(user)
     for m in session.exec(mq.limit(200)).all():
         if q.lower() in (m.title + m.description).lower():
             results["materials"].append({"id": m.id, "title": m.title, "type": m.type})
             if len(results["materials"]) >= limit:
                 break
-    for qq in session.exec(select(Question).limit(300)).all():
+    # Questions follow their lesson: an unpublished draft must not be
+    # discoverable (and its prompt must not leak) through search.
+    qq_stmt = (select(Question)
+               .outerjoin(Lesson, Lesson.id == Question.lesson_id)
+               .where(or_(Question.lesson_id.is_(None), Lesson.published.is_(True))))
+    for qq in session.exec(qq_stmt.limit(300)).all():
         if q.lower() in (qq.prompt_en + qq.prompt_hi).lower():
             results["questions"].append({"id": qq.id, "prompt_en": qq.prompt_en})
             if len(results["questions"]) >= limit:

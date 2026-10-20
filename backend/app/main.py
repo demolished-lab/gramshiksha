@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -64,6 +65,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        # HSTS only on a real HTTPS deployment: sending it from localhost would
+        # make browsers force HTTPS on the dev server. Render/Vercel terminate
+        # TLS, so this is safe in production.
+        if settings.is_production:
+            resp.headers.setdefault("Strict-Transport-Security",
+                                    "max-age=63072000; includeSubDomains")
+        # Authenticated payloads are per-user and must never land in a shared
+        # cache (Vercel's edge otherwise stamps them public, max-age=0).
+        # Auth endpoints carry tokens, so they are never stored at all; other
+        # private responses may be held by the user's own browser/SW cache
+        # (that is what makes offline lessons work) but not by any proxy.
+        if request.headers.get("authorization"):
+            if request.url.path.startswith("/api/auth/") or request.url.path.startswith("/auth/"):
+                resp.headers["Cache-Control"] = "no-store"
+            else:
+                resp.headers["Cache-Control"] = "private, max-age=0, must-revalidate"
+            resp.headers.append("Vary", "Authorization")
         return resp
 
 
@@ -78,8 +96,10 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     `save_upload` only checks the size *after* Starlette has received the whole
     body (SpooledTemporaryFile), so without this a single large POST could
     still exhaust a free-tier instance's memory and disk. A declared
-    Content-Length over the cap is refused with 413 up front; chunked uploads
-    carry no header and still fall through to the per-file cap.
+    Content-Length over the cap is refused with 413 up front. Chunked bodies
+    carry no length; they are still bounded by `save_upload`'s read cap and the
+    per-IP rate limit, and rejecting them outright would break proxies that
+    legitimately stream a form upload.
     """
 
     async def dispatch(self, request, call_next):
@@ -102,7 +122,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     return it to the client."""
 
     async def dispatch(self, request, call_next):
-        rid = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+        # A client-supplied id is echoed back and logged; keep it short and
+        # boring so a 200-char header can't poison logs or blow up a response.
+        raw = request.headers.get("X-Request-ID", "")
+        rid = raw.strip() if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", raw.strip()) else ""
+        rid = rid or uuid.uuid4().hex[:12]
         request.state.request_id = rid
         started = time.perf_counter()
         try:
@@ -215,8 +239,10 @@ app.add_middleware(BodySizeLimitMiddleware)  # innermost: 413s still get our hea
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=settings.cors_allow_origins,
+    # Bearer tokens travel in the Authorization header, not cookies; disabling
+    # credentials keeps a future cookie from being sent cross-origin by accident.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -260,12 +286,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "app": settings.app_name, "version": "0.2.0"}
+    return {"status": "ok", "app": settings.app_name}
 
 
 @app.get("/api/health")
 def health_api() -> dict:
-    return {"status": "ok", "app": settings.app_name, "version": "0.2.0"}
+    return {"status": "ok", "app": settings.app_name}
 
 
 @app.get("/ready")

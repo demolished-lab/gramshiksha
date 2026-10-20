@@ -146,4 +146,8 @@ def require_any(user: User = Depends(get_current_user)) -> User:
     if user.role not in ("student", "teacher", "parent", "school_admin", "platform_admin"):
         raise HTTPException(status_code=403,
                             detail="Requires a student, teacher, parent or admin account")
+    # Pending is fine (their upload is moderated), suspended is not: a
+    # suspended account must not be able to write anything anywhere.
+    if user.role_status == "suspended":
+        raise HTTPException(status_code=403, detail=_status_detail("suspended"))
     return user

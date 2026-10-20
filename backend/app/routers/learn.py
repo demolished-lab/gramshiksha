@@ -44,6 +44,8 @@ def get_lesson(lesson_id: int, lang: str = "en", session: Session = Depends(get_
         raise HTTPException(404, "Lesson not found")
     chapter = session.get(Chapter, lesson.chapter_id)
     course = session.get(Course, chapter.course_id) if chapter else None
+    if course is not None and not course.published:
+        raise HTTPException(404, "Lesson not found")
     questions = session.exec(select(Question).where(Question.lesson_id == lesson_id)).all()
     prog = session.exec(select(Progress).where(
         Progress.user_id == user.id, Progress.lesson_id == lesson_id)).first()
@@ -80,7 +82,9 @@ def complete_lesson(lesson_id: int, minutes: int = Query(10, le=120),
     session.add(prog)
     if first_time:
         on_lesson_complete(session, user)
-        log_study_time(session, user, minutes)
+        # Client-supplied minutes are a hint, not a fact: clamp so one request
+        # cannot mint a whole day of study time (and streak credit).
+        log_study_time(session, user, max(0, min(minutes, 30)))
         _update_course_progress(session, user, lesson)
     session.add(user)
     session.commit()
@@ -108,12 +112,15 @@ def _update_course_progress(session: Session, user: User, lesson: Lesson) -> Non
     enr.progress_pct = pct
     session.add(enr)
     if pct >= 100.0:
-        on_course_complete(session, user)
         from ..models import Certificate
         import uuid
         exists = session.exec(select(Certificate).where(
             Certificate.user_id == user.id, Certificate.course_id == course.id)).first()
         if not exists:
+            # Award exactly once, when the certificate is actually issued —
+            # previously this ran on every completed lesson, so re-opening a
+            # finished course could farm course-completion XP indefinitely.
+            on_course_complete(session, user)
             session.add(Certificate(user_id=user.id, course_id=course.id,
                                     cert_id=f"GS-{uuid.uuid4().hex[:10].upper()}"))
 
@@ -156,10 +163,15 @@ def get_quiz(quiz_id: int, lang: str = "en", session: Session = Depends(get_sess
 @router.post("/quizzes/{quiz_id}/submit")
 def submit_quiz(quiz_id: int, payload: QuizSubmit, lang: str = "en",
                 user: User = Depends(require_student),
-                session: Session = Depends(get_session)):
+                session: Session = Depends(get_session),
+                _rl: None = Depends(rate_limit("learn.quiz.submit", 20))):
     quiz = session.get(Quiz, quiz_id)
     if not quiz or not _quiz_is_available(quiz, session):
         raise HTTPException(404, "Quiz not found")
+    # XP is for *learning*, not for clicking: a retake still records the
+    # attempt and updates topic stats, but only the first submit pays out.
+    first_attempt = session.exec(select(QuizAttempt.id).where(
+        QuizAttempt.user_id == user.id, QuizAttempt.quiz_id == quiz_id)).first() is None
     rows = session.exec(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id)).all()
     questions = [session.get(Question, r.question_id) for r in rows]
     questions = [q for q in questions if q and _question_is_available(q, session)]
@@ -186,7 +198,8 @@ def submit_quiz(quiz_id: int, payload: QuizSubmit, lang: str = "en",
                             answers=json.dumps(payload.answers, ensure_ascii=False),
                             score=score, max_score=max_score,
                             time_taken_s=payload.time_taken_s))
-    on_quiz(session, user, score_pct)
+    if first_attempt:
+        on_quiz(session, user, score_pct)
     session.add(user)
     session.commit()
     return {"score": score, "max_score": max_score, "percentage": score_pct,
@@ -244,7 +257,7 @@ def practice_answer(payload: PracticeSubmit, lang: str = "en",
     _record_topic(session, user, q, ok)
     on_practice(session, user)
     if payload.minutes:
-        log_study_time(session, user, payload.minutes)
+        log_study_time(session, user, max(0, min(payload.minutes, 15)))
     session.add(user)
     session.commit()
     return {"correct": ok, "correct_answer": correct_payload,

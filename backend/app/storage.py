@@ -26,6 +26,31 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 CLOUDINARY_PREFIX = "cloudinary://"
 
 
+def _looks_like(data: bytes, ext: str) -> bool:
+    """Cheap signature check — the extension alone is attacker-controlled.
+
+    A .pdf that is really HTML, or a .pptx that is really a zip bomb, would
+    otherwise be stored and later served/opened. This is not a full parser;
+    it stops the obvious "rename any file" attack.
+    """
+    if ext == ".webp":
+        return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    if ext == ".mp3":
+        return data[:3] == b"ID3" or (
+            len(data) >= 2 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0)
+    if ext == ".m4a":
+        return data[4:8] == b"ftyp"
+    if ext == ".pptx":
+        return data[:4] in (b"PK\x03\x04", b"PK\x05\x06")
+    signature = {
+        ".pdf": b"%PDF-",
+        ".png": b"\x89PNG\r\n\x1a\n",
+        ".jpg": b"\xff\xd8\xff",
+        ".jpeg": b"\xff\xd8\xff",
+    }.get(ext)
+    return bool(signature) and data.startswith(signature)
+
+
 def save_upload(file: UploadFile, allowed_ext: dict[str, str], max_size: int) -> tuple[str, int]:
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in allowed_ext:
@@ -33,6 +58,8 @@ def save_upload(file: UploadFile, allowed_ext: dict[str, str], max_size: int) ->
     data = file.file.read(max_size + 1)
     if len(data) > max_size:
         raise HTTPException(422, "File too large (max 10 MB)")
+    if not _looks_like(data, ext):
+        raise HTTPException(422, f"File content does not look like a valid {ext} file")
     if settings.cloudinary_enabled:
         return _save_cloudinary(data, ext)
     return _save_local(data, ext)

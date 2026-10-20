@@ -1,3 +1,4 @@
+import { clearCachedApi } from './auth';
 import type {
   Availability, BookAsk, Doubt, LessonDetail, Lang, LocateResult, LoginResponse, Material, Me, Notification,
   ParentChild, ProgressSummary, Question, QuizDetail, QuizResult, ReadingPick, RoleStatus,
@@ -16,6 +17,9 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
     // Token expired/invalid — drop session so the UI falls back to login.
     localStorage.removeItem('gs_token');
     localStorage.removeItem('gs_user');
+    // Also drop cached API bodies for the dead session: the next person on
+    // this device must not read them offline.
+    void clearCachedApi();
   }
   if (!res.ok) {
     let detail = res.statusText;

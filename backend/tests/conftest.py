@@ -28,10 +28,13 @@ def _rate_limiter_isolation():
     endpoint and every test shares the TestClient's single "testclient" IP, so
     without this, tests would bleed into each other and flake."""
     from app.ratelimit import clear
+    from app.routers import auth as auth_router
 
     clear()
+    auth_router._LOGIN_FAILS.clear()
     yield
     clear()
+    auth_router._LOGIN_FAILS.clear()
 
 
 @pytest.fixture(autouse=True)

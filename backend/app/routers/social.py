@@ -8,7 +8,7 @@ from ..authorization import visible_students
 from ..db import get_session
 from ..models import (Bookmark, Doubt, DoubtReply, Note, Notification, User)
 from ..ratelimit import rate_limit
-from ..security import get_current_user, require_roles
+from ..security import get_current_user, has_role, require_roles
 from ..streams import stream_for
 from .catalog import _check_stream
 
@@ -43,13 +43,14 @@ def my_doubts(user=Depends(get_current_user),
     _check_stream(stream)
     if user.role == "student":
         rows = session.exec(select(Doubt).where(Doubt.student_id == user.id)).all()
-    elif user.role == "platform_admin":
+    elif has_role(user, "platform_admin"):
         rows = session.exec(select(Doubt).order_by(Doubt.created_at.desc())).all()
-    elif user.role in ("teacher", "school_admin"):
+    elif has_role(user, "teacher", "school_admin"):
         student_ids = [student.id for student in visible_students(user, session)]
         rows = session.exec(select(Doubt).where(Doubt.student_id.in_(student_ids))
                             .order_by(Doubt.created_at.desc())).all() if student_ids else []
     else:
+        # Suspended staff: no scope at all.
         rows = []
     if stream:
         rows = [d for d in rows if d.stream in ("", stream)]
@@ -99,9 +100,14 @@ def resolve_doubt(doubt_id: int, user=Depends(get_current_user),
     d = session.get(Doubt, doubt_id)
     if not d:
         raise HTTPException(404, "Doubt not found")
-    if d.student_id != user.id and user.role != "platform_admin":
-        visible_ids = {student.id for student in visible_students(user, session)}
-        if d.student_id not in visible_ids:
+    if d.student_id != user.id:
+        if has_role(user, "platform_admin"):
+            pass
+        elif has_role(user, "teacher", "school_admin"):
+            visible_ids = {student.id for student in visible_students(user, session)}
+            if d.student_id not in visible_ids:
+                raise HTTPException(403, "Not allowed")
+        else:
             raise HTTPException(403, "Not allowed")
     d.status = "resolved"
     session.add(d)

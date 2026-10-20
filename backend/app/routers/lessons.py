@@ -26,7 +26,7 @@ from ..db import get_session
 from ..gamification import log_study_time
 from ..models import Chapter, Course, Lesson, Progress, Question, User, utcnow
 from ..schemas import AttemptIn, AttemptOut, LessonCreate, LessonRead, QuestionIn, QuestionOut
-from ..security import get_current_user, require_student, require_teacher
+from ..security import get_current_user, has_role, require_student, require_teacher
 from .learn import _grade, _record_topic
 
 router = APIRouter(prefix="/lessons", tags=["lessons"])
@@ -37,12 +37,12 @@ DIFFICULTIES = ("easy", "medium", "hard")
 
 
 def _can_manage_course(actor: User, course: Course, session: Session) -> bool:
-    if actor.role == "platform_admin":
+    if has_role(actor, "platform_admin"):
         return True
-    if actor.role == "school_admin":
+    if has_role(actor, "school_admin"):
         owner = session.get(User, course.teacher_id) if course.teacher_id else None
         return bool(actor.school_id is not None and owner and owner.school_id == actor.school_id)
-    return actor.role == "teacher" and course.teacher_id == actor.id
+    return has_role(actor, "teacher") and course.teacher_id == actor.id
 
 
 def _lesson_course(lesson: Lesson, session: Session) -> Optional[Course]:
@@ -235,7 +235,10 @@ def submit_attempt(lesson_id: int, payload: AttemptIn,
     on the Progress row — same semantics as the quiz engine.
     """
     lesson = session.get(Lesson, lesson_id)
-    if not lesson:
+    if not lesson or not lesson.published:
+        raise HTTPException(404, "Lesson not found")
+    course = _lesson_course(lesson, session)
+    if course is not None and not course.published:
         raise HTTPException(404, "Lesson not found")
     questions = session.exec(select(Question)
                              .where(Question.lesson_id == lesson_id)
@@ -277,7 +280,7 @@ def submit_attempt(lesson_id: int, payload: AttemptIn,
     prog.updated_at = utcnow()
     session.add(prog)
     if payload.minutes:
-        log_study_time(session, user, payload.minutes)
+        log_study_time(session, user, min(payload.minutes, 30))
     session.add(user)
     session.commit()
 

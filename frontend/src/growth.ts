@@ -72,6 +72,14 @@ export function getReferral(): string {
   }
 }
 
+/** One signup per captured invite: the code must not credit every account
+ *  created later on the same device. */
+export function clearReferral(): void {
+  try {
+    localStorage.removeItem(REF_KEY);
+  } catch { /* ignore */ }
+}
+
 /** Canonical invite link for a user's own code. */
 export function inviteLink(code: string, siteUrl = OFF_CONFIG.site_url): string {
   return `${siteUrl.replace(/\/$/, '')}/?ref=${code}#/home`;
