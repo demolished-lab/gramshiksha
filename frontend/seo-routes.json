@@ -185,10 +185,10 @@
     },
     {
       "path": "/explore/{grade}",
-      "title": "Class {grade} Courses, Lessons & Practice — SSC, HSC & CBSE | GramShiksha Academy",
-      "description": "Free Class {grade} lessons, practice questions, notes and textbook links for Maharashtra SSC, HSC and CBSE. Learn in English, Hindi or Marathi.",
+      "title": "Class {grade} Courses, Lessons & Practice — {boards} | GramShiksha Academy",
+      "description": "Free Class {grade} lessons, practice questions, notes and textbook links for Maharashtra {boards}. Learn in English, Hindi or Marathi.",
       "h1": "Class {grade} Courses, Lessons & Practice",
-      "summary": "Free Class {grade} courses, lessons, practice and study materials for SSC, HSC and CBSE, in English, Hindi and Marathi.",
+      "summary": "Free Class {grade} courses, lessons, practice and study materials for {boards}, in English, Hindi and Marathi.",
       "robots": "index, follow, max-image-preview:large",
       "sitemap": true,
       "priority": 0.7,
@@ -200,7 +200,7 @@
         "@type": "CollectionPage",
         "name": "Class {grade} Courses",
         "url": "https://gramshiksha-academy.vercel.app/explore/{grade}",
-        "description": "Free Class {grade} lessons, practice and textbooks for SSC, HSC and CBSE.",
+        "description": "Free Class {grade} lessons, practice and textbooks for {boards}.",
         "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" }
       }
     },

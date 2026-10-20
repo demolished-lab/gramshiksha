@@ -25,7 +25,8 @@ const DEFAULT_IMAGE = data.image;
 
 const fill = (value: unknown, grade: number): unknown => {
   if (typeof value === 'string') {
-    return value.replace(/\{grade\}/g, String(grade));
+    const boards = grade >= 11 ? 'HSC & CBSE' : 'SSC & CBSE';
+    return value.replace(/\{grade\}/g, String(grade)).replace(/\{boards\}/g, boards);
   }
   if (Array.isArray(value)) return value.map((item) => fill(item, grade));
   if (value && typeof value === 'object') {

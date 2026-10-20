@@ -27,7 +27,10 @@ const escapeHtml = (value) => String(value)
   .replaceAll('"', '&quot;');
 
 const fill = (value, grade) => {
-  if (typeof value === 'string') return value.replaceAll('{grade}', String(grade));
+  if (typeof value === 'string') {
+    const boards = grade >= 11 ? 'HSC & CBSE' : 'SSC & CBSE';
+    return value.replaceAll('{grade}', String(grade)).replaceAll('{boards}', boards);
+  }
   if (Array.isArray(value)) return value.map((item) => fill(item, grade));
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, fill(item, grade)]));
