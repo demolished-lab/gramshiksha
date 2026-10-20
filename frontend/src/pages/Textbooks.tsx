@@ -153,10 +153,17 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
   }, [avail, bookLang, subject]);
 
   useEffect(() => {
+    // Responses are not ordered: changing Class and then Board fires two
+    // requests, and on a ~400 ms database the first one can land last. Live
+    // evidence: a CBSE filter showing 75 Balbharati (SSC) books. Drop every
+    // answer that belongs to a filter set we have already moved on from.
+    let live = true;
     setLoading(true);
     apiTextbooks(grade, board, bookLang || null, subject || null, stream || null)
-      .then(setBooks).catch(() => setBooks([]))
-      .finally(() => setLoading(false));
+      .then((rows) => { if (live) setBooks(rows); })
+      .catch(() => { if (live) setBooks([]); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
   }, [grade, board, bookLang, subject, stream, reload]);
 
   // ETA countdown while the official portal is being scanned server-side.
