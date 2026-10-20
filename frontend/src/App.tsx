@@ -50,6 +50,23 @@ export default function App() {
     };
   }, []);
 
+  // api.ts clears a dead token on every 401; this also clears the React user
+  // so a guarded page redirects to its login instead of showing a signed-in
+  // shell full of failed requests.
+  useEffect(() => {
+    const expired = () => {
+      setUser(null);
+      setShowAuth(false);
+      setMobileNavOpen(false);
+    };
+    window.addEventListener('gs:session-expired', expired);
+    // Child effects run before this one, so a very fast 401 can land before
+    // the listener exists. By then api.ts has already cleared storage; read it
+    // once here so the shell does not keep a dead user in memory.
+    if (!getUser()) setUser(null);
+    return () => window.removeEventListener('gs:session-expired', expired);
+  }, []);
+
   useEffect(() => {
     if (user?.role === 'student') void syncQueuedProgress().catch(() => {});
   }, [user?.role]);

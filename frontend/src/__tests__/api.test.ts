@@ -84,7 +84,11 @@ describe('request framing', () => {
 });
 
 describe('error handling', () => {
-  it('clears the session on 401 so the UI falls back to login', async () => {
+  it('clears the session and notifies the app on 401 so it falls back to login', async () => {
+    const target = new EventTarget();
+    vi.stubGlobal('window', target);
+    let expired = 0;
+    target.addEventListener('gs:session-expired', () => { expired += 1; });
     localStorage.setItem('gs_token', 'expired');
     localStorage.setItem('gs_user', JSON.stringify({ name: 'Asha' }));
     fetchMock.mockResolvedValue(jsonResponse(401, { detail: 'Could not validate credentials' }));
@@ -93,6 +97,8 @@ describe('error handling', () => {
 
     expect(localStorage.getItem('gs_token')).toBeNull();
     expect(localStorage.getItem('gs_user')).toBeNull();
+    // Storage alone left React believing the user was still signed in.
+    expect(expired).toBe(1);
   });
 
   it('surfaces FastAPI validation arrays as readable errors', async () => {

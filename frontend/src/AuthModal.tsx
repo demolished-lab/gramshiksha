@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiLogin, apiRegister } from './api';
 import { saveSession } from './auth';
 import { clearReferral, getReferral } from './growth';
@@ -20,6 +20,22 @@ export default function AuthModal({ lang, onClose, onAuthed }: {
   const [prefLang, setPrefLang] = useState<Lang>(lang);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  // A small phone (or a phone with the keyboard open) must be able to scroll
+  // the longer sign-up form instead of losing the top fields off-screen.
+  // Lock the page behind the dialog so its own scroll is the only one.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
 
   const submit = async () => {
     setBusy(true); setErr('');
@@ -46,10 +62,9 @@ export default function AuthModal({ lang, onClose, onAuthed }: {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }}
-      onClick={onClose} role="dialog" aria-modal="true">
-      <div className="card" style={{ width: 380, maxWidth: '94vw' }} onClick={(e) => e.stopPropagation()}>
-        <h3>{mode === 'login' ? t('login', lang) : t('register', lang)}</h3>
+    <div className="auth-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <div className="card auth-card" onClick={(e) => e.stopPropagation()}>
+        <h3 id="auth-title">{mode === 'login' ? t('login', lang) : t('register', lang)}</h3>
         {mode === 'register' && (
           <>
             <label>{t('name', lang)}</label>

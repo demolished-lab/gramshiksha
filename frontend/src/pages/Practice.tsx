@@ -14,14 +14,19 @@ export default function Practice({ lang }: { lang: Lang }) {
   const [weak, setWeak] = useState<WeakTopics | null>(null);
   const [difficulty, setDifficulty] = useState('');
   const [error, setError] = useState('');
+  // An empty question set is a valid answer, not a permanent skeleton. Keep
+  // loading separate from the error so a class with no questions gets a way
+  // out instead of an endless shimmer.
+  const [loading, setLoading] = useState(true);
   const [flagged, setFlagged] = useState<number[]>([]);
   const [answered, setAnswered] = useState<number[]>([]);
 
   const load = (diff: string) => {
     setQuestions([]); setIdx(0); setFeedback(null); setChosen(null);
-    setFlagged([]); setAnswered([]);
+    setFlagged([]); setAnswered([]); setError(''); setLoading(true);
     apiPracticeQuestions({ difficulty: diff || undefined, limit: 10, lang })
-      .then(setQuestions).catch((e) => setError(String(e)));
+      .then((rows) => { setQuestions(rows); setLoading(false); })
+      .catch((e) => { setError(String(e)); setLoading(false); });
   };
 
   useEffect(() => {
@@ -96,7 +101,14 @@ export default function Practice({ lang }: { lang: Lang }) {
           ))}
         </div>
 
-        {!questions.length && !error && <div className="skeleton" style={{ height: 80 }} />}
+        {loading && !questions.length && <div className="skeleton" style={{ height: 80 }} />}
+        {!loading && !error && !questions.length && (
+          <div className="empty-state">
+            <div className="icon" aria-hidden="true">📝</div>
+            <p>{t('empty', lang)}</p>
+            <button className="btn small" onClick={() => load(difficulty)}>{t('retry', lang)}</button>
+          </div>
+        )}
 
         {q && (
           <>

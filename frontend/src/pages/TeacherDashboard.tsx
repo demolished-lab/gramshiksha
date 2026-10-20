@@ -17,6 +17,7 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
   const [replyFor, setReplyFor] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
   const [error, setError] = useState('');
+  const [studentsLoaded, setStudentsLoaded] = useState(false);
 
   // Monthly Reading List: the teacher's own picks (`mine=1`) plus the form.
   const [picks, setPicks] = useState<ReadingPick[]>([]);
@@ -32,9 +33,11 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
   };
 
   const load = () => {
+    setStudentsLoaded(false);
     Promise.all([apiTeacherOverview(), apiTeacherStudents(), apiDoubts()])
       .then(([ov, st, db]) => { setOverview(ov); setStudents(st); setDoubts(db.filter((d) => d.status === 'pending')); })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(String(e)))
+      .finally(() => setStudentsLoaded(true));
   };
   useEffect(load, []);
   // Kept off `load()` on purpose: a reading-list hiccup must not blank the
@@ -198,7 +201,7 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
 
       <div className="card">
         <h3>🚨 Students needing help</h3>
-        {!students.length && <p className="muted">{t('loading', lang)}</p>}
+        {!students.length && !error && <p className="muted">{studentsLoaded ? t('empty', lang) : t('loading', lang)}</p>}
         {students.filter((s) => s.weak_topics.length > 0 || s.quiz_avg_pct !== null && s.quiz_avg_pct < 50).length === 0 && students.length > 0 && (
           <p className="success">All students are doing well ✓</p>
         )}

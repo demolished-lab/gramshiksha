@@ -20,6 +20,10 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
     // Also drop cached API bodies for the dead session: the next person on
     // this device must not read them offline.
     void clearCachedApi();
+    // Storage alone does not change React's in-memory user, so the shell kept
+    // rendering a signed-in header while every call failed 401. Let App drop
+    // the session state and let its route guard take over.
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('gs:session-expired'));
   }
   if (!res.ok) {
     let detail = res.statusText;

@@ -19,6 +19,7 @@ const isStaff = (role: string) =>
 export default function AdminDashboard({ lang }: { lang: Lang }) {
   const [stats, setStats] = useState<{ students: number; teachers: number; lessons_completed_total: number } | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
   const [courses, setCourses] = useState<AssignableCourse[]>([]);
   const [courseId, setCourseId] = useState<number | null>(null);
   const [teacherId, setTeacherId] = useState<number | null>(null);
@@ -31,11 +32,12 @@ export default function AdminDashboard({ lang }: { lang: Lang }) {
   const [busy, setBusy] = useState(false);
 
   const load = () => {
+    setUsersLoaded(false);
     apiAdminUsers(100).then((rows) => {
       setUsers(rows);
       setTeacherId((current) => current !== null && rows.some((u) => u.id === current && u.role === 'teacher' && u.role_status === 'active')
         ? current : rows.find((u) => u.role === 'teacher' && u.role_status === 'active')?.id ?? null);
-    }).catch((e) => setError(errText(e)));
+    }).catch((e) => setError(errText(e))).finally(() => setUsersLoaded(true));
     apiAssignableCourses().then((rows) => {
       setCourses(rows);
       setCourseId((current) => current ?? rows[0]?.id ?? null);
@@ -158,7 +160,7 @@ export default function AdminDashboard({ lang }: { lang: Lang }) {
             </tbody>
           </table>
         </div>
-        {!users.length && !error && <p className="muted">{t('loading', lang)}</p>}
+        {!users.length && !error && <p className="muted">{usersLoaded ? t('empty', lang) : t('loading', lang)}</p>}
       </div>
     </div>
   );

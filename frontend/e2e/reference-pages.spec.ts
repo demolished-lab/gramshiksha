@@ -107,6 +107,41 @@ test('registration form exposes the student class, board, and language choices',
   await expect(dialog.getByText('Board')).toBeVisible();
   await expect(dialog.getByText(/Language/)).toBeVisible();
   await expect(dialog.locator('select')).toHaveCount(4);
+
+  // The sign-up form is taller than a small phone. It must scroll inside the
+  // dialog instead of pushing its first field above 0 and its submit button
+  // below the viewport, where neither can be reached.
+  if ((page.viewportSize()?.width ?? 1280) <= 480) {
+    const overlay = await dialog.evaluate((el) => ({
+      overflowY: getComputedStyle(el).overflowY,
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+    }));
+    expect(['auto', 'scroll']).toContain(overlay.overflowY);
+    const headingTop = await dialog.getByRole('heading', { name: /sign up/i })
+      .evaluate((el) => el.getBoundingClientRect().top);
+    expect(headingTop).toBeGreaterThanOrEqual(0);
+    const submit = dialog.getByRole('button', { name: /sign up/i }).last();
+    await submit.scrollIntoViewIfNeeded();
+    const submitInView = await submit.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= window.innerHeight;
+    });
+    expect(submitInView).toBe(true);
+  }
+});
+
+test('practice shows a retry instead of an endless skeleton when no questions exist', async ({ page }) => {
+  await useSession(page);
+  await mockApi(page);
+  // Registered after mockApi so this route wins. An empty set is a valid
+  // server answer, not a load failure; the old UI shimmered forever.
+  await page.route('**/api/learn/practice/questions**', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.goto('/#/practice');
+  await expect(page.getByText(/Nothing here yet/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Retry/i })).toBeVisible();
 });
 
 test('student dashboard shows progress, learning cards, and recommendations on desktop and mobile', async ({ page }) => {
@@ -163,6 +198,18 @@ test('teacher dashboard renders its operational sections', async ({ page }) => {
   await expect(page.locator('.table-scroll')).toBeVisible();
 });
 
+test('a teacher with no students sees an empty state, not a permanent Loading label', async ({ page }) => {
+  await useSession(page, 'teacher');
+  await mockApi(page);
+  await page.route('**/api/teacher/students', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: '[]',
+  }));
+  await page.goto('/#/teacher');
+  await expect(page.getByRole('heading', { name: /Students needing help/i })).toBeVisible();
+  await expect(page.getByText(/Nothing here yet/i)).toBeVisible();
+  await expect(page.getByText(/^Loading/i)).toHaveCount(0);
+});
+
 test('admin dashboard renders its operational sections', async ({ page }) => {
   await useSession(page, 'platform_admin');
   await mockApi(page);
@@ -173,6 +220,17 @@ test('admin dashboard renders its operational sections', async ({ page }) => {
   await expect(page.getByLabel('Course', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Approved teacher', { exact: true })).toBeVisible();
   await expect(page.locator('.table-scroll')).toBeVisible();
+});
+
+test('an expired token clears the in-memory session and returns to login', async ({ page }) => {
+  await useSession(page);
+  await mockApi(page);
+  await page.route('**/api/learn/today**', (route) => route.fulfill({
+    status: 401, contentType: 'application/json', body: JSON.stringify({ detail: 'Could not validate credentials' }),
+  }));
+  await page.goto('/#/dashboard');
+  await expect(page).toHaveURL(/#\/login\/student/);
+  expect(await page.evaluate(() => localStorage.getItem('gs_token'))).toBeNull();
 });
 
 test('role-scoped deep links redirect instead of firing the wrong APIs', async ({ page }) => {

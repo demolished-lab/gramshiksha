@@ -47,11 +47,10 @@ export async function openOfflineMaterial(materialId: number): Promise<void> {
   if (!response) throw new Error('This offline file is no longer on this device. Download it again while online.');
 
   const objectUrl = URL.createObjectURL(await response.blob());
-  const link = document.createElement('a');
-  link.href = objectUrl;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  link.click();
+  // A programmatic `_blank` click after an `await` has no user activation, so
+  // phone browsers block it as a popup (or open a blank tab for a blob PDF).
+  // Navigating this tab always works; Back returns to My Downloads.
+  window.location.assign(objectUrl);
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
