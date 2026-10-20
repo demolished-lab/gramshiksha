@@ -50,13 +50,18 @@ def test_cloudinary_image_public_id_drops_duplicate_extension(monkeypatch):
     monkeypatch.setattr(settings, "cloudinary_cloud_name", "testcloud")
     monkeypatch.setattr(settings, "cloudinary_api_key", "testkey")
     monkeypatch.setattr(settings, "cloudinary_api_secret", "testsecret")
-    monkeypatch.setattr(cloudinary.uploader, "upload", lambda *a, **k: {
-        "resource_type": "image", "public_id": "gramshiksha/abc.pdf",
-        "bytes": 8,
-    })
+    seen = {}
+
+    def fake_upload(*a, **k):
+        seen.update(k)
+        return {"resource_type": "image", "public_id": "gramshiksha/abc.pdf",
+                "bytes": 8}
+
+    monkeypatch.setattr(cloudinary.uploader, "upload", fake_upload)
     ref, size = st._save_cloudinary(b"%PDF-1.4", ".pdf")
-    # Cloudinary's image delivery URL adds the format, so the stored public_id
+    # Cloudinary's image delivery URL adds the format, so the upload public_id
     # must not contain it too (otherwise "<id>.pdf.pdf" is the real URL).
+    assert not seen["public_id"].endswith(".pdf")
     assert ref == "cloudinary://image/gramshiksha/abc"
     assert size == 8
 

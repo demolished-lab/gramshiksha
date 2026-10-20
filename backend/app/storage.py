@@ -80,7 +80,11 @@ def _save_cloudinary(data: bytes, ext: str) -> tuple[str, int]:
     cloudinary.config(cloud_name=settings.cloudinary_cloud_name,
                       api_key=settings.cloudinary_api_key,
                       api_secret=settings.cloudinary_api_secret, secure=True)
-    public_id = f"{settings.cloudinary_folder}/{uuid.uuid4().hex}{ext}"
+    # Do not put the extension in public_id: Cloudinary derives the format
+    # and appends it to the delivery URL. A public_id that already ends in
+    # ".pdf" is delivered as "<id>.pdf.pdf", while our signed URL uses the
+    # stored id verbatim. The format is detected from the bytes instead.
+    public_id = f"{settings.cloudinary_folder}/{uuid.uuid4().hex}"
     try:
         res = cloudinary.uploader.upload(
             io.BytesIO(data), public_id=public_id, resource_type="auto",
