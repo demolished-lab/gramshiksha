@@ -75,7 +75,7 @@ export function refreshUser(me: Me): void {
  * Download buttons, pre-filtered to their class/board on the page — because
  * "log in and see the books" is the product requirement. Only a login that
  * started from the landing/login screens redirects: a student who signs in
- * mid-browse (say, from #/courses) stays exactly where they were. Every
+ * mid-browse (say, from /courses) stays exactly where they were. Every
  * other role keeps the historical behaviour of no redirect.
  */
 export function landingAfterAuth(

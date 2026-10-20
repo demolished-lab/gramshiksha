@@ -52,7 +52,7 @@ const mockReaderApi = async (page: Page) => {
 test('desktop keeps the frame and phones get a direct PDF action', async ({ page }) => {
   await useSession(page);
   await mockReaderApi(page);
-  await page.goto('/#/textbooks');
+  await page.goto('/textbooks');
   await page.getByRole('button', { name: /Read$/ }).first().click();
   await expect(page.locator('.viewer')).toBeVisible();
 

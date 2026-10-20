@@ -3,7 +3,7 @@ import RoleLoginForm from '../components/RoleLoginForm';
 import { t } from '../i18n';
 import type { Lang } from '../types';
 
-/** Designated student login (#/login/student). Backed by POST
+/** Designated student login (/login/student). Backed by POST
  * /auth/token/student — teacher credentials get a 403 here, not a session.
  * On success the student lands DIRECTLY in the e-book library (cover grid +
  * Download, pre-filtered to their class/board); "Today's learning" stays one
@@ -19,7 +19,7 @@ export default function StudentLogin({ lang, go, onAuthed }: {
       subtitle={t('studentLoginTag', lang)}
       loginFn={apiStudentLogin}
       onDone={() => { onAuthed(); go('textbooks'); }}
-      switchHref="#/login/teacher"
+      switchHref="/login/teacher"
       switchLabel={t('teacherLogin', lang)}
     />
   );

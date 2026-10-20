@@ -1,6 +1,5 @@
 import { t } from '../i18n';
 import type { Lang } from '../types';
-import ShareButtons from '../components/ShareButtons';
 import SupportBar from '../components/SupportBar';
 import AdSlot from '../components/AdSlot';
 
@@ -32,9 +31,9 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
           </div>
           <div className="quick-entry" role="group" aria-label={t('quickLoginLabel', lang)}>
             <span>{t('alreadyLearning', lang)}</span>
-            <a href="#/login/student">{t('studentLogin', lang)}</a>
+            <a href="/login/student">{t('studentLogin', lang)}</a>
             <span className="quick-divider" aria-hidden="true">·</span>
-            <a href="#/login/teacher">{t('teacherLogin', lang)}</a>
+            <a href="/login/teacher">{t('teacherLogin', lang)}</a>
           </div>
           <div className="hero-proof"><span aria-hidden="true">✓</span> {t('proofBoards', lang)} <span aria-hidden="true">✓</span> {t('proofLanguages', lang)} <span aria-hidden="true">✓</span> {t('proofFree', lang)}</div>
         </div>
@@ -90,7 +89,6 @@ export default function Landing({ lang, go, onLogin }: { lang: Lang; go: (p: str
       <section className="section-block faq-block" aria-labelledby="faq-heading"><div className="section-heading"><div><span className="eyebrow eyebrow-muted">{t('landingGoodToKnow', lang)}</span><h2 id="faq-heading">{t('faqHeading', lang)}</h2></div></div>{FAQS.map(([question, answer]) => <details className="faq-item" key={question}><summary>{t(question, lang)}<span aria-hidden="true">+</span></summary><p>{t(answer, lang)}</p></details>)}</section>
 
       <AdSlot /><SupportBar />
-      <footer className="site">{t('landingFooter', lang)}<div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}><ShareButtons text="GramShiksha — free Class 1-12 lessons, quizzes & textbooks in English, हिंदी and मराठी" /></div></footer>
     </div>
   );
 }

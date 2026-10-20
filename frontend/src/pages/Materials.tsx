@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiAvailability, apiMaterials, apiPendingMaterials, apiReportMaterial, apiReviewMaterial, apiUploadMaterial } from '../api';
 import StreamPicker, { streamName } from '../components/StreamPicker';
+import AdSlot from '../components/AdSlot';
 import { getToken } from '../auth';
 import { openMaterialOnline, saveMaterialOffline } from '../offlineMaterials';
 import { t } from '../i18n';
@@ -165,8 +166,8 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
               </>
             ) : (
               <>
-                <a className="btn small" href="#/login/student">👁 {t('viewOnline', lang)} · {t('login', lang)}</a>
-                <a className="btn small ghost" href="#/login/student">⬇ {t('download', lang)} · {t('login', lang)}</a>
+                <a className="btn small" href="/login/student">👁 {t('viewOnline', lang)} · {t('login', lang)}</a>
+                <a className="btn small ghost" href="/login/student">⬇ {t('download', lang)} · {t('login', lang)}</a>
               </>
             )}
             <button className="btn small ghost" onClick={() => void report(m.id)}>🚩 Report</button>
@@ -175,6 +176,7 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
           {reportState?.id === m.id && <p className={reportState.failed ? 'error' : 'success'} role="status">{reportState.message}</p>}
         </div>
       ))}
+      <AdSlot />
     </div>
   );
 }

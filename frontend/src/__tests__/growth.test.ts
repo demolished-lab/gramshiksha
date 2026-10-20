@@ -39,7 +39,7 @@ describe('referral capture', () => {
 
   it('builds the canonical invite link', () => {
     expect(inviteLink('GS000123')).toBe(
-      'https://gramshiksha-academy.vercel.app/?ref=GS000123#/home');
+      'https://gramshiksha-academy.vercel.app/?ref=GS000123');
   });
 });
 

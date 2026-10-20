@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiPracticeAnswer, apiPracticeQuestions, apiWeakTopics } from '../api';
 import { getToken, enqueue } from '../auth';
 import { t } from '../i18n';
+import AdSlot from '../components/AdSlot';
 import type { Lang, Question, WeakTopics } from '../types';
 
 export default function Practice({ lang }: { lang: Lang }) {
@@ -164,7 +165,7 @@ export default function Practice({ lang }: { lang: Lang }) {
                 </p>
                 <p className="muted">{feedback.explanation}</p>
                 {anon && (
-                  <p><a className="btn small" href="#/login/student">{t('login', lang)}</a></p>
+                  <p><a className="btn small" href="/login/student">{t('login', lang)}</a></p>
                 )}
               </>
             )}
@@ -209,6 +210,7 @@ export default function Practice({ lang }: { lang: Lang }) {
           </button>
         </div>
       )}
+      <AdSlot />
     </div>
   );
 }

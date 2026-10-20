@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { dataSaver, getLang, getUser, landingAfterAuth, logout, setDataSaver, setLang, SessionUser } from './auth';
 import { t } from './i18n';
 import type { Lang } from './types';
-import { parseRoute } from './routing';
+import { parseRoute, pathFor } from './routing';
+import { applySeo } from './seo';
 import Landing from './pages/Landing';
 import { captureReferral } from './growth';
 import { syncQueuedProgress } from './offlineSync';
@@ -22,33 +23,93 @@ const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const Explore = lazy(() => import('./pages/Explore'));
 const TeacherLogin = lazy(() => import('./pages/TeacherLogin'));
 const StudentLogin = lazy(() => import('./pages/StudentLogin'));
+const AboutPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.AboutPage })));
+const ContactPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.ContactPage })));
+const PrivacyPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.PrivacyPage })));
+const TermsPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.TermsPage })));
 import AuthModal from './AuthModal';
 import ApprovalNotice from './ApprovalNotice';
+import SiteFooter from './components/SiteFooter';
+
+function initialPath(): string {
+  const hash = location.hash;
+  if (hash.startsWith('#/')) {
+    const path = hash.slice(1) || '/';
+    history.replaceState(null, '', path);
+    return path;
+  }
+  return location.pathname;
+}
 
 export default function App() {
   const [lang, setLangState] = useState<Lang>(getLang());
   const [user, setUser] = useState<SessionUser | null>(getUser());
-  const [route, setRoute] = useState(() => parseRoute(location.hash));
+  const [route, setRoute] = useState(() => parseRoute(initialPath()));
   const [online, setOnline] = useState(navigator.onLine);
   const [saver, setSaver] = useState(dataSaver());
   const [showAuth, setShowAuth] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notifCount] = useState(0);
 
+  const navigate = useCallback((path: string, replace = false) => {
+    const next = path.startsWith('/') ? path : `/${path}`;
+    const current = `${location.pathname}${location.search}`;
+    if (next !== current) {
+      if (replace) history.replaceState(null, '', next);
+      else history.pushState(null, '', next);
+    }
+    setRoute(parseRoute(next));
+    if (!replace) window.scrollTo(0, 0);
+  }, []);
+
   useEffect(() => {
     captureReferral();
-    const onHash = () => setRoute(parseRoute(location.hash));
-    window.addEventListener('hashchange', onHash);
+    const sync = () => {
+      // Old #/course/1 links land here. Replace, don't push, so the legacy
+      // URL does not sit in history in front of the canonical path.
+      if (location.hash.startsWith('#/')) {
+        navigate(location.hash.slice(1) || '/', true);
+        return;
+      }
+      setRoute(parseRoute(location.pathname));
+    };
+    window.addEventListener('popstate', sync);
+    window.addEventListener('hashchange', sync);
     const on = () => { setOnline(true); void syncQueuedProgress().catch(() => {}); };
     const off = () => setOnline(false);
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
     return () => {
-      window.removeEventListener('hashchange', onHash);
+      window.removeEventListener('popstate', sync);
+      window.removeEventListener('hashchange', sync);
       window.removeEventListener('online', on);
       window.removeEventListener('offline', off);
     };
-  }, []);
+  }, [navigate]);
+
+  // Keep every same-origin, in-app link a real history navigation. External
+  // links, downloads and in-page anchors keep their browser behaviour.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0
+        || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const anchor = target?.closest('a');
+      if (!anchor || anchor.hasAttribute('target') || anchor.hasAttribute('download')) return;
+      const href = anchor.getAttribute('href');
+      if (!href || !href.startsWith('/') || href.startsWith('//')) return;
+      if (href.startsWith('/api/') || href.startsWith('/assets/')) return;
+      const url = new URL(anchor.href, location.href);
+      if (url.origin !== location.origin) return;
+      if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
+      if (/\.[a-z0-9]+$/i.test(url.pathname) && !/\.html?$/i.test(url.pathname)) return;
+      event.preventDefault();
+      setMobileNavOpen(false);
+      navigate(`${url.pathname}${url.search}`);
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [navigate]);
 
   // api.ts clears a dead token on every 401; this also clears the React user
   // so a guarded page redirects to its login instead of showing a signed-in
@@ -72,20 +133,8 @@ export default function App() {
   }, [user?.role]);
 
   useEffect(() => {
-    const pageTitles: Record<string, string> = {
-      home: 'Learn without limits', explore: 'Explore courses', courses: 'Courses',
-      course: 'Course details', lesson: 'Lesson', practice: 'Practice', materials: 'Study materials',
-      textbooks: 'Textbooks', doubts: 'Ask a doubt', downloads: 'My downloads', progress: 'My progress',
-      dashboard: 'Today’s learning', teacher: 'Teacher dashboard', parent: 'Parent dashboard', admin: 'Admin dashboard',
-      // #/login carries its audience in the sub slot (parseHash) — name it.
-      'login.student': 'Student login', 'login.teacher': 'Teacher login', login: 'Log in',
-    };
-    const key = route.sub ? `${route.page}.${route.sub}` : route.page;
-    // An unknown page is the 404 screen; calling it "Learn without limits"
-    // would be a lie in the tab and in browser history.
-    const title = pageTitles[key] ?? pageTitles[route.page] ?? 'Page not found';
-    document.title = `${title} · GramShiksha`;
-  }, [route.page, route.sub]);
+    applySeo(location.pathname);
+  }, [route.page, route.sub, route.id]);
 
   useEffect(() => {
     document.body.classList.toggle('data-saver', saver);
@@ -112,7 +161,7 @@ export default function App() {
   }, [mobileNavOpen]);
 
   const go = (page: string, id?: number) => {
-    location.hash = `/${page}${id ? `/${id}` : ''}`;
+    navigate(pathFor(page, id));
   };
 
   const switchLang = (l: Lang) => { setLang(l); setLangState(l); };
@@ -156,10 +205,11 @@ export default function App() {
   const redirectTarget = guardedRole && !canViewGuarded ? (authenticated ? roleHome : loginTarget) : null;
 
   useEffect(() => {
-    if (redirectTarget && location.hash !== `#/${redirectTarget}`) {
-      location.hash = `#/${redirectTarget}`;
+    if (redirectTarget) {
+      const target = pathFor(redirectTarget);
+      if (location.pathname !== target) navigate(target, true);
     }
-  }, [redirectTarget]);
+  }, [redirectTarget, navigate]);
 
   const navItems: [string, string][] = [
     ['home', t('home', lang)],
@@ -225,6 +275,10 @@ export default function App() {
       case 'teacher': page = approvalGated(<TeacherDashboard lang={lang} />); break;
       case 'parent': page = <ParentDashboard lang={lang} />; break;
       case 'admin': page = approvalGated(<AdminDashboard lang={lang} />); break;
+      case 'about': page = <AboutPage lang={lang} />; break;
+      case 'contact': page = <ContactPage lang={lang} />; break;
+      case 'privacy': page = <PrivacyPage lang={lang} />; break;
+      case 'terms': page = <TermsPage lang={lang} />; break;
       default: page = user && isStudent
         ? <StudentDashboard lang={lang} go={go} />
         : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
@@ -235,7 +289,7 @@ export default function App() {
   // landing render — deep links stay honest about where they point.
   const knownPages = ['home', 'login', 'dashboard', 'explore', 'courses', 'course',
     'lesson', 'practice', 'materials', 'textbooks', 'doubts', 'downloads',
-    'progress', 'teacher', 'parent', 'admin'];
+    'progress', 'teacher', 'parent', 'admin', 'about', 'contact', 'privacy', 'terms'];
   if (!knownPages.includes(route.page)) {
     page = (
       <div className="card" style={{ textAlign: 'center', padding: '48px 20px' }}>
@@ -259,17 +313,17 @@ export default function App() {
       {!online && <div className="banner-offline" role="status">📴 {t('offlineNote', lang)} <span>Cached lessons remain available.</span></div>}
       {authenticated && mobileNavOpen && <button className="drawer-backdrop" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
       <aside className={`sidebar ${mobileNavOpen ? 'drawer-open' : ''}`} aria-label="Workspace navigation">
-        <div className="sidebar-header"><a className="brand sidebar-brand" href="#/home" onClick={() => setMobileNavOpen(false)}><span className="brand-mark" aria-hidden="true">G</span><span><strong>GramShiksha</strong><small>Learn. Practice. Grow.</small></span></a><button className="drawer-close" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)}>×</button></div>
+        <div className="sidebar-header"><a className="brand sidebar-brand" href="/" onClick={() => setMobileNavOpen(false)}><span className="brand-mark" aria-hidden="true">G</span><span><strong>GramShiksha</strong><small>Learn. Practice. Grow.</small></span></a><button className="drawer-close" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)}>×</button></div>
         <div className="sidebar-label">Workspace</div>
         <nav className="sidebar-nav">
-          {sidebarItems.map(([p, label]) => <a key={p} href={`#/${p}`} onClick={() => setMobileNavOpen(false)} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}><span className="nav-icon">{navIcons[p] ?? '•'}</span>{label}</a>)}
+          {sidebarItems.map(([p, label]) => <a key={p} href={pathFor(p)} onClick={() => setMobileNavOpen(false)} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}><span className="nav-icon">{navIcons[p] ?? '•'}</span>{label}</a>)}
         </nav>
-        <div className="sidebar-bottom"><a href="#/downloads" onClick={() => setMobileNavOpen(false)}><span className="nav-icon">⇩</span>{t('downloads', lang)}</a><button className="sidebar-logout" onClick={() => { setMobileNavOpen(false); logout(); setUser(null); go('home'); }}><span className="nav-icon">↪</span>{t('logout', lang)}</button></div>
+        <div className="sidebar-bottom"><a href="/downloads" onClick={() => setMobileNavOpen(false)}><span className="nav-icon">⇩</span>{t('downloads', lang)}</a><button className="sidebar-logout" onClick={() => { setMobileNavOpen(false); logout(); setUser(null); go('home'); }}><span className="nav-icon">↪</span>{t('logout', lang)}</button></div>
       </aside>
       <div className="app-content">
       <header className="appbar">
         {authenticated && <button className="mobile-menu-toggle" aria-label="Open navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)}>☰</button>}
-        <a className="brand" href="#/home">
+        <a className="brand" href="/">
           <span className="brand-mark" aria-hidden="true">G</span>
           {t('appName', lang)}
         </a>
@@ -297,20 +351,22 @@ export default function App() {
 
       <nav className="navbar" aria-label="Main navigation">
         {navItems.map(([p, label]) => (
-          <a key={p} href={`#/${p}`} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}>{label}</a>
+          <a key={p} href={pathFor(p)} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}>{label}</a>
         ))}
-        {isStudent && <a href="#/dashboard" className={route.page === 'dashboard' ? 'active' : ''} aria-current={route.page === 'dashboard' ? 'page' : undefined}>{t('todaysLearning', lang)}</a>}
-        {isStudent && <a href="#/progress" className={route.page === 'progress' ? 'active' : ''} aria-current={route.page === 'progress' ? 'page' : undefined}>{t('progress', lang)}</a>}
-        {isTeacher && <a href="#/teacher" className={route.page === 'teacher' ? 'active' : ''} aria-current={route.page === 'teacher' ? 'page' : undefined}>{t('teacher', lang)} <span className="nav-role">✦</span></a>}
-        {isParent && <a href="#/parent" className={route.page === 'parent' ? 'active' : ''} aria-current={route.page === 'parent' ? 'page' : undefined}>{t('parent', lang)} <span className="nav-role">✦</span></a>}
-        {isAdmin && <a href="#/admin" className={route.page === 'admin' ? 'active' : ''} aria-current={route.page === 'admin' ? 'page' : undefined}>Admin <span className="nav-role">✦</span></a>}
+        {isStudent && <a href="/dashboard" className={route.page === 'dashboard' ? 'active' : ''} aria-current={route.page === 'dashboard' ? 'page' : undefined}>{t('todaysLearning', lang)}</a>}
+        {isStudent && <a href="/progress" className={route.page === 'progress' ? 'active' : ''} aria-current={route.page === 'progress' ? 'page' : undefined}>{t('progress', lang)}</a>}
+        {isTeacher && <a href="/teacher" className={route.page === 'teacher' ? 'active' : ''} aria-current={route.page === 'teacher' ? 'page' : undefined}>{t('teacher', lang)} <span className="nav-role">✦</span></a>}
+        {isParent && <a href="/parent" className={route.page === 'parent' ? 'active' : ''} aria-current={route.page === 'parent' ? 'page' : undefined}>{t('parent', lang)} <span className="nav-role">✦</span></a>}
+        {isAdmin && <a href="/admin" className={route.page === 'admin' ? 'active' : ''} aria-current={route.page === 'admin' ? 'page' : undefined}>Admin <span className="nav-role">✦</span></a>}
       </nav>
 
       <main id="main-content" className="container"><Suspense fallback={<div className="route-loading" aria-busy="true"><div className="skeleton skeleton-title" /><div className="skeleton skeleton-panel" /></div>}>{page}</Suspense></main>
 
+      <SiteFooter lang={lang} />
+
       <nav className="tabbar" aria-label="Quick">
         {tabs.map(([p, ic, label]) => (
-          <a key={p} href={`#/${p}`} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}>
+          <a key={p} href={pathFor(p)} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}>
             <span className="ic">{ic}</span>{label}
           </a>
         ))}

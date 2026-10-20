@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiAvailability, apiBoards, apiCourses, apiSubjects } from '../api';
 import StreamPicker, { streamName } from '../components/StreamPicker';
+import AdSlot from '../components/AdSlot';
 import { pick, t } from '../i18n';
 import { takeCoursesPref } from '../prefs';
 import type { AvailabilityStream, Course, Lang, Subject } from '../types';
@@ -108,6 +109,7 @@ export default function Courses({ lang, go }: { lang: Lang; go: (p: string, id?:
           </div>
         ))}
       </div>
+      <AdSlot />
     </div>
   );
 }

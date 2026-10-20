@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiAvailability } from '../api';
 import { booksIn, subjectLabel, visibleSubjects } from '../catalog';
 import StreamPicker, { streamName } from '../components/StreamPicker';
+import AdSlot from '../components/AdSlot';
 import { t } from '../i18n';
 import { peekExplorePref, setCoursesPref, setExplorePref, setTextbookPref } from '../prefs';
 import type { Availability, Lang } from '../types';
@@ -34,7 +35,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
 
-  // A deep link (#/explore/7 from a class card) wins over session memory.
+  // A deep link (/explore/7 from a class card) wins over session memory.
   useEffect(() => { if (routeGrade) setGrade(routeGrade); }, [routeGrade]);
 
   useEffect(() => {
@@ -59,7 +60,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
     return () => { live = false; };
   }, [grade, board, lang, reload]);
 
-  const pickGrade = (g: number) => { setGrade(g); location.hash = `/explore/${g}`; };
+  const pickGrade = (g: number) => { setGrade(g); go('explore', g); };
 
   const openBooks = (subject: string) => {
     setTextbookPref({
@@ -130,7 +131,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
           <div className="empty-state">
             <div className="icon">🧭</div>
             <p>{t('noContent', lang)}</p>
-            <a className="btn ghost" href="#/textbooks">{t('textbooks', lang)}</a>
+            <a className="btn ghost" href="/textbooks">{t('textbooks', lang)}</a>
           </div>
         ) : (
           <div className="grid-cards">
@@ -166,6 +167,7 @@ export default function Explore({ lang, go, routeGrade, user }: {
           </div>
         )
       )}
+      <AdSlot />
     </div>
   );
 }

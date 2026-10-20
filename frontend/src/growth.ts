@@ -82,7 +82,7 @@ export function clearReferral(): void {
 
 /** Canonical invite link for a user's own code. */
 export function inviteLink(code: string, siteUrl = OFF_CONFIG.site_url): string {
-  return `${siteUrl.replace(/\/$/, '')}/?ref=${code}#/home`;
+  return `${siteUrl.replace(/\/$/, '')}/?ref=${code}`;
 }
 
 export interface ShareTargets {

@@ -30,6 +30,7 @@ log = logging.getLogger("gramshiksha")
 router = APIRouter(tags=["growth"])
 
 _REF_RE = re.compile(r"^GS(\d{1,10})$")
+_PUBLISHER_RE = re.compile(r"^ca-(pub-\d{16})$")
 
 
 def referral_code(user_id: int) -> str:
@@ -90,6 +91,24 @@ def growth_config():
         "sponsor": sponsor,
         "premium_url": settings.premium_url or None,
     }
+
+
+@router.get("/ads.txt", include_in_schema=False)
+def ads_txt():
+    """Authorized-seller file for the frontend domain.
+
+    Vercel proxies `/ads.txt` here so the file lives at the canonical site
+    root, not on the API subdomain. Before AdSense is configured the route is
+    a 404, which is the correct "no authorized sellers" signal; after the
+    publisher ID is set it returns the standard google.com line. The ID is
+    public by design and is never read from a secret.
+    """
+    match = _PUBLISHER_RE.match((settings.adsense_client or "").strip())
+    if not match:
+        return Response(status_code=404)
+    body = f"google.com, {match.group(1)}, DIRECT, f08c47fec0942fa0\n"
+    return Response(content=body, media_type="text/plain",
+                    headers={"Cache-Control": "public, max-age=3600"})
 
 
 @router.get("/growth/me")

@@ -17,7 +17,7 @@ export default function ShareButtons({ text }: { text: string }) {
   }, []);
 
   const pageUrl =
-    code && cfg.referral_enabled ? inviteLink(code, cfg.site_url) : `${location.origin}${location.pathname}#/home`;
+    code && cfg.referral_enabled ? inviteLink(code, cfg.site_url) : `${location.origin}${location.pathname}`;
   const targets = shareLinks(pageUrl, text);
 
   const native = async () => {

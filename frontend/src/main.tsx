@@ -21,7 +21,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
           <div className="empty-state">
             <div className="icon">⚠️</div>
             <p>Something went wrong loading this page.</p>
-            <button className="btn small" onClick={() => { localStorage.clear(); void clearCachedApi(); location.hash = '#/home'; location.reload(); }}>
+            <button className="btn small" onClick={() => { localStorage.clear(); void clearCachedApi(); location.assign('/'); }}>
               Reset & reload
             </button>
           </div>

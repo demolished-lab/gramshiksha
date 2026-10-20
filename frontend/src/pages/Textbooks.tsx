@@ -3,6 +3,7 @@ import { apiAvailability, apiLocate, apiMyRequests, apiReadingList, apiSubjects,
 import { booksIn, subjectLabel } from '../catalog';
 import { monthLabel, pick, t } from '../i18n';
 import StreamPicker, { streamName } from '../components/StreamPicker';
+import AdSlot from '../components/AdSlot';
 import { takeTextbookPref } from '../prefs';
 import type { Availability, BookAsk, Lang, ReadingPick, Subject, Textbook } from '../types';
 
@@ -658,6 +659,7 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
           </div>
         </div>
       )}
+      <AdSlot />
     </div>
   );
 }

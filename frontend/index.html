@@ -6,41 +6,61 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#1a7f37" />
-    <meta name="description" content="GramShiksha — free trilingual (English/हिंदी/मराठी) school lessons, quizzes and textbooks for Class 1-12. Works offline." />
+    <meta name="description" content="Free English, Hindi and Marathi lessons, practice questions, study materials and official SSC, HSC and CBSE textbooks for Class 1–12. Low-data and offline-friendly." />
     <link rel="canonical" href="https://gramshiksha-academy.vercel.app/" />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="application-name" content="GramShiksha Academy" />
+    <meta name="apple-mobile-web-app-title" content="GramShiksha" />
+    <link rel="alternate" type="application/rss+xml" title="GramShiksha updates" href="/api/feed.xml" />
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
     <!-- Open Graph / Twitter cards: plain static tags so every share preview
-         works with zero JS. Hash routes (#/courses) share the same preview.
-         og:image must be a raster image — most scrapers (WhatsApp, Facebook,
-         X) ignore SVG, which silently produced a text-less preview. -->
+         works with zero JS. The build script writes route-specific values into
+         each public page; og:image must be a raster image because WhatsApp,
+         Facebook and X ignore SVG covers. -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="GramShiksha" />
-    <meta property="og:title" content="GramShiksha — free Class 1-12 learning in English, हिंदी, मराठी" />
-    <meta property="og:description" content="Free lessons, quizzes, study material and official textbooks for Class 1-12 (SSC, HSC, CBSE). Low-data mode, works offline." />
+    <meta property="og:site_name" content="GramShiksha Academy" />
+    <meta property="og:title" content="GramShiksha Academy — Free Class 1–12 Lessons, Quizzes & Textbooks" />
+    <meta property="og:description" content="Free English, Hindi and Marathi lessons, practice questions, study materials and official SSC, HSC and CBSE textbooks for Class 1–12." />
     <meta property="og:url" content="https://gramshiksha-academy.vercel.app/" />
     <meta property="og:image" content="https://gramshiksha-academy.vercel.app/images/gramshiksha-hero-classroom.jpg" />
     <meta property="og:image:width" content="1600" />
     <meta property="og:image:height" content="900" />
     <meta property="og:image:alt" content="Students learning together in a bright classroom" />
+    <meta property="og:locale" content="en_IN" />
+    <meta property="og:locale:alternate" content="hi_IN" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="GramShiksha — free Class 1-12 learning" />
-    <meta name="twitter:description" content="Free trilingual lessons, quizzes and textbooks. Works offline on slow networks." />
+    <meta name="twitter:title" content="GramShiksha Academy — Free Class 1–12 Lessons, Quizzes & Textbooks" />
+    <meta name="twitter:description" content="Free trilingual lessons, practice and official textbooks. Works offline on slow networks." />
     <meta name="twitter:image" content="https://gramshiksha-academy.vercel.app/images/gramshiksha-hero-classroom.jpg" />
-    <script type="application/ld+json">
+    <script type="application/ld+json" data-seo-jsonld="true">
     {
       "@context": "https://schema.org",
       "@type": "WebSite",
-      "name": "GramShiksha",
-      "alternateName": ["ग्रामशिक्षा", "Gramshiksha"],
+      "name": "GramShiksha Academy",
+      "alternateName": ["GramShiksha", "ग्रामशिक्षा"],
       "url": "https://gramshiksha-academy.vercel.app/",
       "inLanguage": ["en", "hi", "mr"],
-      "description": "Free trilingual school lessons, quizzes and textbooks for Class 1-12."
+      "description": "Free trilingual school lessons, practice, study materials and textbooks for Class 1–12."
     }
     </script>
-    <title>Gramshiksha — ग्राम शिक्षा</title>
+    <title>GramShiksha Academy — Free Class 1–12 Lessons, Quizzes & Textbooks</title>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <main style="max-width:760px;margin:48px auto;padding:0 20px;font-family:system-ui,sans-serif;line-height:1.6">
+        <h1>GramShiksha Academy — free Class 1–12 learning</h1>
+        <p>Free English, Hindi and Marathi lessons, practice questions, study materials and official SSC, HSC and CBSE textbooks. Low-data and offline-friendly.</p>
+        <ul>
+          <li><a href="/courses">Courses for Class 1–12</a></li>
+          <li><a href="/materials">Free study materials</a></li>
+          <li><a href="/textbooks">Official textbooks</a></li>
+          <li><a href="/practice">Practice questions</a></li>
+          <li><a href="/about">About</a> · <a href="/contact">Contact</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></li>
+          <li><a href="/login/student">Student login</a></li>
+        </ul>
+      </main>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

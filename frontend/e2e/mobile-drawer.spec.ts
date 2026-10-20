@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
     else if (url.pathname.endsWith('/growth/reading-list')) body = [];
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   });
-  await page.goto('/#/dashboard');
+  await page.goto('/dashboard');
   await expect(page.locator('#main-content')).toBeVisible();
 });
 
@@ -33,7 +33,7 @@ test('opens, navigates, and closes the mobile drawer', async ({ page }) => {
   await expect(drawer).toHaveClass(/drawer-open/);
   await expect(page.locator('.drawer-close')).toBeVisible();
   await page.locator('.sidebar-nav').getByRole('link', { name: /Practice/ }).click();
-  await expect(page).toHaveURL(/#\/practice$/);
+  await expect(page).toHaveURL(/\/practice$/);
   await expect(drawer).not.toHaveClass(/drawer-open/);
   await menu.click();
   await page.keyboard.press('Escape');

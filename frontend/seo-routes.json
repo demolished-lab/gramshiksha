@@ -1,0 +1,401 @@
+{
+  "site": "https://gramshiksha-academy.vercel.app",
+  "siteName": "GramShiksha Academy",
+  "image": "/images/gramshiksha-hero-classroom.jpg",
+  "routes": [
+    {
+      "path": "/",
+      "title": "GramShiksha Academy — Free Class 1–12 Lessons, Quizzes & Textbooks",
+      "description": "Free English, Hindi and Marathi lessons, practice questions, study materials and official SSC, HSC and CBSE textbooks for Class 1–12. Low-data and offline-friendly.",
+      "h1": "Free Class 1–12 learning in English, Hindi and Marathi",
+      "summary": "GramShiksha Academy brings lessons, practice, notes and official textbooks together for Maharashtra SSC, HSC and CBSE learners.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 1.0,
+      "changefreq": "weekly",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "EducationalOrganization",
+            "@id": "https://gramshiksha-academy.vercel.app/#organization",
+            "name": "GramShiksha Academy",
+            "alternateName": ["GramShiksha", "ग्रामशिक्षा"],
+            "url": "https://gramshiksha-academy.vercel.app/",
+            "logo": "https://gramshiksha-academy.vercel.app/favicon.svg",
+            "image": "https://gramshiksha-academy.vercel.app/images/gramshiksha-hero-classroom.jpg",
+            "description": "Free trilingual school lessons, practice, study materials and official textbook links for Class 1–12 in India.",
+            "areaServed": "IN",
+            "availableLanguage": ["en", "hi", "mr"]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://gramshiksha-academy.vercel.app/#website",
+            "name": "GramShiksha Academy",
+            "alternateName": "GramShiksha",
+            "url": "https://gramshiksha-academy.vercel.app/",
+            "inLanguage": ["en", "hi", "mr"],
+            "description": "Free lessons, quizzes, study materials and official textbooks for Class 1–12.",
+            "publisher": { "@id": "https://gramshiksha-academy.vercel.app/#organization" }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://gramshiksha-academy.vercel.app/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Is GramShiksha free?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. Lessons, practice questions, study materials and textbook links are free to use."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does GramShiksha work offline?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Lessons and saved materials can be read offline after they have been opened or saved. Progress made offline syncs when the connection returns."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Which boards and classes are supported?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Maharashtra SSC and HSC, plus CBSE, for Class 1–12. Streams are available for Class 11–12."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Which languages are available?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "English, Hindi and Marathi."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "path": "/courses",
+      "title": "Class 1–12 Courses — SSC, HSC & CBSE | GramShiksha Academy",
+      "description": "Browse free courses by class, board and subject. Learn with lessons, practice questions and progress tracking for Maharashtra SSC, HSC and CBSE.",
+      "h1": "Courses for Class 1–12",
+      "summary": "Choose a class, board and subject to start free lessons and practice. Maharashtra SSC, HSC and CBSE are supported.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.9,
+      "changefreq": "daily",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "Class 1–12 Courses",
+        "url": "https://gramshiksha-academy.vercel.app/courses",
+        "description": "Free courses by class, board and subject for Maharashtra SSC, HSC and CBSE.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" },
+        "inLanguage": ["en", "hi", "mr"]
+      }
+    },
+    {
+      "path": "/materials",
+      "title": "Free Study Materials, Notes & Question Papers | GramShiksha Academy",
+      "description": "Read or save free notes, question papers, worksheets and revision material for Class 1–12. Filter by class, board, subject and type.",
+      "h1": "Free study materials for Class 1–12",
+      "summary": "Notes, question papers, worksheets, formula sheets and audio revision for SSC, HSC and CBSE learners.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.9,
+      "changefreq": "daily",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "Free Study Materials",
+        "url": "https://gramshiksha-academy.vercel.app/materials",
+        "description": "Free notes, question papers, worksheets and revision material for Class 1–12.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" },
+        "inLanguage": ["en", "hi", "mr"]
+      }
+    },
+    {
+      "path": "/textbooks",
+      "title": "Official Maharashtra SSC, HSC & CBSE Textbooks | GramShiksha Academy",
+      "description": "Open official textbook PDFs for Class 1–12. Links point to government and board portals and are checked for availability.",
+      "h1": "Official textbooks for Class 1–12",
+      "summary": "Find official Maharashtra SSC, HSC and CBSE textbooks, then read them in the app or open the source PDF.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.8,
+      "changefreq": "weekly",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "Official Textbooks",
+        "url": "https://gramshiksha-academy.vercel.app/textbooks",
+        "description": "Official textbook links for Maharashtra SSC, HSC and CBSE, Class 1–12.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" }
+      }
+    },
+    {
+      "path": "/practice",
+      "title": "Free Practice Questions & Quizzes for Class 1–12 | GramShiksha Academy",
+      "description": "Practise free questions with instant explanations for Class 1–12. Sign in to save answers and track progress.",
+      "h1": "Free practice questions and quizzes",
+      "summary": "Answer questions by class, subject and chapter, with instant explanations and progress tracking when signed in.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.8,
+      "changefreq": "weekly",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "Free Practice Questions and Quizzes",
+        "url": "https://gramshiksha-academy.vercel.app/practice",
+        "description": "Free practice questions with explanations for Class 1–12.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" }
+      }
+    },
+    {
+      "path": "/explore",
+      "title": "Explore Courses by Class, Board & Subject | GramShiksha Academy",
+      "description": "Explore free courses for every class from 1 to 12. Choose Maharashtra SSC, HSC or CBSE and start learning.",
+      "h1": "Explore courses by class",
+      "summary": "Pick a class to see subjects, lessons, practice sets and textbooks. Class 11–12 includes science, commerce and arts streams where available.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.8,
+      "changefreq": "weekly",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "Explore Courses by Class",
+        "url": "https://gramshiksha-academy.vercel.app/explore",
+        "description": "Explore free courses for Class 1–12 across Maharashtra SSC, HSC and CBSE.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" }
+      }
+    },
+    {
+      "path": "/explore/{grade}",
+      "title": "Class {grade} Courses, Lessons & Practice — SSC/CBSE | GramShiksha Academy",
+      "description": "Free Class {grade} lessons, practice questions, notes and textbook links for Maharashtra SSC and CBSE. Learn in English, Hindi or Marathi.",
+      "h1": "Class {grade} learning",
+      "summary": "Free Class {grade} courses, lessons, practice and study materials for SSC and CBSE, in English, Hindi and Marathi.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.7,
+      "changefreq": "weekly",
+      "static": true,
+      "grades": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "Class {grade} Courses",
+        "url": "https://gramshiksha-academy.vercel.app/explore/{grade}",
+        "description": "Free Class {grade} lessons, practice and textbooks for SSC and CBSE.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" }
+      }
+    },
+    {
+      "path": "/about",
+      "title": "About GramShiksha Academy — Free Class 1–12 Learning",
+      "description": "Learn who builds GramShiksha Academy, why it is free, how lessons and official textbook links are reviewed, and how the project stays independent.",
+      "h1": "About GramShiksha Academy",
+      "summary": "GramShiksha Academy is an independent, free learning project for Class 1–12 students in India, with lessons, practice, study materials and official textbook links.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.6,
+      "changefreq": "monthly",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "AboutPage",
+        "name": "About GramShiksha Academy",
+        "url": "https://gramshiksha-academy.vercel.app/about",
+        "description": "About the independent, free Class 1–12 learning project GramShiksha Academy.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" }
+      }
+    },
+    {
+      "path": "/contact",
+      "title": "Contact GramShiksha Academy — Corrections & Privacy Requests",
+      "description": "Report a broken textbook link, correct a lesson, raise a privacy request or send copyright notice to GramShiksha Academy.",
+      "h1": "Contact GramShiksha Academy",
+      "summary": "Contact the GramShiksha Academy team about corrections, broken textbook links, privacy requests or copyright notices.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.5,
+      "changefreq": "monthly",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "ContactPage",
+        "name": "Contact GramShiksha Academy",
+        "url": "https://gramshiksha-academy.vercel.app/contact",
+        "description": "Contact details for corrections, privacy requests and copyright notices.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" }
+      }
+    },
+    {
+      "path": "/privacy",
+      "title": "Privacy Policy — Cookies, Accounts & Advertising | GramShiksha Academy",
+      "description": "How GramShiksha Academy handles account data, learning progress, device storage, cookies and Google AdSense advertising, and how to exercise your choices.",
+      "h1": "Privacy Policy",
+      "summary": "What GramShiksha Academy collects, why it is needed, how long it is kept, how cookies and advertising work, and how to ask for access or deletion.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.3,
+      "changefreq": "yearly",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "Privacy Policy",
+        "url": "https://gramshiksha-academy.vercel.app/privacy",
+        "description": "Privacy policy for accounts, learning data, cookies and advertising on GramShiksha Academy.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" }
+      }
+    },
+    {
+      "path": "/terms",
+      "title": "Terms of Use — Free Learning & Acceptable Use | GramShiksha Academy",
+      "description": "The rules for using GramShiksha Academy: accounts, acceptable use, teacher content, third-party textbook links, advertising and liability.",
+      "h1": "Terms of Use",
+      "summary": "The terms that apply to free learning, accounts, uploaded content, textbook links and optional support or advertising on GramShiksha Academy.",
+      "robots": "index, follow, max-image-preview:large",
+      "sitemap": true,
+      "priority": 0.3,
+      "changefreq": "yearly",
+      "static": true,
+      "schema": {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "Terms of Use",
+        "url": "https://gramshiksha-academy.vercel.app/terms",
+        "description": "Terms of use for GramShiksha Academy.",
+        "isPartOf": { "@id": "https://gramshiksha-academy.vercel.app/#website" }
+      }
+    },
+    {
+      "path": "/doubts",
+      "title": "Ask a Doubt | GramShiksha Academy",
+      "description": "Sign in to ask a question and read answers from teachers and other learners.",
+      "h1": "Questions and answers",
+      "summary": "Ask a doubt and get an answer from a teacher.",
+      "robots": "noindex, nofollow",
+      "sitemap": false,
+      "static": true,
+      "schema": null
+    },
+    {
+      "path": "/login",
+      "title": "Log In | GramShiksha Academy",
+      "description": "Log in to continue learning, practising and saving progress.",
+      "h1": "Log in to GramShiksha",
+      "summary": "Log in to continue your lessons, practice and saved progress.",
+      "robots": "noindex, follow",
+      "sitemap": false,
+      "static": true,
+      "schema": null
+    },
+    {
+      "path": "/login/student",
+      "title": "Student Login | GramShiksha Academy",
+      "description": "Student login for free lessons, practice, textbooks and progress tracking.",
+      "h1": "Student login",
+      "summary": "Sign in with a student account to continue learning.",
+      "robots": "noindex, follow",
+      "sitemap": false,
+      "static": true,
+      "schema": null
+    },
+    {
+      "path": "/login/teacher",
+      "title": "Teacher Login | GramShiksha Academy",
+      "description": "Teacher login for classes, materials and student progress.",
+      "h1": "Teacher login",
+      "summary": "Sign in with a teacher account to manage learning.",
+      "robots": "noindex, follow",
+      "sitemap": false,
+      "static": true,
+      "schema": null
+    },
+    {
+      "path": "/dashboard",
+      "title": "Today's Learning | GramShiksha Academy",
+      "description": "Your daily learning plan and progress.",
+      "robots": "noindex, nofollow",
+      "sitemap": false,
+      "static": false,
+      "schema": null
+    },
+    {
+      "path": "/progress",
+      "title": "My Progress | GramShiksha Academy",
+      "description": "Your learning progress.",
+      "robots": "noindex, nofollow",
+      "sitemap": false,
+      "static": false,
+      "schema": null
+    },
+    {
+      "path": "/downloads",
+      "title": "My Downloads | GramShiksha Academy",
+      "description": "Your saved offline materials.",
+      "robots": "noindex, nofollow",
+      "sitemap": false,
+      "static": false,
+      "schema": null
+    },
+    {
+      "path": "/teacher",
+      "title": "Teacher Dashboard | GramShiksha Academy",
+      "description": "Teacher workspace.",
+      "robots": "noindex, nofollow",
+      "sitemap": false,
+      "static": false,
+      "schema": null
+    },
+    {
+      "path": "/parent",
+      "title": "Parent Dashboard | GramShiksha Academy",
+      "description": "Parent workspace.",
+      "robots": "noindex, nofollow",
+      "sitemap": false,
+      "static": false,
+      "schema": null
+    },
+    {
+      "path": "/admin",
+      "title": "Admin Dashboard | GramShiksha Academy",
+      "description": "Administration workspace.",
+      "robots": "noindex, nofollow",
+      "sitemap": false,
+      "static": false,
+      "schema": null
+    }
+  ],
+  "dynamicRoutes": [
+    {
+      "pattern": "^/course/[1-9][0-9]*$",
+      "title": "Course | GramShiksha Academy",
+      "description": "Course lessons, chapters and practice on GramShiksha Academy.",
+      "robots": "noindex, follow",
+      "schema": null
+    },
+    {
+      "pattern": "^/lesson/[1-9][0-9]*$",
+      "title": "Lesson | GramShiksha Academy",
+      "description": "Lesson content, notes and practice on GramShiksha Academy.",
+      "robots": "noindex, follow",
+      "schema": null
+    }
+  ]
+}

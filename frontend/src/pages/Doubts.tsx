@@ -30,7 +30,7 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
       <div className="empty-state">
         <div className="icon">❓</div>
         <p>{t('needLogin', lang)}</p>
-        <p><a className="btn small" href="#/login/student">{t('login', lang)}</a></p>
+        <p><a className="btn small" href="/login/student">{t('login', lang)}</a></p>
       </div>
     );
   }

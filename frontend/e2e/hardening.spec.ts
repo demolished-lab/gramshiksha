@@ -43,7 +43,7 @@ const mockMaterialApi = async (page: Page) => {
 test('an online material can be viewed without downloading it first', async ({ page }) => {
   await useSession(page);
   await mockMaterialApi(page);
-  await page.goto('/#/materials');
+  await page.goto('/materials');
   await page.getByRole('button', { name: /View online/i }).first().click();
   await page.waitForURL(/^blob:/, { timeout: 5000 });
   await expect(page.locator('body')).toContainText('offline material body');
@@ -52,11 +52,11 @@ test('an online material can be viewed without downloading it first', async ({ p
 test('an offline file opens in this tab rather than through a blocked popup', async ({ page }) => {
   await useSession(page);
   await mockMaterialApi(page);
-  await page.goto('/#/materials');
+  await page.goto('/materials');
   await page.getByRole('button', { name: /Download$/ }).first().click();
   await expect(page.getByText(/Saved on this device for offline use/i)).toBeVisible();
 
-  await page.goto('/#/downloads');
+  await page.goto('/downloads');
   await expect(page.getByText('Cell notes')).toBeVisible();
   await page.getByRole('button', { name: /Open offline/i }).click();
   await page.waitForURL(/^blob:/, { timeout: 5000 });

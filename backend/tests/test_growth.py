@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 
 
@@ -71,3 +72,20 @@ def test_feed_is_valid_rss(client):
     assert root.find("channel") is not None
     r2 = client.get("/api/feed.xml")
     assert r2.status_code == 200
+
+
+def test_ads_txt_stays_hidden_until_a_valid_publisher_id_exists(client, monkeypatch):
+    monkeypatch.setattr(settings, "adsense_client", "")
+    assert client.get("/ads.txt").status_code == 404
+
+    monkeypatch.setattr(settings, "adsense_client", "not-a-publisher-id")
+    assert client.get("/ads.txt").status_code == 404
+
+    monkeypatch.setattr(settings, "adsense_client", "ca-pub-1234567890123456")
+    for path in ("/ads.txt", "/api/ads.txt"):
+        r = client.get(path)
+        assert r.status_code == 200
+        assert r.text == "google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0\n"
+        assert r.headers["content-type"].startswith("text/plain")
+    # Literal calls so the route-coverage canary sees the endpoint.
+    assert client.get("/ads.txt").status_code == 200

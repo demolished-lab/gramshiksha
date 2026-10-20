@@ -37,13 +37,16 @@ export default function AdSlot({ format = 'auto' }: { format?: string }) {
 
   if (!unit) return null;
   return (
-    <ins
-      className="adsbygoogle"
-      style={{ display: 'block', textAlign: 'center' }}
-      data-ad-client={unit.client}
-      data-ad-slot={unit.slot}
-      data-ad-format={format}
-      data-full-width-responsive="true"
-    />
+    <div className="ad-slot" aria-label="Advertisement">
+      <span className="ad-label">Advertisement</span>
+      <ins
+        className="adsbygoogle"
+        style={{ display: 'block', textAlign: 'center' }}
+        data-ad-client={unit.client}
+        data-ad-slot={unit.slot}
+        data-ad-format={format}
+        data-full-width-responsive="true"
+      />
+    </div>
   );
 }

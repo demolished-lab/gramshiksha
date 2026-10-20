@@ -449,3 +449,20 @@ blockers are called out explicitly.
 4. **PDF buffering** - M5 is capped, not streamed. A 20 MB book still occupies 20 MB of RAM
    for the duration of the request (3 at a time). A true streaming relay is a future change.
 
+### AdSense follow-up (2026-10-20)
+
+The growth setup now prepares the site for AdSense, which changes two earlier
+assumptions:
+
+- `script-src` again includes `'unsafe-inline'` because AdSense's publisher
+  script injects an inline bootstrap. The policy still has no `*` wildcard,
+  keeps `object-src 'none'`, `frame-ancestors 'none'` and a specific allow-list
+  of Google ad hosts. If ads are permanently disabled, remove `'unsafe-inline'`
+  and re-run the deploy-config test.
+- `/ads.txt` is proxied to the backend. It returns 404 until a valid
+  `ADSENSE_CLIENT` (`ca-pub-` + 16 digits) is configured, then serves the
+  standard `google.com, pub-…, DIRECT, f08c47fec0942fa0` line. It is excluded
+  from the document CSP rule and from the `/api/*` proxy rule.
+
+Re-probe both on the live domain after the next Vercel and Render deploys.
+

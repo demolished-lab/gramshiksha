@@ -1,9 +1,22 @@
 {
+  "cleanUrls": true,
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "https://gramshiksha-backend.onrender.com/api/:path*"
-    }
+    },
+    {
+      "source": "/ads.txt",
+      "destination": "https://gramshiksha-backend.onrender.com/ads.txt"
+    },
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/progress", "destination": "/index.html" },
+    { "source": "/downloads", "destination": "/index.html" },
+    { "source": "/teacher", "destination": "/index.html" },
+    { "source": "/parent", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/course/:id", "destination": "/index.html" },
+    { "source": "/lesson/:id", "destination": "/index.html" }
   ],
   "headers": [
     {
@@ -32,11 +45,11 @@
       ]
     },
     {
-      "source": "/",
+      "source": "/((?!api/|assets/|images/|favicon\\.svg|manifest\\.webmanifest|sw\\.js|robots\\.txt|sitemap\\.xml|ads\\.txt).*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://adservice.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://gramshiksha-backend.onrender.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://googleads.g.doubleclick.net https://*.safeframe.googlesyndication.com; frame-src 'self' https://gramshiksha-backend.onrender.com https://*.googlesyndication.com https://googleads.g.doubleclick.net https://*.safeframe.googlesyndication.com; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
+          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://adservice.google.com https://www.googletagservices.com https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://gramshiksha-backend.onrender.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://googleads.g.doubleclick.net https://*.doubleclick.net https://adservice.google.com https://www.google.com https://*.gstatic.com; frame-src 'self' https://gramshiksha-backend.onrender.com https://*.googlesyndication.com https://googleads.g.doubleclick.net https://*.doubleclick.net https://*.safeframe.googlesyndication.com https://www.google.com; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
         },
         {
           "key": "X-Frame-Options",
@@ -49,19 +62,20 @@
       ]
     },
     {
-      "source": "/index.html",
+      "source": "/(dashboard|progress|downloads|teacher|parent|admin|course|lesson|login|doubts)(/.*)?",
       "headers": [
         {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://adservice.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://gramshiksha-backend.onrender.com https://pagead2.googlesyndication.com https://*.googlesyndication.com https://googleads.g.doubleclick.net https://*.safeframe.googlesyndication.com; frame-src 'self' https://gramshiksha-backend.onrender.com https://*.googlesyndication.com https://googleads.g.doubleclick.net https://*.safeframe.googlesyndication.com; worker-src 'self' blob:; manifest-src 'self'; upgrade-insecure-requests"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/ads.txt",
+      "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
+          "value": "public, max-age=3600"
         }
       ]
     },
