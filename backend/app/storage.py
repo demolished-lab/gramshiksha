@@ -89,7 +89,15 @@ def _save_cloudinary(data: bytes, ext: str) -> tuple[str, int]:
         log.warning("Cloudinary upload failed: %s", exc)
         raise HTTPException(502, "Upload storage unavailable — please retry") from exc
     rtype = res.get("resource_type", "raw")
-    return f"{CLOUDINARY_PREFIX}{rtype}/{res['public_id']}", int(res.get("bytes", len(data)))
+    stored_id = res["public_id"]
+    # Cloudinary appends the detected format to image delivery URLs. When a
+    # PDF/PNG public_id already ends in that extension, the resulting URL is
+    # "<id>.pdf.pdf"; storing the extension inside the public_id then makes
+    # our signed URL point at a non-existent "<id>.pdf". Keep the extension
+    # in the public_id only for raw assets, where it is part of the path.
+    if rtype == "image" and ext and stored_id.lower().endswith(ext.lower()):
+        stored_id = stored_id[:-len(ext)]
+    return f"{CLOUDINARY_PREFIX}{rtype}/{stored_id}", int(res.get("bytes", len(data)))
 
 
 def _split_ref(file_path: str) -> tuple[str, str]:

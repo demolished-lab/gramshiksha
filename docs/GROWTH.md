@@ -71,6 +71,14 @@ sitemap was accepted with 22 discovered pages; indexing was requested once for
 `/`, `/courses`, `/materials`, `/textbooks`, `/practice`, `/explore` and
 `/explore/8`. Recheck the Pages report after Google has had time to crawl.
 
+Status (2026-10-21): `/materials` is no longer empty. Twenty-one original
+**Course Revision Checklist** PDFs were published - one for every seeded
+course (Classes 1–12, SSC/HSC/CBSE) - with chapter/lesson checklists, a
+25-minute study routine and an exam-day plan. They are public, approved and
+available without login. This gives AdSense reviewers a real content shelf
+alongside the courses, practice and textbook links. See
+`docs/DEPLOYMENT.md` for the Cloudinary free-plan PDF-delivery setting.
+
 A new `vercel.app` subdomain can take days or weeks to appear for a competitive
 brand. The code removes the technical blockers; authority still comes from
 useful content, a custom domain later, and genuine links.

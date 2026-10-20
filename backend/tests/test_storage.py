@@ -42,6 +42,41 @@ def test_rejects_bad_ext_and_oversize(tmp_path, monkeypatch):
         save_upload(_upload("big.pdf", b"x" * (MAX + 1)), ALLOWED, MAX)
 
 
+def test_cloudinary_image_public_id_drops_duplicate_extension(monkeypatch):
+    import cloudinary.uploader
+
+    import app.storage as st
+
+    monkeypatch.setattr(settings, "cloudinary_cloud_name", "testcloud")
+    monkeypatch.setattr(settings, "cloudinary_api_key", "testkey")
+    monkeypatch.setattr(settings, "cloudinary_api_secret", "testsecret")
+    monkeypatch.setattr(cloudinary.uploader, "upload", lambda *a, **k: {
+        "resource_type": "image", "public_id": "gramshiksha/abc.pdf",
+        "bytes": 8,
+    })
+    ref, size = st._save_cloudinary(b"%PDF-1.4", ".pdf")
+    # Cloudinary's image delivery URL adds the format, so the stored public_id
+    # must not contain it too (otherwise "<id>.pdf.pdf" is the real URL).
+    assert ref == "cloudinary://image/gramshiksha/abc"
+    assert size == 8
+
+
+def test_cloudinary_raw_public_id_keeps_extension(monkeypatch):
+    import cloudinary.uploader
+
+    import app.storage as st
+
+    monkeypatch.setattr(settings, "cloudinary_cloud_name", "testcloud")
+    monkeypatch.setattr(settings, "cloudinary_api_key", "testkey")
+    monkeypatch.setattr(settings, "cloudinary_api_secret", "testsecret")
+    monkeypatch.setattr(cloudinary.uploader, "upload", lambda *a, **k: {
+        "resource_type": "raw", "public_id": "gramshiksha/abc.pdf",
+        "bytes": 8,
+    })
+    ref, _ = st._save_cloudinary(b"%PDF-1.4", ".pdf")
+    assert ref == "cloudinary://raw/gramshiksha/abc.pdf"
+
+
 def test_malformed_cloudinary_ref_is_404():
     with pytest.raises(HTTPException):
         download_target(f"{CLOUDINARY_PREFIX}no-rtype-here")

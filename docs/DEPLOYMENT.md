@@ -59,6 +59,12 @@ The driver needs the prefix `postgresql+psycopg://` — same string, different s
    Docker runtime (builds `backend/Dockerfile`), health check `GET /ready`.
 2. Fill the four `sync: false` secret groups from step 1 (`DATABASE_URL`,
    Cloudinary ×3, SMTP ×5). `JWT_SECRET` generates itself.
+   - In the Cloudinary console, open **Settings → Security** and enable
+     **Allow delivery of PDF and ZIP files**. Free accounts block PDF delivery
+     by default: uploads succeed, but every download URL returns `404` until
+     this is enabled. After changing it, upload new PDFs (or invalidate the
+     old cached URLs). Material `public_id`s must not repeat the file
+     extension; `storage._save_cloudinary` strips it for image assets.
 3. **Deploy.** Boot order: `check_production_safety()` → `alembic upgrade head`
    (3 revisions) → content seed. A misconfiguration fails the deploy with the
    offending variable named in the log — by design, fix and redeploy.
