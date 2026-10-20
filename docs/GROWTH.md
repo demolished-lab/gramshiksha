@@ -66,6 +66,11 @@ account access is not.
 5. Repeat the sitemap submission at <https://www.bing.com/webmasters> (it can
    import from Search Console for free).
 
+Status (2026-10-21): URL-prefix property verified with the HTML tag; the
+sitemap was accepted with 22 discovered pages; indexing was requested once for
+`/`, `/courses`, `/materials`, `/textbooks`, `/practice`, `/explore` and
+`/explore/8`. Recheck the Pages report after Google has had time to crawl.
+
 A new `vercel.app` subdomain can take days or weeks to appear for a competitive
 brand. The code removes the technical blockers; authority still comes from
 useful content, a custom domain later, and genuine links.
