@@ -379,7 +379,7 @@ M9 (CSP hardening, ads off authenticated pages, shorten/revoke tokens).
 
 ## Remediation status (20 October 2026)
 
-All code fixes below were applied after the report, on the same day. Backend: **182 tests
+All code fixes below were applied after the report, on the same day. Backend: **183 tests
 pass**, `ruff` clean. Frontend: **74 tests pass**, production build clean. The two external
 blockers are called out explicitly.
 
@@ -418,11 +418,25 @@ blockers are called out explicitly.
 ### Verification
 
 - `ruff check backend/app backend/tests` -> clean.
-- `pytest backend/tests` -> **182 passed** (10 new hardening tests in
+- `pytest backend/tests` -> **183 passed** (11 new hardening tests in
   `backend/tests/test_security_hardening.py`).
 - `npm test -- --run` -> **74 passed**; `npm run build` -> clean.
-- Live re-probe after deploy: see the deploy log in the session summary (CORS preflight,
-  cache headers, CSP, per-account cache, rate-limit `Retry-After`).
+- Live re-probe after deploy:
+  - `GET /api/health` -> `{"status":"ok","app":"Gramshiksha API"}` (no version).
+  - `OPTIONS /api/auth/token` from the canonical origin -> **200** with
+    `access-control-allow-origin: https://gramshiksha-academy.vercel.app`.
+  - `GET /api/auth/me` with a token -> `Cache-Control: no-store`,
+    `Vary: Authorization`; `GET /api/progress/summary` -> `private, max-age=0,
+    must-revalidate`; anonymous `GET /api/courses` stays public.
+  - A 200-character `X-Request-ID` is replaced by a 12-character id.
+  - An 11th failed login for one address -> **429** with
+    `Retry-After: 897` (the 15-minute per-account lock).
+  - Document CSP no longer contains `'unsafe-inline'` in `script-src` and still
+    sets `X-Frame-Options: DENY`; the app loads with **zero console messages**
+    (no CSP violations).
+  - Browser login creates `gramshiksha-api:acct-<hash>` and stores only
+    authenticated `/api` responses there; the shared shell cache contains no
+    `/api` entries. Logout deletes the private cache and the token.
 
 ### Residual risks (deliberate)
 
