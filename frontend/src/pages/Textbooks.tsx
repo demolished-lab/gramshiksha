@@ -89,17 +89,30 @@ export default function Textbooks({ lang, user }: { lang: Lang; user: { class_gr
     let cancelled = false;
     setChapterState('checking');
     setFrameReady(false);
-    fetch(apiTextbookOpenUrl(viewer.id, undefined, viewer.chapter), { method: 'HEAD' })
-      .then((r) => {
-        if (cancelled) return;
-        if (r.ok) { probedRef.current = key; setChapterState('ok'); return; }
-        setChapterState(r.status === 503 ? 'unavailable' : 'missing');
-      })
-      .catch(() => {
-        // Could not ask at all: treat like a portal hiccup, never like "the
-        // book ended" — the chapter may well exist.
-        if (!cancelled) setChapterState('unavailable');
-      });
+
+    // NCERT refuses roughly one probe in eight even though the file opens on
+    // the next try, so a 503 is retried once, silently, before the student is
+    // told anything. A 404 is final: that chapter genuinely is not there.
+    const probe = async (): Promise<'ok' | 'missing' | 'unavailable'> => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const r = await fetch(apiTextbookOpenUrl(viewer.id, undefined, viewer.chapter),
+            { method: 'HEAD' });
+          if (r.ok) return 'ok';
+          if (r.status !== 503) return 'missing';
+        } catch {
+          // network blip — treat like a 503 and retry once
+        }
+        if (attempt === 0) await new Promise((res) => setTimeout(res, 700));
+      }
+      return 'unavailable';
+    };
+
+    void probe().then((state) => {
+      if (cancelled) return;
+      if (state === 'ok') probedRef.current = key;
+      setChapterState(state);
+    });
     return () => { cancelled = true; };
   }, [viewer, probeNonce]);
 
