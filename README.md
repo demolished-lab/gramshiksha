@@ -181,7 +181,9 @@ can withdraw a pick.
    `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_USE_TLS`.
    Without SMTP, `/auth/reset-request` answers `503` in production rather than
    silently swallowing the request. Local dev (SQLite) logs the code instead.
-   `reset-confirm` verifies the code and allows a single use.
+   `reset-confirm` verifies the code and allows a single use. The login card's
+   **Forgot password?** action walks through request → code + new password and
+   shows the backend's 503 explanation while SMTP is unconfigured.
 6. **Demo accounts** — `admin@gramshiksha.in / Admin@1234` and friends are seeded
    **only on local SQLite**. With a Postgres `DATABASE_URL` they are skipped
    unless you force `SEED_DEMO=true` (never do that on a real instance); course,
