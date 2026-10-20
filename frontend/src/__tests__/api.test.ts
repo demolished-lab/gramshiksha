@@ -30,6 +30,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -109,9 +110,39 @@ describe('error handling', () => {
   });
 
   it('keeps statusText when the error body is not JSON', async () => {
-    fetchMock.mockResolvedValue(new Response('boom', { status: 503, statusText: 'Offline' }));
+    // 500 is not a wake-up status, so this returns immediately (502/503/504
+    // intentionally wait and retry — covered below).
+    fetchMock.mockResolvedValue(new Response('boom', { status: 500, statusText: 'Offline' }));
 
     await expect(apiMe()).rejects.toThrow('Offline');
+  });
+
+  it('retries a read when a waking backend answers 503', async () => {
+    vi.useFakeTimers();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(503, { detail: 'service starting' }))
+      .mockResolvedValueOnce(jsonResponse(200, { name: 'Asha' }));
+
+    const request = apiMe();
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    await expect(request).resolves.toEqual({ name: 'Asha' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('turns a stalled request into a friendly timeout instead of hanging forever', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => {
+        reject(new DOMException('Aborted', 'AbortError'));
+      });
+    }));
+
+    const request = apiMe();
+    const failed = expect(request).rejects.toThrow(/taking longer than usual to wake up/i);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await failed;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

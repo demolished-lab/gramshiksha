@@ -47,6 +47,29 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
     }
   };
 
+  const reply = async (id: number) => {
+    if (!replyText.trim()) return;
+    setError('');
+    try {
+      await apiReplyDoubt(id, replyText.trim());
+      setReplyFor(null);
+      setReplyText('');
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const resolve = async (id: number) => {
+    setError('');
+    try {
+      await apiResolveDoubt(id);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   return (
     <div>
       <div className="page-head">
@@ -126,16 +149,14 @@ export default function Doubts({ lang, user }: { lang: Lang; user: { role: strin
               replyFor === d.id ? (
                 <>
                   <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Your answer…" />
-                  <button className="btn small" onClick={async () => {
-                    await apiReplyDoubt(d.id, replyText); setReplyFor(null); setReplyText(''); load();
-                  }}>{t('send', lang)}</button>
+                  <button className="btn small" disabled={!replyText.trim()} onClick={() => void reply(d.id)}>{t('send', lang)}</button>
                 </>
               ) : (
                 <button className="btn small" onClick={() => setReplyFor(d.id)}>💬 Answer</button>
               )
             )}
             {(user?.role === 'student' || isTeacher) && d.status === 'answered' && (
-              <button className="btn small ghost" onClick={async () => { await apiResolveDoubt(d.id); load(); }}>✓ Mark resolved</button>
+              <button className="btn small ghost" onClick={() => void resolve(d.id)}>✓ Mark resolved</button>
             )}
           </div>
         </div>

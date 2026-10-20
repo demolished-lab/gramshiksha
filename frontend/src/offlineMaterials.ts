@@ -1,8 +1,19 @@
-import { apiMaterialUrl } from './api';
+import { apiMaterialResponse } from './api';
 import { getToken, offlineStorageScope, removeDownload, saveDownload } from './auth';
 
 const CACHE_NAME = 'gramshiksha-offline-materials-v1';
 const MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
+
+/** The API requires a bearer token for every material file, so an <a href>
+ * cannot work. Fetch it as a blob and let the browser's own PDF/image/audio
+ * viewer handle the object URL. */
+async function fetchMaterialFile(materialId: number): Promise<{ blob: Blob; mimeType: string }> {
+  const response = await apiMaterialResponse(materialId);
+  if (!response.ok) throw new Error(`Download failed (${response.status}). Please try again.`);
+  const blob = await response.blob();
+  const mimeType = response.headers.get('Content-Type') || blob.type || 'application/octet-stream';
+  return { blob, mimeType };
+}
 
 function materialRequest(materialId: number): Request {
   const scope = offlineStorageScope();
@@ -15,14 +26,8 @@ export async function saveMaterialOffline(materialId: number, title: string): Pr
   if (!token) throw new Error('Log in to save materials for offline use.');
   if (typeof caches === 'undefined') throw new Error('Offline file storage is not available in this browser.');
 
-  const response = await fetch(apiMaterialUrl(materialId), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new Error(`Download failed (${response.status}). Please try again.`);
-
-  const blob = await response.blob();
+  const { blob, mimeType } = await fetchMaterialFile(materialId);
   if (blob.size > MAX_DOWNLOAD_BYTES) throw new Error('This file is larger than the 10 MB offline limit.');
-  const mimeType = response.headers.get('Content-Type') || blob.type || 'application/octet-stream';
   const request = materialRequest(materialId);
   const cache = await caches.open(CACHE_NAME);
   await cache.put(request, new Response(blob, { headers: { 'Content-Type': mimeType } }));
@@ -38,6 +43,18 @@ export async function saveMaterialOffline(materialId: number, title: string): Pr
     await cache.delete(request);
     throw new Error('The file was downloaded, but this device could not save its offline index. Free up storage and retry.');
   }
+}
+
+/** Open the real file online, without saving it to this device first. The
+ * download endpoint is authenticated, so it is fetched as a blob and opened
+ * in this tab — the same reliable path phones use for offline files. */
+export async function openMaterialOnline(materialId: number): Promise<void> {
+  if (!getToken()) throw new Error('Log in to view this file.');
+  const { blob, mimeType } = await fetchMaterialFile(materialId);
+  const typedBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
+  const objectUrl = URL.createObjectURL(typedBlob);
+  window.location.assign(objectUrl);
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 export async function openOfflineMaterial(materialId: number): Promise<void> {

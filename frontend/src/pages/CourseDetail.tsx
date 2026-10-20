@@ -8,6 +8,7 @@ export default function CourseDetail({ lang, go, courseId }: { lang: Lang; go: (
   const [course, setCourse] = useState<Course | null>(null);
   const [enrolled, setEnrolled] = useState(false);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -20,10 +21,15 @@ export default function CourseDetail({ lang, go, courseId }: { lang: Lang; go: (
   const enroll = async () => {
     if (!getToken()) { go('home'); return; }
     setBusy(true);
+    setActionError('');
     try {
       await apiEnroll(courseId);
       setEnrolled(true);
-    } catch (e) { setError(String(e)); } finally { setBusy(false); }
+    } catch (e) {
+      // Keep the course on screen: replacing the whole page with a load error
+      // hid the button and the reason it failed.
+      setActionError(e instanceof Error ? e.message : String(e));
+    } finally { setBusy(false); }
   };
 
   if (error) return <p className="error">{t('errorLoad', lang)}</p>;
@@ -48,9 +54,12 @@ export default function CourseDetail({ lang, go, courseId }: { lang: Lang; go: (
           📖 {totalLessons} lessons · ⏱ {Math.round(course.duration_min / 60)}h · 👥 {course.students_count}
         </p>
         {!enrolled && (
-          <button className="btn accent" style={{ marginTop: 12 }} disabled={busy} onClick={enroll}>
-            {t('enroll', lang)}
-          </button>
+          <>
+            <button className="btn accent" style={{ marginTop: 12 }} disabled={busy} onClick={enroll}>
+              {t('enroll', lang)}
+            </button>
+            {actionError && <p className="error" role="alert">{actionError}</p>}
+          </>
         )}
       </div>
 

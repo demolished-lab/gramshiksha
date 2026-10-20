@@ -79,6 +79,8 @@ const S: Record<string, [string, string, string]> = {
   send: ['Send', 'भेजें', 'पाठवा'],
   newMaterial: ['Upload material', 'सामग्री अपलोड करें', 'साहित्य अपलोड करा'],
   download: ['Download', 'डाउनलोड', 'डाउनलोड'],
+  viewOnline: ['View online', 'ऑनलाइन देखें', 'ऑनलाइन पहा'],
+  openingFile: ['Opening…', 'खोला जा रहा है…', 'उघडत आहे…'],
   bookmark: ['Bookmark', 'बुकमार्क', 'बुकमार्क'],
   myNotes: ['My Notes', 'मेरे नोट्स', 'माझे नोट्स'],
   addNote: ['Add note', 'नोट जोड़ें', 'नोट जोडा'],

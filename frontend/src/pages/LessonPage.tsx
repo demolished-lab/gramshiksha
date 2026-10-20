@@ -52,8 +52,23 @@ export default function LessonPage({ lang, go, lessonId }: { lang: Lang; go: (p:
 
   const addNote = async () => {
     if (!noteText.trim() || !getToken()) return;
-    const n = await apiAddNote(lessonId, noteText.trim()).catch(() => null);
-    if (n) { setNotes([...notes, { id: n.id, body: noteText.trim() }]); setNoteText(''); }
+    setError('');
+    try {
+      const n = await apiAddNote(lessonId, noteText.trim());
+      setNotes([...notes, { id: n.id, body: noteText.trim() }]);
+      setNoteText('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const bookmark = async () => {
+    setError('');
+    try {
+      await apiAddBookmark(lessonId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   if (error && !lesson) return <p className="error">{t('errorLoad', lang)}</p>;
@@ -97,7 +112,7 @@ export default function LessonPage({ lang, go, lessonId }: { lang: Lang; go: (p:
         <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
           {!done && <button className="btn" onClick={complete}>✓ {t('markComplete', lang)}</button>}
           {lesson.questions.length > 0 && !showQuiz && <button className="btn accent" onClick={startQuiz}>✏️ Practice</button>}
-          {getToken() && <button className="btn ghost" onClick={() => apiAddBookmark(lessonId).catch(() => {})}>🔖 {t('bookmark', lang)}</button>}
+          {getToken() && <button className="btn ghost" onClick={() => void bookmark()}>🔖 {t('bookmark', lang)}</button>}
         </div>
         {xpMsg && <p className="success">⚡ {xpMsg}</p>}
         {error && <p className="error">{error}</p>}
@@ -133,13 +148,17 @@ function InlineQuiz({ lang, quiz, onDone, result }: {
   const [answers, setAnswers] = useState<Record<number, unknown>>({});
   const [startedAt] = useState(Date.now());
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   const submit = async () => {
     setBusy(true);
+    setError('');
     try {
       const r = await apiQuizSubmit(quiz.id, quiz.questions.map((q) => ({ question_id: q.id, answer: answers[q.id] ?? null })),
         Math.round((Date.now() - startedAt) / 1000));
       onDone(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally { setBusy(false); }
   };
 
@@ -192,6 +211,7 @@ function InlineQuiz({ lang, quiz, onDone, result }: {
           </div>
         );
       })}
+      {error && <p className="error" role="alert">{error}</p>}
       {!result ? (
         <button className="btn" disabled={busy || Object.keys(answers).length < quiz.questions.length} onClick={submit}>
           {t('submit', lang)}

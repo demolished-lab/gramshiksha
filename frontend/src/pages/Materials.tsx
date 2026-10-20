@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiAvailability, apiMaterials, apiPendingMaterials, apiReportMaterial, apiReviewMaterial, apiUploadMaterial } from '../api';
 import StreamPicker, { streamName } from '../components/StreamPicker';
 import { getToken } from '../auth';
-import { saveMaterialOffline } from '../offlineMaterials';
+import { openMaterialOnline, saveMaterialOffline } from '../offlineMaterials';
 import { t } from '../i18n';
 import type { AvailabilityStream, Lang, Material } from '../types';
 
@@ -20,7 +20,11 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
   const [pending, setPending] = useState<Material[]>([]);
   const [error, setError] = useState('');
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [viewingId, setViewingId] = useState<number | null>(null);
   const [downloadState, setDownloadState] = useState<{ id: number; message: string; failed: boolean } | null>(null);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [reviewError, setReviewError] = useState('');
+  const [reportState, setReportState] = useState<{ id: number; message: string; failed: boolean } | null>(null);
   const isTeacher = user && ['teacher', 'school_admin', 'platform_admin'].includes(user.role);
 
   const load = () => {
@@ -45,6 +49,51 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
       setStream('');
     }
   }, [grade, board]);
+
+  const viewOnline = async (m: Material) => {
+    setViewingId(m.id);
+    setDownloadState(null);
+    try {
+      await openMaterialOnline(m.id);
+    } catch (e) {
+      setDownloadState({
+        id: m.id,
+        message: e instanceof Error ? e.message : String(e),
+        failed: true,
+      });
+    } finally {
+      setViewingId(null);
+    }
+  };
+
+  const review = async (id: number, decision: 'approved' | 'rejected') => {
+    setReviewingId(id);
+    setReviewError('');
+    try {
+      await apiReviewMaterial(id, decision, decision === 'rejected' ? 'Not suitable' : '');
+      load();
+    } catch (e) {
+      setReviewError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const report = async (id: number) => {
+    const reason = prompt(`Report reason (${REPORT_REASONS.join('/')}):`, 'incorrect');
+    if (!reason) return;
+    if (!REPORT_REASONS.includes(reason)) {
+      setReportState({ id, message: 'Choose one of the listed report reasons.', failed: true });
+      return;
+    }
+    setReportState(null);
+    try {
+      await apiReportMaterial(id, reason, '');
+      setReportState({ id, message: 'Reported ✓ A moderator will review it.', failed: false });
+    } catch (e) {
+      setReportState({ id, message: e instanceof Error ? e.message : String(e), failed: true });
+    }
+  };
 
   return (
     <div>
@@ -74,10 +123,11 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
           {pending.map((m) => (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
               <div style={{ flex: 1 }}><strong>{m.title}</strong> <span className="muted">by student</span></div>
-              <button className="btn small" onClick={async () => { await apiReviewMaterial(m.id, 'approved'); load(); }}>✓ {t('approve', lang)}</button>
-              <button className="btn small ghost" onClick={async () => { await apiReviewMaterial(m.id, 'rejected', 'Not suitable'); load(); }}>✗ {t('reject', lang)}</button>
+              <button className="btn small" disabled={reviewingId === m.id} onClick={() => void review(m.id, 'approved')}>✓ {t('approve', lang)}</button>
+              <button className="btn small ghost" disabled={reviewingId === m.id} onClick={() => void review(m.id, 'rejected')}>✗ {t('reject', lang)}</button>
             </div>
           ))}
+          {reviewError && <p className="error" role="alert">{reviewError}</p>}
         </div>
       )}
 
@@ -98,25 +148,31 @@ export default function Materials({ lang, user }: { lang: Lang; user: { role: st
           <div className="muted">source: {m.source_of_content} · ⬇ {m.downloads} · {Math.round(m.file_size / 1024)} KB</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
             {getToken() ? (
-              <button className="btn small" disabled={savingId === m.id} onClick={async () => {
-                setSavingId(m.id);
-                setDownloadState(null);
-                try {
-                  await saveMaterialOffline(m.id, m.title);
-                  setDownloadState({ id: m.id, message: t('savedOffline', lang), failed: false });
-                } catch (e) {
-                  setDownloadState({ id: m.id, message: e instanceof Error ? e.message : String(e), failed: true });
-                } finally { setSavingId(null); }
-              }}>⬇ {savingId === m.id ? t('saving', lang) : t('download', lang)}</button>
+              <>
+                <button className="btn small" disabled={viewingId === m.id} onClick={() => void viewOnline(m)}>
+                  👁 {viewingId === m.id ? t('openingFile', lang) : t('viewOnline', lang)}
+                </button>
+                <button className="btn small ghost" disabled={savingId === m.id} onClick={async () => {
+                  setSavingId(m.id);
+                  setDownloadState(null);
+                  try {
+                    await saveMaterialOffline(m.id, m.title);
+                    setDownloadState({ id: m.id, message: t('savedOffline', lang), failed: false });
+                  } catch (e) {
+                    setDownloadState({ id: m.id, message: e instanceof Error ? e.message : String(e), failed: true });
+                  } finally { setSavingId(null); }
+                }}>⬇ {savingId === m.id ? t('saving', lang) : t('download', lang)}</button>
+              </>
             ) : (
-              <a className="btn small" href="#/login/student">⬇ {t('download', lang)} · {t('login', lang)}</a>
+              <>
+                <a className="btn small" href="#/login/student">👁 {t('viewOnline', lang)} · {t('login', lang)}</a>
+                <a className="btn small ghost" href="#/login/student">⬇ {t('download', lang)} · {t('login', lang)}</a>
+              </>
             )}
-            <button className="btn small ghost" onClick={() => {
-              const reason = prompt(`Report reason (${REPORT_REASONS.join('/')}):`, 'incorrect');
-              if (reason && REPORT_REASONS.includes(reason)) apiReportMaterial(m.id, reason, '').then(() => alert('Reported ✓'));
-            }}>🚩 Report</button>
+            <button className="btn small ghost" onClick={() => void report(m.id)}>🚩 Report</button>
           </div>
           {downloadState?.id === m.id && <p className={downloadState.failed ? 'error' : 'success'} role="status">{downloadState.message}</p>}
+          {reportState?.id === m.id && <p className={reportState.failed ? 'error' : 'success'} role="status">{reportState.message}</p>}
         </div>
       ))}
     </div>

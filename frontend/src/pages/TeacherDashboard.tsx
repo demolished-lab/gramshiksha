@@ -17,6 +17,7 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
   const [replyFor, setReplyFor] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [studentsLoaded, setStudentsLoaded] = useState(false);
 
   // Monthly Reading List: the teacher's own picks (`mine=1`) plus the form.
@@ -70,6 +71,19 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
       loadPicks();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const reply = async (id: number) => {
+    if (!replyText.trim()) return;
+    setActionError('');
+    try {
+      await apiReplyDoubt(id, replyText.trim());
+      setReplyFor(null);
+      setReplyText('');
+      load();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -233,6 +247,7 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
 
       <div className="card">
         <h3>❓ Pending doubts ({doubts.length})</h3>
+        {actionError && <p className="error" role="alert">{actionError}</p>}
         {!doubts.length && <p className="muted">No pending doubts ✓</p>}
         {doubts.map((d) => (
           <div key={d.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
@@ -241,9 +256,7 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
             {replyFor === d.id ? (
               <div style={{ display: 'flex', gap: 8 }}>
                 <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Type your answer…" />
-                <button className="btn small" onClick={async () => {
-                  await apiReplyDoubt(d.id, replyText); setReplyFor(null); setReplyText(''); load();
-                }}>{t('send', lang)}</button>
+                <button className="btn small" disabled={!replyText.trim()} onClick={() => void reply(d.id)}>{t('send', lang)}</button>
               </div>
             ) : (
               <button className="btn small" onClick={() => setReplyFor(d.id)}>💬 Answer</button>

@@ -7,12 +7,100 @@ import type {
 
 const BASE = `${(import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_URL ?? ''}/api`;
 
-async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
+/** Render's free instance sleeps after inactivity and can take 50+ seconds to
+ * wake. A bare `fetch` has no timeout, so a stalled wake left skeletons and
+ * spinners on screen forever (and a phone tab can sit there for minutes).
+ * Every API call now has a deadline. */
+const DEFAULT_TIMEOUT_MS = 60_000;
+const UPLOAD_TIMEOUT_MS = 300_000;
+
+/** A waking proxy can answer 502/503/504 before the app is ready. These waits
+ * span roughly the measured cold-start window instead of failing after a
+ * couple of seconds and making the learner tap Retry on every page. */
+const WAKE_STATUSES = new Set([502, 503, 504]);
+const WAKE_RETRY_DELAYS_MS = [5_000, 15_000, 25_000];
+const NETWORK_RETRY_DELAY_MS = 1_500;
+
+const TIMEOUT_MESSAGE = 'The server is taking longer than usual to wake up. Please try again in a moment.';
+const NETWORK_MESSAGE = 'Could not reach the server. Check your internet connection and try again.';
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+interface FetchSettings {
+  timeoutMs?: number;
+  /** Retry 502/503/504 — the usual Render wake-up responses. */
+  retryWake?: boolean;
+  /** Retry one immediate network failure (offline, DNS, reset connection). */
+  retryNetwork?: boolean;
+}
+
+async function fetchWithWakeRetry(
+  url: string,
+  init: RequestInit,
+  settings: FetchSettings = {},
+): Promise<Response> {
+  const {
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    retryWake = false,
+    retryNetwork = false,
+  } = settings;
+  let wakeRetries = 0;
+  let networkRetries = 0;
+
+  for (;;) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      const res = await fetch(url, { ...init, signal: controller.signal });
+      if (retryWake && WAKE_STATUSES.has(res.status) && wakeRetries < WAKE_RETRY_DELAYS_MS.length) {
+        const wait = WAKE_RETRY_DELAYS_MS[wakeRetries++];
+        // Release the failed response before waiting; otherwise a proxy body
+        // can keep the connection occupied while the instance boots.
+        try { await res.body?.cancel(); } catch { /* body already consumed */ }
+        await sleep(wait);
+        continue;
+      }
+      return res;
+    } catch {
+      // A timeout means the request reached the network and waited the full
+      // deadline. Retrying that once would double a bad 60-second wait, so
+      // surface the friendly message and let the page's Retry do the rest.
+      if (timedOut) throw new Error(TIMEOUT_MESSAGE);
+      if (retryNetwork && networkRetries < 1) {
+        networkRetries += 1;
+        await sleep(NETWORK_RETRY_DELAY_MS);
+        continue;
+      }
+      throw new Error(NETWORK_MESSAGE);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/** One authenticated request, including session-expiry handling. `req()` uses
+ * this for JSON, while material downloads use the raw response. */
+async function requestWithSession(
+  path: string,
+  options: RequestInit = {},
+  settings: FetchSettings = {},
+): Promise<Response> {
   const token = localStorage.getItem('gs_token');
   const headers: Record<string, string> = { ...(options.headers as Record<string, string>) };
   if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const method = (options.method ?? 'GET').toUpperCase();
+  const idempotent = method === 'GET' || method === 'HEAD';
+  const res = await fetchWithWakeRetry(`${BASE}${path}`, { ...options, headers }, {
+    timeoutMs: settings.timeoutMs,
+    retryWake: settings.retryWake ?? idempotent,
+    retryNetwork: settings.retryNetwork ?? idempotent,
+  });
   if (res.status === 401) {
     // Token expired/invalid — drop session so the UI falls back to login.
     localStorage.removeItem('gs_token');
@@ -25,6 +113,11 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
     // the session state and let its route guard take over.
     if (typeof window !== 'undefined') window.dispatchEvent(new Event('gs:session-expired'));
   }
+  return res;
+}
+
+async function req<T>(path: string, options: RequestInit = {}, settings: FetchSettings = {}): Promise<T> {
+  const res = await requestWithSession(path, options, settings);
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -36,7 +129,7 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-const post = <T>(path: string, body?: unknown) =>
+const post = <T>(path: string, body?: unknown, settings: FetchSettings = {}) =>
   req<T>(path, {
     method: 'POST',
     // FormData must be passed through untouched: JSON.stringify(FormData) is
@@ -44,23 +137,33 @@ const post = <T>(path: string, body?: unknown) =>
     // 422 from the multipart parser. req() then also skips the Content-Type
     // header so the browser can set the boundary.
     body: body === undefined || body instanceof FormData ? body : JSON.stringify(body),
-  });
+  }, settings);
 
 // ---------- auth ----------
 export const apiRegister = (payload: Record<string, unknown>) =>
   post<{ access_token: string }>('/auth/register', payload);
-export const apiLogin = async (email: string, password: string): Promise<LoginResponse> => {
-  const res = await fetch(`${BASE}/auth/token`, {
+
+/** Login is usually the first request after an idle period, so it is the most
+ * likely one to meet a waking backend. It is safe to retry (a lost token
+ * response only means another token), unlike registration. */
+const fetchLogin = async (
+  path: '/auth/token' | '/auth/token/teacher' | '/auth/token/student',
+  email: string, password: string,
+): Promise<LoginResponse> => {
+  const res = await fetchWithWakeRetry(`${BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ username: email, password }).toString(),
-  });
+  }, { retryWake: true, retryNetwork: true });
   if (!res.ok) {
     const j = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(typeof j.detail === 'string' ? j.detail : 'Login failed');
   }
   return res.json();
 };
+
+export const apiLogin = (email: string, password: string) =>
+  fetchLogin('/auth/token', email, password);
 export const apiMe = () => req<Me>('/auth/me');
 export const apiUpdateMe = (payload: Record<string, unknown>) =>
   req<{ ok: boolean }>('/auth/me', { method: 'PATCH', body: JSON.stringify(payload) });
@@ -68,21 +171,10 @@ export const apiUpdateMe = (payload: Record<string, unknown>) =>
 /** Designated logins: the teacher page only yields teacher sessions, the
  * student page only student sessions (server returns 403 on role mismatch).
  * Parents and admins keep using the generic apiLogin. */
-const apiRoleLogin = async (
+const apiRoleLogin = (
   path: '/auth/token/teacher' | '/auth/token/student',
   email: string, password: string,
-): Promise<LoginResponse> => {
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ username: email, password }).toString(),
-  });
-  if (!res.ok) {
-    const j = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(typeof j.detail === 'string' ? j.detail : 'Login failed');
-  }
-  return res.json();
-};
+) => fetchLogin(path, email, password);
 export const apiTeacherLogin = (email: string, password: string) =>
   apiRoleLogin('/auth/token/teacher', email, password);
 export const apiStudentLogin = (email: string, password: string) =>
@@ -143,7 +235,10 @@ export const apiTextbookOpenUrl = (id: number, mode?: 'dl' | 'ext', chapter?: nu
  * scan (seconds) → request queue. Never throws the book away: a miss comes
  * back as `result: 'queued'` with a queue position, not an error. */
 export const apiLocate = (q: string, classGrade: number | null, board: string, lang: string, stream?: string | null) =>
-  post<LocateResult>('/library/locate', { q, class_grade: classGrade, board, lang, stream: stream || '' });
+  post<LocateResult>('/library/locate', { q, class_grade: classGrade, board, lang, stream: stream || '' },
+    // The official-portal scan is slower than a database read but must still
+    // fail eventually instead of spinning forever.
+    { timeoutMs: 120_000 });
 /** The signed-in learner's own asks (401 when anonymous — callers ignore). */
 export const apiMyRequests = () => req<BookAsk[]>('/library/requests');
 
@@ -188,7 +283,8 @@ export const apiMaterials = (opts: { class_grade?: number; board?: string; subje
   Object.entries(opts).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') p.set(k, String(v)); });
   return req<Material[]>(`/materials?${p.toString()}`);
 };
-export const apiUploadMaterial = (form: FormData) => post<{ id: number; status: string }>('/materials', form);
+export const apiUploadMaterial = (form: FormData) =>
+  post<{ id: number; status: string }>('/materials', form, { timeoutMs: UPLOAD_TIMEOUT_MS });
 export const apiPendingMaterials = () => req<Material[]>('/materials/pending');
 export const apiReviewMaterial = (id: number, decision: string, reason = '') => {
   const fd = new FormData();
@@ -203,6 +299,10 @@ export const apiReportMaterial = (id: number, reason: string, detail = '') => {
   return req<{ ok: boolean }>(`/materials/${id}/report`, { method: 'POST', body: fd });
 };
 export const apiMaterialUrl = (id: number) => `${BASE}/materials/${id}/download`;
+/** Raw authenticated file response. Used for both offline saving and the
+ * direct online viewer — a plain <a href> cannot attach a bearer token. */
+export const apiMaterialResponse = (id: number) =>
+  requestWithSession(`/materials/${id}/download`, {}, { timeoutMs: 120_000, retryWake: true, retryNetwork: true });
 
 // ---------- social ----------
 export const apiAskDoubt = (subject_name: string, chapter_title: string, text: string) =>

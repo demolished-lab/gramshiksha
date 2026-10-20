@@ -6,6 +6,7 @@ import { t } from './i18n';
 import type { Lang } from './types';
 
 const BOARDS = ['Maharashtra SSC', 'Maharashtra HSC', 'CBSE'];
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export default function AuthModal({ lang, onClose, onAuthed }: {
   lang: Lang; onClose: () => void; onAuthed: () => void;
@@ -22,18 +23,57 @@ export default function AuthModal({ lang, onClose, onAuthed }: {
   const [busy, setBusy] = useState(false);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const cardRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   // A small phone (or a phone with the keyboard open) must be able to scroll
   // the longer sign-up form instead of losing the top fields off-screen.
   // Lock the page behind the dialog so its own scroll is the only one.
+  // Also keep keyboard focus inside the modal: without this, Tab walked into
+  // the page behind the dimmed overlay, and closing dropped focus on <body>.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement : null;
+    const card = cardRef.current;
+    const firstField = card?.querySelector<HTMLElement>(
+      'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+    const frame = window.requestAnimationFrame(() => (firstField ?? card)?.focus());
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeRef.current();
+        return;
+      }
+      if (e.key !== 'Tab' || !card) return;
+      const nodes = Array.from(card.querySelectorAll<HTMLElement>(FOCUSABLE))
+        .filter((el) => el.getClientRects().length > 0);
+      if (!nodes.length) {
+        e.preventDefault();
+        card.focus();
+        return;
+      }
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement;
+      const outside = !card.contains(active);
+      if (e.shiftKey && (active === first || outside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || outside)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
     return () => {
+      window.cancelAnimationFrame(frame);
       document.body.style.overflow = previous;
       window.removeEventListener('keydown', onKey);
+      const opener = restoreFocusRef.current;
+      if (opener?.isConnected) opener.focus();
     };
   }, []);
 
@@ -63,7 +103,7 @@ export default function AuthModal({ lang, onClose, onAuthed }: {
 
   return (
     <div className="auth-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="auth-title">
-      <div className="card auth-card" onClick={(e) => e.stopPropagation()}>
+      <div className="card auth-card" ref={cardRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <h3 id="auth-title">{mode === 'login' ? t('login', lang) : t('register', lang)}</h3>
         {mode === 'register' && (
           <>

@@ -131,6 +131,28 @@ test('registration form exposes the student class, board, and language choices',
   }
 });
 
+test('the auth dialog keeps focus inside and restores the opener on close', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/#/home');
+  const opener = page.getByRole('button', { name: /log in/i }).first();
+  await opener.click();
+
+  const dialog = page.getByRole('dialog');
+  const email = dialog.locator('input[type="email"]');
+  const close = dialog.getByRole('button', { name: 'Close' });
+  await expect(email).toBeFocused();
+
+  await close.focus();
+  await page.keyboard.press('Tab');
+  await expect(email).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(close).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
 test('practice shows a retry instead of an endless skeleton when no questions exist', async ({ page }) => {
   await useSession(page);
   await mockApi(page);
