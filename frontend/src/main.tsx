@@ -40,6 +40,23 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
+// A deploy replaces the hashed chunk files, so a tab that stayed open across
+// one can ask for a chunk that no longer exists and land on the error
+// boundary (seen live: Textbooks-*.js 404 right after a release). Vite fires
+// this event for exactly that case — reload once to pick up the new index.
+// The guard stops a genuine CDN outage from becoming a reload loop.
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  try {
+    const last = Number(sessionStorage.getItem('gs-preload-reload') ?? 0);
+    if (Date.now() - last < 60_000) return;   // already retried: let the boundary speak
+    sessionStorage.setItem('gs-preload-reload', String(Date.now()));
+  } catch {
+    return;                                    // storage unavailable: don't risk a loop
+  }
+  window.location.reload();
+});
+
 // PWA: register service worker (offline + low-bandwidth cache)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
