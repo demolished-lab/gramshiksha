@@ -5,9 +5,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  apiAdminUsers, apiApproveUser, apiCourses, apiDeletePick, apiLocate, apiLogin, apiMaterialUrl, apiMe,
-  apiMyRequests, apiReadingList, apiResetConfirm, apiResetRequest, apiSavePick, apiSuspendUser,
-  apiTextbookOpenUrl, apiUploadMaterial,
+  apiAdminUsers, apiApproveUser, apiCourses, apiDeletePick, apiLocate, apiLogin, apiMaterialUrl,
+  apiMaterials, apiMe, apiMyRequests, apiReadingList, apiResetConfirm, apiResetRequest, apiSavePick,
+  apiSuspendUser, apiTextbookOpenUrl, apiUploadMaterial,
 } from '../api';
 
 const jsonResponse = (status: number, body: unknown) =>
@@ -54,6 +54,13 @@ describe('request framing', () => {
     await apiMe();
 
     expect(lastCall().headers.Authorization).toBeUndefined();
+  });
+
+  it('requests the whole public materials shelf', async () => {
+    // The backend defaults to 20; the public shelf now has more than that.
+    fetchMock.mockResolvedValue(jsonResponse(200, []));
+    await apiMaterials({ board: 'CBSE' });
+    expect(lastCall().url).toBe('/api/materials?limit=100&board=CBSE');
   });
 
   it('posts multipart uploads untouched', async () => {

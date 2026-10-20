@@ -285,7 +285,7 @@ export const apiSyncQueue = (items: unknown[]) => post<{ synced: { ok: boolean }
 
 // ---------- materials ----------
 export const apiMaterials = (opts: { class_grade?: number; board?: string; subject_name?: string; type?: string; lang?: string; mine?: boolean; stream?: string }) => {
-  const p = new URLSearchParams();
+  const p = new URLSearchParams({ limit: '100' });
   Object.entries(opts).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') p.set(k, String(v)); });
   return req<Material[]>(`/materials?${p.toString()}`);
 };
