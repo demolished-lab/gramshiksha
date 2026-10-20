@@ -52,7 +52,12 @@ const mockApi = async (page: Page) => {
       my_courses: [{ id: 1, title_en: 'Mathematics', students: 20 }],
       pending_material_reviews: 0, pending_doubts: 0, total_students: 120,
     };
-    else if (pathname.endsWith('/teacher/students')) body = [];
+    else if (pathname.endsWith('/teacher/students')) body = [{
+      id: 5, name: 'Arjun Kumar', class_grade: 8, board: 'Maharashtra SSC',
+      lessons_completed: 2, quizzes: 1, quiz_avg_pct: 50,
+      weak_topics: [{ topic: 'fractions', subject: 'Mathematics', accuracy_pct: 40 }],
+      pending_doubts: 0, streak_days: 1, xp: 20,
+    }];
     else if (pathname.endsWith('/school/stats')) body = { students: 2450, teachers: 120, lessons_completed_total: 5100 };
     else if (pathname.endsWith('/admin/users')) body = [{
       id: 8, email: 'teacher@example.com', name: 'Approved Teacher', role: 'teacher',
@@ -148,21 +153,85 @@ test('doubt solving supports search, filters, and asking a question', async ({ p
   await expect(page.getByPlaceholder(/Type your doubt/i)).toHaveValue('');
 });
 
-test('teacher and admin dashboards render their operational sections', async ({ page }) => {
+test('teacher dashboard renders its operational sections', async ({ page }) => {
   await useSession(page, 'teacher');
   await mockApi(page);
   await page.goto('/#/teacher');
   await expect(page.getByRole('heading', { name: /Welcome back/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Class performance/i })).toBeVisible();
-  await page.evaluate(() => {
-    localStorage.setItem('gs_user', JSON.stringify({ id: 1, name: 'Admin', email: 'admin@example.com', role: 'platform_admin', role_status: 'active' }));
-    location.hash = '/admin';
-  });
+  await expect(page.getByRole('heading', { name: /Students needing help/i })).toBeVisible();
+  await expect(page.locator('.table-scroll')).toBeVisible();
+});
+
+test('admin dashboard renders its operational sections', async ({ page }) => {
+  await useSession(page, 'platform_admin');
+  await mockApi(page);
+  await page.goto('/#/admin');
   await expect(page.getByRole('heading', { name: /Admin/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /staff/i })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Assign courses to approved teachers/i })).toBeVisible();
   await expect(page.getByLabel('Course', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Approved teacher', { exact: true })).toBeVisible();
+  await expect(page.locator('.table-scroll')).toBeVisible();
+});
+
+test('role-scoped deep links redirect instead of firing the wrong APIs', async ({ page }) => {
+  await useSession(page, 'teacher');
+  await mockApi(page);
+  await page.goto('/#/dashboard');
+  await expect(page).toHaveURL(/#\/teacher$/);
+  await expect(page.getByRole('heading', { name: /Welcome back/i })).toBeVisible();
+});
+
+test('platform admin student deep link lands on the admin dashboard', async ({ page }) => {
+  await useSession(page, 'platform_admin');
+  await mockApi(page);
+  await page.goto('/#/progress');
+  await expect(page).toHaveURL(/#\/admin$/);
+  await expect(page.getByRole('heading', { name: /Admin/i })).toBeVisible();
+});
+
+test('parent teacher deep link lands on the parent dashboard', async ({ page }) => {
+  await useSession(page, 'parent');
+  await mockApi(page);
+  await page.goto('/#/teacher');
+  await expect(page).toHaveURL(/#\/parent$/);
+  await expect(page.getByRole('heading', { name: /Parent/i })).toBeVisible();
+});
+
+test('anonymous progress deep link opens the student login', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/#/progress');
+  await expect(page).toHaveURL(/#\/login\/student$/);
+  await expect(page.getByRole('heading', { name: /Student login/i })).toBeVisible();
+});
+
+test('anonymous parent and admin deep links open the generic login', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/#/parent');
+  await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.getByRole('heading', { name: /Quality education/i })).toBeVisible();
+  await page.goto('/#/admin');
+  await expect(page).toHaveURL(/#\/login$/);
+  await expect(page.getByRole('heading', { name: /Quality education/i })).toBeVisible();
+});
+
+test('public screens have no horizontal overflow', async ({ page }) => {
+  await mockApi(page);
+  for (const path of ['/#/home', '/#/login']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: /Quality education/i })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  }
+});
+
+test('teacher table and reading form stay inside the viewport', async ({ page }) => {
+  await useSession(page, 'teacher');
+  await mockApi(page);
+  await page.goto('/#/teacher');
+  await expect(page.locator('.table-scroll')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  expect(await page.locator('.reading-banner').evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
 });
 
 test('login, language switching, offline notice, progress certificates, and 404 remain reachable', async ({ page }) => {

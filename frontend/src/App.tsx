@@ -117,6 +117,33 @@ export default function App() {
   const isAdmin = user?.role === 'platform_admin' || user?.role === 'school_admin';
 
   const authenticated = Boolean(user);
+  const isPlatformAdmin = user?.role === 'platform_admin';
+  const roleHome = isStudent ? 'dashboard' : isParent ? 'parent' : isPlatformAdmin ? 'admin' : isTeacher ? 'teacher' : 'home';
+
+  // Role-scoped pages must not fire their API calls for the wrong account.
+  // A deep link, bookmark, or stale history entry should land on the right
+  // dashboard instead of a screen full of 403s.
+  const guardedRole: 'student' | 'teacher' | 'admin' | 'parent' | null =
+    route.page === 'dashboard' || route.page === 'progress' ? 'student'
+      : route.page === 'teacher' ? 'teacher'
+        : route.page === 'admin' ? 'admin'
+          : route.page === 'parent' ? 'parent'
+            : null;
+  const canViewGuarded =
+    guardedRole === 'student' ? isStudent
+      : guardedRole === 'teacher' ? isTeacher
+        : guardedRole === 'admin' ? isAdmin
+          : guardedRole === 'parent' ? isParent
+            : true;
+  const loginTarget = guardedRole === 'student' ? 'login/student' : guardedRole === 'teacher' ? 'login/teacher' : 'login';
+  const redirectTarget = guardedRole && !canViewGuarded ? (authenticated ? roleHome : loginTarget) : null;
+
+  useEffect(() => {
+    if (redirectTarget && location.hash !== `#/${redirectTarget}`) {
+      location.hash = `#/${redirectTarget}`;
+    }
+  }, [redirectTarget]);
+
   const navItems: [string, string][] = [
     ['home', t('home', lang)],
     ['explore', t('explore', lang)],
@@ -146,36 +173,45 @@ export default function App() {
       : node;
 
   let page: JSX.Element;
-  switch (route.page) {
-    case 'login':
-      page = route.sub === 'teacher'
-        ? <TeacherLogin lang={lang} go={go} onAuthed={onAuthed} />
-        : route.sub === 'student'
-          ? <StudentLogin lang={lang} go={go} onAuthed={onAuthed} />
-          : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
-      break;
-    case 'dashboard': page = <StudentDashboard lang={lang} go={go} />; break;
-    case 'explore':
-      page = <Explore lang={lang} go={go} routeGrade={route.id} user={user} />;
-      break;
-    case 'courses': page = <Courses lang={lang} go={go} />; break;
-    case 'course': page = <CourseDetail lang={lang} go={go} courseId={route.id!} />; break;
-    case 'lesson': page = <LessonPage lang={lang} go={go} lessonId={route.id!} />; break;
-    case 'practice': page = <Practice lang={lang} />; break;
-    case 'materials': page = <Materials lang={lang} user={user} />; break;
-    case 'textbooks': page = <Textbooks lang={lang} user={user} />; break;
-    case 'doubts': page = <Doubts lang={lang} user={user} />; break;
-    case 'downloads': page = user
-      ? <Downloads lang={lang} go={go} />
-      : <div className="card empty-state"><div className="icon">🔒</div><p>{t('privateDownloadsLogin', lang)}</p><button className="btn" onClick={() => setShowAuth(true)}>{t('login', lang)}</button></div>;
-      break;
-    case 'progress': page = <ProgressPage lang={lang} />; break;
-    case 'teacher': page = approvalGated(<TeacherDashboard lang={lang} />); break;
-    case 'parent': page = <ParentDashboard lang={lang} />; break;
-    case 'admin': page = approvalGated(<AdminDashboard lang={lang} />); break;
-    default: page = user && isStudent
-      ? <StudentDashboard lang={lang} go={go} />
-      : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
+  if (redirectTarget) {
+    page = (
+      <div className="card empty-state" role="status">
+        <div className="icon">🔒</div>
+        <p>{authenticated ? 'Taking you to your dashboard…' : t('privateDownloadsLogin', lang)}</p>
+      </div>
+    );
+  } else {
+    switch (route.page) {
+      case 'login':
+        page = route.sub === 'teacher'
+          ? <TeacherLogin lang={lang} go={go} onAuthed={onAuthed} />
+          : route.sub === 'student'
+            ? <StudentLogin lang={lang} go={go} onAuthed={onAuthed} />
+            : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
+        break;
+      case 'dashboard': page = <StudentDashboard lang={lang} go={go} />; break;
+      case 'explore':
+        page = <Explore lang={lang} go={go} routeGrade={route.id} user={user} />;
+        break;
+      case 'courses': page = <Courses lang={lang} go={go} />; break;
+      case 'course': page = <CourseDetail lang={lang} go={go} courseId={route.id!} />; break;
+      case 'lesson': page = <LessonPage lang={lang} go={go} lessonId={route.id!} />; break;
+      case 'practice': page = <Practice lang={lang} />; break;
+      case 'materials': page = <Materials lang={lang} user={user} />; break;
+      case 'textbooks': page = <Textbooks lang={lang} user={user} />; break;
+      case 'doubts': page = <Doubts lang={lang} user={user} />; break;
+      case 'downloads': page = user
+        ? <Downloads lang={lang} go={go} />
+        : <div className="card empty-state"><div className="icon">🔒</div><p>{t('privateDownloadsLogin', lang)}</p><button className="btn" onClick={() => setShowAuth(true)}>{t('login', lang)}</button></div>;
+        break;
+      case 'progress': page = <ProgressPage lang={lang} />; break;
+      case 'teacher': page = approvalGated(<TeacherDashboard lang={lang} />); break;
+      case 'parent': page = <ParentDashboard lang={lang} />; break;
+      case 'admin': page = approvalGated(<AdminDashboard lang={lang} />); break;
+      default: page = user && isStudent
+        ? <StudentDashboard lang={lang} go={go} />
+        : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
+    }
   }
 
   // Unknown hash routes get a real 404 (with a way home), not a silent
@@ -194,7 +230,6 @@ export default function App() {
     );
   }
 
-  const roleHome = user?.role === 'student' ? 'dashboard' : user?.role === 'parent' ? 'parent' : isTeacher ? 'teacher' : 'admin';
   const sidebarItems: [string, string][] = authenticated
     ? user?.role === 'student'
       ? [['dashboard', t('todaysLearning', lang)], ['explore', t('explore', lang)], ['textbooks', t('textbooks', lang)], ['practice', t('practice', lang)], ['doubts', t('doubts', lang)], ['progress', t('progress', lang)]]

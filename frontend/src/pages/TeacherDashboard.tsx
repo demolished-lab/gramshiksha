@@ -155,7 +155,7 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
             aria-label={t('pickMonth', lang)} />
           <input value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder={t('pickTitle', lang)} aria-label={t('pickTitle', lang)}
-            style={{ gridColumn: 'span 2' }}
+            style={{ gridColumn: '1 / -1' }}
             onKeyDown={(e) => { if (e.key === 'Enter') void savePick(); }} />
           <input value={author} onChange={(e) => setAuthor(e.target.value)}
             placeholder={t('pickAuthor', lang)} aria-label={t('pickAuthor', lang)} />
@@ -202,28 +202,30 @@ export default function TeacherDashboard({ lang }: { lang: Lang }) {
         {students.filter((s) => s.weak_topics.length > 0 || s.quiz_avg_pct !== null && s.quiz_avg_pct < 50).length === 0 && students.length > 0 && (
           <p className="success">All students are doing well ✓</p>
         )}
-        <table>
-          <thead>
-            <tr><th>{t('name', lang)}</th><th>Class</th><th>{t('lessonsDone', lang)}</th><th>{t('quizAvg', lang)}</th><th>{t('needHelp', lang)}</th></tr>
-          </thead>
-          <tbody>
-            {students.map((s) => (
-              <tr key={s.id}>
-                <td><strong>{s.name}</strong><div className="muted">🔥 {s.streak_days} · ⚡ {s.xp}</div></td>
-                <td>{s.class_grade ?? '—'}</td>
-                <td>{s.lessons_completed}</td>
-                <td>{s.quiz_avg_pct === null ? '—' : `${s.quiz_avg_pct}%`}</td>
-                <td>
-                  {s.weak_topics.length === 0 ? '—' : s.weak_topics.map((w) => (
-                    <span key={w.topic} className="badge orange" style={{ display: 'inline-block', marginBottom: 2 }}>
-                      {w.topic.replace(/_/g, ' ')} {w.accuracy_pct}%
-                    </span>
-                  ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll" role="region" aria-label="Student progress" tabIndex={0}>
+          <table>
+            <thead>
+              <tr><th>{t('name', lang)}</th><th>Class</th><th>{t('lessonsDone', lang)}</th><th>{t('quizAvg', lang)}</th><th>{t('needHelp', lang)}</th></tr>
+            </thead>
+            <tbody>
+              {students.map((s) => (
+                <tr key={s.id}>
+                  <td><strong>{s.name}</strong><div className="muted">🔥 {s.streak_days} · ⚡ {s.xp}</div></td>
+                  <td>{s.class_grade ?? '—'}</td>
+                  <td>{s.lessons_completed}</td>
+                  <td>{s.quiz_avg_pct === null ? '—' : `${s.quiz_avg_pct}%`}</td>
+                  <td>
+                    {s.weak_topics.length === 0 ? '—' : s.weak_topics.map((w) => (
+                      <span key={w.topic} className="badge orange" style={{ display: 'inline-block', marginBottom: 2 }}>
+                        {w.topic.replace(/_/g, ' ')} {w.accuracy_pct}%
+                      </span>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="card">
