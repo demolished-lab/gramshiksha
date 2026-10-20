@@ -122,8 +122,10 @@ export async function clearCachedApi(): Promise<void> {
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
-  postSession(null);
-  void clearCachedApi();
+  // Drop the entries first, then tell the SW to delete the whole per-account
+  // cache. Reversing this order lets clearCachedApi re-create an empty cache
+  // after the SW has just deleted it.
+  void clearCachedApi().then(() => postSession(null));
 }
 
 /** Offline lesson cache */
