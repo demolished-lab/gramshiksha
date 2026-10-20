@@ -6,6 +6,8 @@ slow internet, shared phones and limited data.
 
 > Learn → Practice → Test → **Find Weakness** → Revise → Improve
 
+**Live site:** <https://gramshiksha-academy.vercel.app/> · **Source:** <https://github.com/demolished-lab/gramshiksha>
+
 ## What's inside
 
 | Area | Details |
