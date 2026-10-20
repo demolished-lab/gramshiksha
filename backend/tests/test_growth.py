@@ -76,7 +76,9 @@ def test_feed_is_valid_rss(client):
 
 def test_ads_txt_stays_hidden_until_a_valid_publisher_id_exists(client, monkeypatch):
     monkeypatch.setattr(settings, "adsense_client", "")
-    assert client.get("/ads.txt").status_code == 404
+    hidden = client.get("/ads.txt")
+    assert hidden.status_code == 404
+    assert hidden.headers["cache-control"] == "no-store"
 
     monkeypatch.setattr(settings, "adsense_client", "not-a-publisher-id")
     assert client.get("/ads.txt").status_code == 404

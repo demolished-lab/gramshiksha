@@ -105,7 +105,7 @@ def ads_txt():
     """
     match = _PUBLISHER_RE.match((settings.adsense_client or "").strip())
     if not match:
-        return Response(status_code=404)
+        return Response(status_code=404, headers={"Cache-Control": "no-store"})
     body = f"google.com, {match.group(1)}, DIRECT, f08c47fec0942fa0\n"
     return Response(content=body, media_type="text/plain",
                     headers={"Cache-Control": "public, max-age=3600"})
