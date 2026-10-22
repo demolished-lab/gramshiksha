@@ -97,6 +97,11 @@ The support card appears automatically. Never put a bank password, card number
 or UPI PIN in the repo or an env value. A malformed UPI id or non-HTTPS link is
 hidden rather than rendered as a broken button.
 
+If the Render environment cannot be edited, the same public UPI id can be
+baked in at frontend build time with `VITE_DONATE_UPI=name@upi` (Vercel →
+Production env, then redeploy). `DONATE_UPI` in Render still wins when both are
+set; use one source of truth once Render is available.
+
 ### 4. Affiliates
 
 Join free programs (bookstores, stationery, ed-tech; Amazon Associates and most

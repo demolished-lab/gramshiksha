@@ -15,11 +15,24 @@ export interface GrowthConfig {
   premium_url: string | null;
 }
 
+const UPI_RE = /^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9]{1,64}$/;
+
+/** Optional build-time donation fallback for deployments where the Render
+ *  environment cannot be edited. The UPI id is public by design (it is shown
+ *  on the support card); the backend value still wins when both exist. */
+function buildDonateUpi(): string {
+  const env = (import.meta as unknown as { env?: Record<string, string> }).env;
+  const value = env?.VITE_DONATE_UPI?.trim() ?? '';
+  return UPI_RE.test(value) ? value : '';
+}
+
+const BUILD_DONATE_UPI = buildDonateUpi();
+
 export const OFF_CONFIG: GrowthConfig = {
   site_url: 'https://gramshiksha-academy.vercel.app',
   referral_enabled: true,
   ads: null,
-  donate: null,
+  donate: BUILD_DONATE_UPI ? { upi: BUILD_DONATE_UPI, url: null } : null,
   affiliates: [],
   sponsor: null,
   premium_url: null,
@@ -29,6 +42,12 @@ const CACHE_KEY = 'gs_growth';
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const REF_KEY = 'gs_ref';
 const REF_RE = /^GS\d{1,10}$/i;
+
+function withBuildDonation(cfg: GrowthConfig): GrowthConfig {
+  const upi = cfg.donate?.upi || BUILD_DONATE_UPI;
+  if (!upi) return cfg;
+  return { ...cfg, donate: { upi, url: cfg.donate?.url ?? null } };
+}
 
 export async function fetchGrowthConfig(): Promise<GrowthConfig> {
   try {
@@ -41,7 +60,7 @@ export async function fetchGrowthConfig(): Promise<GrowthConfig> {
   try {
     const res = await fetch('/api/growth/config');
     if (!res.ok) throw new Error(String(res.status));
-    const cfg = (await res.json()) as GrowthConfig;
+    const cfg = withBuildDonation((await res.json()) as GrowthConfig);
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), cfg }));
     } catch { /* private mode → memory only */ }
