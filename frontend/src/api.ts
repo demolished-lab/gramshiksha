@@ -376,3 +376,17 @@ export const apiGrowthConfig = () => req<{
 }>('/growth/config');
 export const apiGrowthMe = () => req<{ referral_code: string; referrals: number }>('/growth/me');
 export const apiLeaderboard = () => req<{ name: string; referrals: number }[]>('/growth/leaderboard');
+
+// ---------- Study Studio imports ----------
+export interface StudioExtract {
+  filename: string;
+  text: string;
+  truncated: boolean;
+}
+/** Extract text from a NotebookLM export (PDF/DOCX/HTML/Markdown/text).
+ * The backend parses it in memory and never stores the uploaded file. */
+export const apiStudioExtract = (file: File) => {
+  const body = new FormData();
+  body.append('file', file);
+  return post<StudioExtract>('/studio/extract', body, { timeoutMs: 120_000 });
+};

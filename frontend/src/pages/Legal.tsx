@@ -123,7 +123,9 @@ export function PrivacyPage(_: { lang: Lang }) {
         <li><strong>Learning information:</strong> lessons opened, practice answers, scores, progress, badges, saved materials, reading-list picks and doubts you post.</li>
         <li><strong>Teacher content:</strong> files and descriptions uploaded by teachers, and review notes attached to them.</li>
         <li><strong>Technical information:</strong> server logs such as IP address, browser type, requested page and time of request, kept to operate and secure the service.</li>
-        <li><strong>Device storage:</strong> a login token, language choice, data-saver setting, referral code and cached lessons/materials stored in your browser. Cached content stays on your device until you clear it.</li>
+        <li><strong>Device storage:</strong> a login token, language choice, data-saver setting, referral code, Study Studio packs and cached lessons/materials stored in your browser. Cached content stays on your device until you clear it.</li>
+        <li><strong>Study Studio imports:</strong> text you paste or a PDF, DOCX, HTML, Markdown or text file you upload is read to build your study pack. The uploaded file is parsed in memory for that request and is not stored; the pack stays in your browser.</li>
+        <li><strong>Optional Google Drive import:</strong> if you choose it, Google asks for read-only access to your Drive so you can pick one document. The short-lived access token stays in your browser tab and is not stored on our servers. We do not read files you do not select, and we do not use Google user data for advertising.</li>
       </ul>
       <p>We do not ask for a student's home address, government ID, payment card or precise location.</p>
 
@@ -180,6 +182,11 @@ export function PrivacyPage(_: { lang: Lang }) {
         serve advertising. These providers process data for us under their own terms. We may
         also disclose information when required by law, to protect a user, or to investigate
         abuse. Aggregated, non-identifying statistics may be published.
+      </p>
+      <p>
+        Google Drive import is initiated by you. Google processes the authorization and the
+        selected document under Google's own terms and privacy policy; GramShiksha receives only
+        the document text you choose to import.
       </p>
 
       <h2>6. Retention</h2>

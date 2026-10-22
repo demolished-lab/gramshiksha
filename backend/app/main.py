@@ -14,7 +14,7 @@ import os
 from .config import settings
 from .db import create_db_and_tables, engine
 from .routers import auth, catalog, dashboards, growth, learn, library, materials, progress, social
-from .routers import lessons
+from .routers import lessons, studio
 from .seed import seed
 
 log = logging.getLogger("gramshiksha")
@@ -263,6 +263,7 @@ app.include_router(library.router)
 # against the current models but never mounted (see each module's docstring).
 app.include_router(lessons.router)
 app.include_router(progress.router)
+app.include_router(studio.router)
 
 # Production routes under /api (matches Netlify/Vercel rewrites /api/* -> backend /api/*)
 app.include_router(auth.router, prefix="/api")
@@ -275,6 +276,7 @@ app.include_router(growth.router, prefix="/api")
 app.include_router(library.router, prefix="/api")
 app.include_router(lessons.router, prefix="/api")
 app.include_router(progress.router, prefix="/api")
+app.include_router(studio.router, prefix="/api")
 
 # Uploaded files are served ONLY via the authenticated
 # GET /materials/{id}/download endpoint (approval + visibility checked).

@@ -87,6 +87,8 @@ describe('vercel.json delivery config', () => {
     expect(csp).toContain('googlesyndication.com'); // AdSense, once enabled
     expect(csp).toContain('fundingchoicesmessages.google.com'); // Google-certified CMP
     expect(csp).toContain('gramshiksha-backend.onrender.com'); // direct API base
+    expect(csp).toContain('https://www.googleapis.com'); // opt-in Drive import
+    expect(csp).toContain('https://accounts.google.com'); // Google Identity Services
     // AdSense injects inline bootstrap code; its publisher script cannot run
     // under a nonce-only policy. Keep the rest of the policy tight instead of
     // shipping an ad slot that is silently blocked.

@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { apiStudioExtract } from '../api';
 import { t } from '../i18n';
 import type { SessionUser } from '../auth';
 import type { Lang } from '../types';
 import { buildStudyPack, packHtml, type StudyPack } from '../studio';
+import { driveImportEnabled, exportGoogleDoc, googleClientId, listGoogleDocs, requestDriveToken, type DriveFile } from '../googleDrive';
+import InstallPrompt from '../components/InstallPrompt';
 
 type Tab = 'overview' | 'flashcards' | 'quiz' | 'checklist';
 
@@ -74,6 +77,13 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
   const [flipped, setFlipped] = useState<Record<number, boolean>>({});
   const [openAnswers, setOpenAnswers] = useState<Record<number, boolean>>({});
   const [busy, setBusy] = useState(false);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  const driveOn = driveImportEnabled();
+  const [driveToken, setDriveToken] = useState('');
+  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
+  const [drivePick, setDrivePick] = useState('');
+  const [driveBusy, setDriveBusy] = useState(false);
+  const [driveError, setDriveError] = useState('');
 
   useEffect(() => {
     setPacks(readPacks(storageKey));
@@ -146,6 +156,80 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
     } finally {
       setBusy(false);
     }
+  };
+
+  const importFile = async (file: File | undefined) => {
+    if (!file) return;
+    setError('');
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File is larger than 10 MB. Export a shorter document or paste the notes.');
+      if (fileInput.current) fileInput.current.value = '';
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await apiStudioExtract(file);
+      setText(result.text);
+      if (!title.trim()) {
+        setTitle(result.filename.replace(/\.[^.]+$/, '').slice(0, 120));
+      }
+      setToast(result.truncated
+        ? 'Imported the first 120,000 characters. Build the pack and trim later if needed.'
+        : 'File imported. Review it, then build your pack.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That file could not be read.');
+    } finally {
+      setBusy(false);
+      if (fileInput.current) fileInput.current.value = '';
+    }
+  };
+
+  const connectDrive = async () => {
+    setDriveError('');
+    setDriveBusy(true);
+    try {
+      const token = await requestDriveToken(googleClientId());
+      const files = await listGoogleDocs(token);
+      setDriveToken(token);
+      setDriveFiles(files);
+      setDrivePick(files[0]?.id ?? '');
+      setToast(files.length
+        ? 'Google Drive connected. Choose a document to import.'
+        : 'Google Drive connected, but no Google Docs were found.');
+    } catch (err) {
+      setDriveError(err instanceof Error ? err.message : 'Google Drive could not connect.');
+    } finally {
+      setDriveBusy(false);
+    }
+  };
+
+  const importDrive = async () => {
+    const file = driveFiles.find((item) => item.id === drivePick);
+    if (!file) {
+      setDriveError('Choose a Google Doc first.');
+      return;
+    }
+    setDriveError('');
+    setDriveBusy(true);
+    try {
+      const text = await exportGoogleDoc(driveToken, file);
+      setText(text);
+      setTitle(file.name.replace(/\.[^.]+$/, '').slice(0, 120));
+      if (file.webViewLink && validHttpUrl(file.webViewLink)) setSourceUrl(file.webViewLink);
+      setToast('Google Doc imported. Review it, then build your pack.');
+    } catch (err) {
+      setDriveError(err instanceof Error ? err.message : 'That Google Doc could not be read.');
+    } finally {
+      setDriveBusy(false);
+    }
+  };
+
+  const disconnectDrive = () => {
+    setDriveToken('');
+    setDriveFiles([]);
+    setDrivePick('');
+    setDriveError('');
+    setToast('Google Drive disconnected. The access token was discarded.');
   };
 
   const paste = async () => {
@@ -240,6 +324,8 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
           <span aria-hidden="true">🔒</span> Saved on this device
         </div>
       </div>
+
+      <InstallPrompt />
 
       {toast && <p className="studio-toast" role="status">{toast}</p>}
       {error && <p className="error" role="alert">{error}</p>}
@@ -419,6 +505,66 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
             <li>Copy the text you want to study.</li>
             <li>Paste it below. GramShiksha never asks for your Google password or stores your Google session.</li>
           </ol>
+
+          <div className="studio-file-row">
+            <label className="btn ghost small studio-file-button">
+              Import a file
+              <input
+                ref={fileInput}
+                type="file"
+                accept=".pdf,.docx,.html,.htm,.md,.markdown,.txt,application/pdf,text/plain,text/markdown,text/html,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={(event) => importFile(event.target.files?.[0])}
+                disabled={busy}
+              />
+            </label>
+            <span className="muted">PDF, DOCX, HTML, Markdown or TXT · up to 10 MB</span>
+          </div>
+
+          {driveOn && (
+            <div className="studio-drive">
+              <div className="studio-drive-head">
+                <strong>Google Drive</strong>
+                <span className="muted">Official · read-only</span>
+              </div>
+              <p className="muted">
+                Export a NotebookLM notebook to Google Docs, then pick that document here.
+                GramShiksha reads only the document you choose and keeps the access token
+                in this tab — never on a server.
+              </p>
+              {!driveToken ? (
+                <button className="btn ghost small" type="button" onClick={connectDrive} disabled={driveBusy}>
+                  {driveBusy ? 'Connecting…' : 'Connect Google Drive'}
+                </button>
+              ) : (
+                <>
+                  <label className="sr-only" htmlFor="studio-drive-file">Google Doc</label>
+                  <select
+                    id="studio-drive-file"
+                    value={drivePick}
+                    onChange={(event) => setDrivePick(event.target.value)}
+                    disabled={driveBusy}
+                  >
+                    <option value="">{driveFiles.length ? 'Choose a document' : 'No Google Docs found'}</option>
+                    {driveFiles.map((file) => (
+                      <option key={file.id} value={file.id}>{file.name}</option>
+                    ))}
+                  </select>
+                  <div className="studio-import-actions">
+                    <button className="btn small" type="button" onClick={importDrive} disabled={driveBusy || !drivePick}>
+                      {driveBusy ? 'Importing…' : 'Import selected doc'}
+                    </button>
+                    <button className="btn ghost small" type="button" onClick={connectDrive} disabled={driveBusy}>
+                      Refresh list
+                    </button>
+                    <button className="btn ghost small" type="button" onClick={disconnectDrive} disabled={driveBusy}>
+                      Disconnect
+                    </button>
+                  </div>
+                </>
+              )}
+              {driveError && <p className="error" role="alert">{driveError}</p>}
+            </div>
+          )}
 
           <label htmlFor="studio-title">Title</label>
           <input

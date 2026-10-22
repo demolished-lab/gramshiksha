@@ -589,6 +589,15 @@ main.container { --page-pad: 20px; max-width: 1160px; padding: 24px max(var(--pa
 .studio-lede { max-width: 680px; margin: 0; }
 .studio-device-badge { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: .74rem; font-weight: 700; white-space: nowrap; }
 .studio-toast { margin: 0 0 14px; padding: 10px 13px; border-radius: 10px; background: #ecfdf5; color: #166534; font-size: .85rem; font-weight: 600; }
+.install-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin: 0 0 16px; padding: 13px 15px; border: 1px solid #bbf7d0; border-radius: 14px; background: linear-gradient(135deg, #f0fdf4, #f8fffb); }
+.install-copy { min-width: 0; }
+.install-copy strong { display: block; margin-bottom: 3px; color: #14532d; font-size: .9rem; }
+.install-copy p { margin: 0; color: #3f6212; font-size: .8rem; line-height: 1.45; }
+.install-copy .install-ios { margin-top: 5px; color: #4d7c0f; }
+.install-actions { display: flex; align-items: flex-start; gap: 4px; }
+.install-dismiss { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: #4d7c0f; font-size: 1.1rem; cursor: pointer; }
+.install-dismiss:hover { background: #dcfce7; }
+@media (max-width: 560px) { .install-card { flex-direction: column; gap: 8px; } .install-actions { align-self: flex-end; } }
 .studio-import, .studio-pack { padding: 20px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); box-shadow: var(--shadow); }
 .studio-import h2, .studio-pack h2 { margin: 0 0 8px; }
 .studio-import label { display: block; margin-top: 14px; }
@@ -596,6 +605,17 @@ main.container { --page-pad: 20px; max-width: 1160px; padding: 24px max(var(--pa
 .studio-import textarea { min-height: 220px; resize: vertical; line-height: 1.5; }
 .studio-steps { margin: 0 0 8px; padding-left: 22px; color: #475569; font-size: .9rem; }
 .studio-steps li { margin: 5px 0; }
+.studio-file-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 2px; }
+.studio-file-row .muted { font-size: .74rem; }
+.studio-file-button { position: relative; overflow: hidden; cursor: pointer; }
+.studio-file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.studio-file-button:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+.studio-drive { margin: 14px 0 4px; padding: 13px 14px; border: 1px solid #dbeafe; border-radius: 12px; background: #f8fbff; }
+.studio-drive-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.studio-drive-head strong { color: #1e3a8a; font-size: .9rem; }
+.studio-drive-head .muted { font-size: .7rem; }
+.studio-drive p { margin: 4px 0 10px; font-size: .78rem; line-height: 1.5; }
+.studio-drive select { width: 100%; }
 .studio-import-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .studio-hint { margin: 10px 0 0; font-size: .78rem; }
 .studio-pack-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }

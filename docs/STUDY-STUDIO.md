@@ -41,7 +41,16 @@ credentials.
 - **Device-local library** — packs are saved in `localStorage`, scoped to the
   signed-in name and role, so they survive a reload and work offline.
 - **Export** — print / Save as PDF, or download a self-contained HTML file.
-- **PWA share target** — once the app is installed, a learner can tap
+- **File import** — upload a NotebookLM export as PDF, DOCX, HTML, Markdown or
+  TXT (up to 10 MB). The backend extracts text in memory and never stores the
+  upload; `/api/studio/extract` requires a signed-in GramShiksha account.
+- **Google Drive import (opt-in)** — a learner can connect their own Google
+  account with read-only Drive access, pick the Google Doc they exported from
+  NotebookLM, and import its text. The token stays in the browser tab. The card
+  is hidden until `VITE_GOOGLE_CLIENT_ID` is configured; see
+  [GOOGLE-DRIVE.md](GOOGLE-DRIVE.md).
+- **PWA install prompt** — when the browser says the app is installable, Studio
+  shows a one-tap **Install app** card. Once installed, the learner can tap
   **Share → GramShiksha** from their own NotebookLM app; the shared title, text
   and link prefill the import form. This is a user-initiated handoff, not a
   background Google login.
@@ -57,10 +66,13 @@ credentials.
 
 1. Open `/studio` and sign in to GramShiksha.
 2. In their own NotebookLM account, generate a study guide, notes or quiz.
-3. Copy the text.
-4. Paste it into `/studio`, optionally add a title and source URL.
+3. Copy the text, or export the notebook as PDF/DOCX and upload it.
+4. Paste/import it into `/studio`, optionally add a title and source URL.
 5. Build the pack and study it in GramShiksha.
 6. Keep it on the device, print it, or download the HTML copy.
+
+If the owner configures a Google OAuth client ID, step 3 can also be
+**Export to Google Docs → Connect Google Drive → pick the Doc** inside Studio.
 
 On a phone, the copy/paste flow works in every browser. It does not depend on a
 Chrome extension, a desktop-only connector, or a paid API. On Android, installing
@@ -76,7 +88,8 @@ GramShiksha as a PWA adds it to the system share sheet, so the learner can tap
 | Server-side Gmail automation with stored cookies | Fully automatic | Rejected: credential custody, ToS and account-security risk |
 | Browser extension running in the user's own session | More automatic | Possible later; must be installed by the user and still respects Google's terms |
 | PWA share target | One-tap "Share to GramShiksha" on mobile | **Shipped for text and links** |
-| Share a PDF file | Import a generated PDF directly | Later: needs a POST handler and PDF text extraction |
+| Upload a PDF/DOCX/HTML file | Import an exported notebook directly | **Shipped** |
+| Google Drive import | Pick an exported Google Doc | **Shipped, opt-in via OAuth client ID** |
 
 The share target still runs in the learner's session and sends only the content
 the learner chooses to share. It does not need Google credentials.
@@ -87,6 +100,8 @@ the learner chooses to share. It does not need Google credentials.
 frontend /studio
         │
         ├── paste / clipboard / example
+        ├── file upload ── POST /studio/extract ── PDF/DOCX/HTML/MD/TXT
+        ├── Google Drive ── Google Identity Services (read-only, opt-in)
         ├── local deterministic parser  (no network, no API key)
         ├── native flashcards, quiz, checklist
         └── localStorage library
@@ -94,9 +109,10 @@ frontend /studio
                 └── download self-contained HTML
 ```
 
-There is no backend call in this slice, so it works on the free Render instance
-even when the API is cold or offline. The parser is deterministic: the same text
-produces the same pack, which makes the feature testable and cheap to run.
+The parser itself has no backend call, so it works on a low-end phone and while
+offline. File extraction is the only network step, and the upload is parsed in
+memory and discarded. The parser is deterministic: the same text produces the
+same pack, which makes the feature testable and cheap to run.
 
 ### Storage
 
@@ -125,8 +141,13 @@ produces the same pack, which makes the feature testable and cheap to run.
 |---|---|
 | `frontend/src/studio.ts` | Parser, pack type, safe HTML export |
 | `frontend/src/pages/Studio.tsx` | `/studio` UI and local library |
+| `frontend/src/googleDrive.ts` | Opt-in Google Drive listing/export helpers |
+| `frontend/src/components/InstallPrompt.tsx` | PWA install suggestion |
+| `backend/app/routers/studio.py` | In-memory PDF/DOCX/HTML/text extraction |
 | `frontend/src/__tests__/studio.test.ts` | Parser and escaping tests |
-| `frontend/e2e/studio.spec.ts` | Desktop/mobile import and export tests |
+| `frontend/src/__tests__/googleDrive.test.ts` | Drive request/token/Error tests |
+| `frontend/e2e/studio.spec.ts` | Desktop/mobile import, share, install and export tests |
+| `docs/GOOGLE-DRIVE.md` | OAuth client setup and consent-screen limits |
 | `frontend/src/App.tsx` | Route, navigation and signed-out gate |
 | `frontend/public/manifest.webmanifest` | PWA share-target registration |
 | `frontend/seo-routes.json` | Private `noindex` SEO entry |
@@ -137,6 +158,7 @@ produces the same pack, which makes the feature testable and cheap to run.
 
 - Share-target support for PDF/file shares (text and links already work).
 - Optional owner-only batch authoring for teacher-published packs.
+- Google OAuth verification and a production consent screen for Drive import.
 - Provider adapter for a free model, with the native parser as fallback.
 - Backend persistence and cross-device sync, with per-user quotas and moderation.
 - Official Gemini Notebook Enterprise API only if the no-spend rule changes.
