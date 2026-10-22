@@ -607,6 +607,7 @@ main.container { --page-pad: 20px; max-width: 1160px; padding: 24px max(var(--pa
 .studio-steps li { margin: 5px 0; }
 .studio-file-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 2px; }
 .studio-file-row .muted { font-size: .74rem; }
+.studio-file-hint { margin: 2px 0 8px; font-size: .72rem; line-height: 1.45; }
 .studio-file-button { position: relative; overflow: hidden; cursor: pointer; }
 .studio-file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .studio-file-button:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }

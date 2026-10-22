@@ -502,8 +502,8 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
           <h2>Import from NotebookLM</h2>
           <ol className="studio-steps">
             <li>Open your own NotebookLM/Gemini Notebook account and generate a study guide, notes or quiz.</li>
-            <li>Copy the text you want to study.</li>
-            <li>Paste it below. GramShiksha never asks for your Google password or stores your Google session.</li>
+            <li>Copy the text you want to study, or export the notebook as a PDF/DOCX.</li>
+            <li>Paste it below or use <strong>Import a file</strong>. GramShiksha never asks for your Google password or stores your Google session.</li>
           </ol>
 
           <div className="studio-file-row">
@@ -519,6 +519,10 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
             </label>
             <span className="muted">PDF, DOCX, HTML, Markdown or TXT · up to 10 MB</span>
           </div>
+          <p className="muted studio-file-hint">
+            From Google Docs, choose <strong>File → Download → Microsoft Word (.docx)</strong>,
+            then import that file. No Google sign-in is needed.
+          </p>
 
           {driveOn && (
             <div className="studio-drive">
