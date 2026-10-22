@@ -48,7 +48,7 @@ describe('vercel.json delivery config', () => {
       destination: 'https://gramshiksha-backend.onrender.com/api/:path*',
     });
     const rewritten = new Map(config.rewrites.map((r) => [r.source, r.destination]));
-    for (const path of ['/dashboard', '/progress', '/downloads', '/teacher',
+    for (const path of ['/dashboard', '/studio', '/progress', '/downloads', '/teacher',
       '/parent', '/admin', '/course/:id', '/lesson/:id']) {
       expect(rewritten.get(path), `missing rewrite for ${path}`).toBe('/');
     }
@@ -106,7 +106,7 @@ describe('vercel.json delivery config', () => {
 
   it('keeps login, learner workspaces and dynamic pages out of search', () => {
     const noindex = config.headers
-      .find((r) => r.source.startsWith('/(dashboard|progress|downloads'));
+      .find((r) => r.source.includes('dashboard') && r.source.includes('studio'));
     expect(noindex?.headers).toContainEqual({
       key: 'X-Robots-Tag',
       value: 'noindex, nofollow',

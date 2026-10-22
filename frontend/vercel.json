@@ -10,6 +10,7 @@
       "destination": "https://gramshiksha-backend.onrender.com/ads.txt"
     },
     { "source": "/dashboard", "destination": "/" },
+    { "source": "/studio", "destination": "/" },
     { "source": "/progress", "destination": "/" },
     { "source": "/downloads", "destination": "/" },
     { "source": "/teacher", "destination": "/" },
@@ -62,7 +63,7 @@
       ]
     },
     {
-      "source": "/(dashboard|progress|downloads|teacher|parent|admin|course|lesson|login|doubts)(/.*)?",
+      "source": "/(dashboard|studio|progress|downloads|teacher|parent|admin|course|lesson|login|doubts)(/.*)?",
       "headers": [
         {
           "key": "X-Robots-Tag",

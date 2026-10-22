@@ -338,6 +338,17 @@
       "schema": null
     },
     {
+      "path": "/studio",
+      "title": "Study Studio | GramShiksha Academy",
+      "description": "Turn your own NotebookLM notes into native flashcards, quizzes and revision checklists on GramShiksha Academy.",
+      "h1": "Study Studio",
+      "summary": "Import your own study notes and build a native study pack.",
+      "robots": "noindex, nofollow",
+      "sitemap": false,
+      "static": false,
+      "schema": null
+    },
+    {
       "path": "/progress",
       "title": "My Progress | GramShiksha Academy",
       "description": "Your learning progress.",

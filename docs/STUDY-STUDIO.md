@@ -1,148 +1,136 @@
 # GramShiksha Study Studio
 
-A native study workspace that turns GramShiksha's own courses, lessons, textbooks
-and revision materials into research notebooks, study packs, flashcards, quizzes
-and a Socratic tutor — without sending learners to a third-party tab.
+A native study workspace at `/studio`. A learner generates a study guide, notes
+or quiz in **their own** NotebookLM / Gemini Notebook account, copies the result,
+and imports it into GramShiksha. GramShiksha turns that text into a native pack:
+overview, key points, flashcards, quiz questions and a revision checklist.
 
-## The short answer about `mcp-anything`
+The learner never leaves GramShiksha to *study*. NotebookLM is only the
+authoring tool they already chose to use with their own Google account.
 
-[`gabrielekarra/mcp-anything`](https://github.com/gabrielekarra/mcp-anything) is a
-**generator for MCP servers**. It turns an OpenAPI spec, a codebase or a written
-brief into a server that exposes tools to an MCP-capable agent. It does **not**
-wrap an arbitrary website, and NotebookLM is not an MCP server.
+## The rule that keeps this safe
 
-NotebookLM (now Gemini Notebook) has:
+> The user's Gmail session stays in the user's browser. GramShiksha only receives
+> the text the user deliberately pastes.
 
-| Route | Cost | Status |
+We do **not**:
+
+- ask for a Google password,
+- store Google cookies or session tokens,
+- run an invisible browser on the server as the user,
+- call undocumented NotebookLM APIs,
+- create accounts or accept Google's terms on the user's behalf.
+
+Those shortcuts would put every learner's Google account at risk, break when
+Google changes its login flow, and are not something a school platform should
+do. The import design gives the learner the same result without holding their
+credentials.
+
+## What shipped
+
+- **`/studio`** — signed-in, mobile-first page with an import form, an example,
+  clipboard paste, a local library, and four study tabs.
+- **Deterministic parser** (`frontend/src/studio.ts`) — turns plain text into:
+  - overview,
+  - up to 8 key points,
+  - up to 12 flashcards,
+  - up to 8 quiz questions,
+  - up to 12 checklist items.
+- **Study tools** — flip cards, mark cards known, reveal quiz answers, tick the
+  revision checklist, reset progress.
+- **Device-local library** — packs are saved in `localStorage`, scoped to the
+  signed-in name and role, so they survive a reload and work offline.
+- **Export** — print / Save as PDF, or download a self-contained HTML file.
+- **Privacy badge** — the page states that packs are saved on the device and that
+  the Google session is never connected.
+- **Routing and SEO** — `/studio` is a private, `noindex` SPA route; it is not in
+  the sitemap and is not statically generated.
+- **Tests** — parser unit tests plus Playwright coverage on desktop, mobile and
+  compact mobile: import, tabs, flip, reveal, checklist, reload persistence,
+  HTML download, and the signed-out gate.
+
+## How a learner uses it
+
+1. Open `/studio` and sign in to GramShiksha.
+2. In their own NotebookLM account, generate a study guide, notes or quiz.
+3. Copy the text.
+4. Paste it into `/studio`, optionally add a title and source URL.
+5. Build the pack and study it in GramShiksha.
+6. Keep it on the device, print it, or download the HTML copy.
+
+On a phone, the copy/paste flow works in every browser. It does not depend on a
+Chrome extension, a desktop-only connector, or a paid API.
+
+## Why not fully automatic per-user NotebookLM?
+
+| Route | Result | Verdict |
 |---|---|---|
-| Official Gemini Notebook Enterprise API | Paid Google Cloud Enterprise licences | Not compatible with the no-spend rule |
-| Unofficial `notebooklm-py` / browser automation | Free, but uses undocumented APIs and Google cookies | Fragile and against Google's terms; only safe as a private, user-controlled authoring worker |
-| Native GramShiksha generation | Free tier / our own content | Works today, no third-party redirect |
+| User copies from their own NotebookLM and imports | Native pack, no credentials held | **Shipped** |
+| Official Gemini Notebook Enterprise API | Fully automatic | Paid Google Cloud; conflicts with the free-tier rule |
+| Server-side Gmail automation with stored cookies | Fully automatic | Rejected: credential custody, ToS and account-security risk |
+| Browser extension running in the user's own session | More automatic | Possible later; must be installed by the user and still respects Google's terms |
+| PWA share target | One-tap "Share to GramShiksha" on mobile | Good next step; still user-initiated |
 
-So the correct architecture is **not** "make NotebookLM native". It is:
+The next safe step is a **share target**: the learner taps Share in NotebookLM
+and chooses GramShiksha. That still runs in the learner's session and sends only
+the shared text or file. It needs a service-worker POST handler and an import
+screen that accepts shared content; it does not need Google credentials.
 
-> Build a native GramShiksha Studio, and make NotebookLM one optional
-> *authoring backend* behind it.
-
-Students never see NotebookLM. They see GramShiksha pages, GramShiksha citations
-and GramShiksha downloads.
-
-## Product shape
-
-`/studio` is a signed-in workspace with four tabs:
-
-1. **Sources** — pick a course, lesson, textbook chapter or uploaded PDF. The
-   source list is scoped to the learner's class/board or the teacher's school.
-2. **Notebook** — a named research project with a short brief, key concepts and
-   internal citations.
-3. **Create** — study guide, flashcards, quiz, mind map, revision checklist,
-   audio script, parent summary, or a lesson plan. Every generated asset can be
-   previewed and published back into a course.
-4. **Ask** — a Socratic tutor chat grounded in the selected sources. Answers
-   cite internal lesson IDs and never link out to a third-party result page.
-
-Every button has a real state: loading, empty, retry, permission-denied,
-quota-reached, published and offline-cached.
-
-## Architecture
+## Architecture as implemented
 
 ```
 frontend /studio
         │
-backend /studio/*  (FastAPI, auth + quotas + moderation)
-        │
-        ├── native generator (deterministic, no external key)
-        ├── optional provider adapter ── OpenRouter / Gemini / other free model
-        └── optional NotebookLM worker ── teacher-only, explicit consent
-        │
-Postgres (notebooks, sources, artifacts, jobs)
-Cloudinary (generated PDFs, audio, images)
+        ├── paste / clipboard / example
+        ├── local deterministic parser  (no network, no API key)
+        ├── native flashcards, quiz, checklist
+        └── localStorage library
+                ├── print / Save as PDF
+                └── download self-contained HTML
 ```
 
-The frontend only calls GramShiksha endpoints. Generated artifacts are stored in
-GramShiksha storage and rendered by GramShiksha components. There are no iframes,
-no redirects and no third-party result pages in the student flow.
+There is no backend call in this slice, so it works on the free Render instance
+even when the API is cold or offline. The parser is deterministic: the same text
+produces the same pack, which makes the feature testable and cheap to run.
 
-### MCP layer
+### Storage
 
-`mcp-anything` can generate a **GramShiksha MCP server** from our FastAPI OpenAPI
-schema. That is useful for trusted agents and teachers:
-
-- `list_courses`, `get_lesson`, `search_content`
-- `create_study_pack`, `generate_quiz`, `publish_material`
-- `get_class_progress`, `list_unanswered_doubts`
-
-It is an automation surface for our own API, not a NotebookLM bridge.
-
-### NotebookLM adapter (optional, teacher-only)
-
-If the account owner explicitly wants it, a private worker can:
-
-1. Create a notebook from GramShiksha lesson text.
-2. Ask NotebookLM for a study guide, quiz, flashcards or audio script.
-3. Download the artifact.
-4. Moderate it.
-5. Upload it to Cloudinary and publish it as a GramShiksha material.
-
-Rules for that worker:
-
-- It is triggered manually by an admin/teacher, never by an anonymous student.
-- Google cookies live in an encrypted secret store, never in the repo or browser
-  localStorage.
-- No student names, emails, phone numbers or doubts are sent to Google.
-- The generated asset is labelled "AI-assisted" and carries source citations.
-- If Google changes the undocumented API, the worker fails closed and the native
-  generator remains available.
-- It is disabled by default until the owner re-authenticates and accepts the
-  terms-of-service risk.
-
-## Creative feature backlog
-
-### MVP — native, no external key
-
-- **Study Pack**: key concepts, 5 flashcards, 5-question quiz, revision checklist.
-- **Explain like a village teacher**: plain-language explanation plus a local
-  example, in English/Hindi/Marathi.
-- **Doubt → notebook**: turn an unanswered doubt into a source note for a teacher.
-- **Offline pack**: cache the pack in the service worker so it opens without data.
-- **Teacher planner**: one-week plan from the selected lesson and class timetable.
-- **Parent digest**: a short weekly summary of completed lessons and one practice
-  suggestion.
-
-### Next — provider adapter
-
-- Socratic tutor that asks one question at a time and never gives the answer first.
-- Bilingual audio script and downloadable MP3/PDF.
-- Mind map rendered as a native SVG tree, not an image from another site.
-- Quiz generator with difficulty levels and explanations.
-- "Weak topic rescue" pack assembled from the learner's progress history.
-- Teacher moderation queue for AI-generated assets.
-
-### Later — optional NotebookLM worker
-
-- Deep research report from multiple GramShiksha sources.
-- Audio Overview script adapted to the local syllabus.
-- Mind map and slide outline imported as native assets.
-- Multi-source comparison for Classes 11–12.
+- Key: `gs_studio_packs_v1:<name>:<role>`.
+- Limit: 20 packs per browser profile.
+- The raw pasted text is **not** stored; only the generated pack is.
+- Clearing browser data removes the packs. Downloading HTML is the durable copy.
+- No pack is published to other users from this screen.
 
 ## Guardrails
 
-- Free tier only. No paid API, domain or hosting is required for the MVP.
-- No student PII leaves GramShiksha.
+- Free tier only. No paid model, domain or hosting is required.
+- No student PII is sent anywhere; parsing happens in the browser.
+- Imported text is escaped before it is placed in downloadable HTML.
+- AI output is labelled "AI-assisted" and the page tells learners to check facts
+  against the official textbook.
 - No scraped copyrighted textbook content is republished.
-- AI output is always editable, moderated and labelled; it is never presented as
-  an official government textbook.
-- Rate limits and per-role quotas protect the free backend.
-- If a provider is unavailable, the native generator is the fallback, not an
-  error page.
+- The page never presents generated notes as an official government textbook.
+- Clipboard access is optional; the manual paste path always works.
+- The pack is device-local, so a shared phone does not publish one learner's notes
+  to another account.
 
-## First implementation slice
+## Files
 
-1. Add a `studio` router with `GET /studio/sources` and
-   `POST /studio/packs` using the native generator.
-2. Add `/studio` with Sources, Notebook and Create tabs.
-3. Publish a generated pack as a normal GramShiksha material.
-4. Add the provider adapter interface and a disabled NotebookLM worker stub.
-5. Add tests for permissions, quotas, citations and offline caching.
+| File | Purpose |
+|---|---|
+| `frontend/src/studio.ts` | Parser, pack type, safe HTML export |
+| `frontend/src/pages/Studio.tsx` | `/studio` UI and local library |
+| `frontend/src/__tests__/studio.test.ts` | Parser and escaping tests |
+| `frontend/e2e/studio.spec.ts` | Desktop/mobile import and export tests |
+| `frontend/src/App.tsx` | Route, navigation and signed-out gate |
+| `frontend/seo-routes.json` | Private `noindex` SEO entry |
+| `frontend/vercel.json` | SPA rewrite and noindex header |
+| `frontend/src/styles.css` | Studio and print styles |
 
-No Google login is required for this slice.
+## Later, only with explicit approval
+
+- PWA share target for one-tap mobile import.
+- Optional owner-only batch authoring for teacher-published packs.
+- Provider adapter for a free model, with the native parser as fallback.
+- Backend persistence and cross-device sync, with per-user quotas and moderation.
+- Official Gemini Notebook Enterprise API only if the no-spend rule changes.

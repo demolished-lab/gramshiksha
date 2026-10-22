@@ -20,6 +20,7 @@ const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'));
 const ParentDashboard = lazy(() => import('./pages/ParentDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const Studio = lazy(() => import('./pages/Studio'));
 const Explore = lazy(() => import('./pages/Explore'));
 const TeacherLogin = lazy(() => import('./pages/TeacherLogin'));
 const StudentLogin = lazy(() => import('./pages/StudentLogin'));
@@ -224,8 +225,9 @@ export default function App() {
     ['practice', t('practice', lang)],
     ['doubts', t('doubts', lang)],
   ];
-  if (authenticated) navItems.push(['downloads', t('downloads', lang)]);
+  if (authenticated) navItems.push(['studio', t('studio', lang)], ['downloads', t('downloads', lang)]);
   const navIcons: Record<string, string> = { home: '⌂', explore: '▦', materials: '▤', textbooks: '▥', practice: '✎', doubts: '?', downloads: '⇩', dashboard: '◉', progress: '↗', teacher: '▣', parent: '♧', admin: '⚙' };
+  navIcons.studio = '📚';
   const tabs: [string, string, string][] = [
     ['home', '🏠', t('home', lang)],
     ['explore', '📚', t('explore', lang)],
@@ -264,6 +266,14 @@ export default function App() {
             : <Landing lang={lang} go={go} onLogin={() => openAuth('login')} />;
         break;
       case 'dashboard': page = <StudentDashboard lang={lang} go={go} />; break;
+      case 'studio': page = user
+        ? <Studio lang={lang} user={user} />
+        : <div className="card empty-state">
+            <div className="icon">📚</div>
+            <p>Log in to open your Study Studio. Your packs stay on this device.</p>
+            <button className="btn" onClick={() => openAuth('login')}>{t('login', lang)}</button>
+          </div>;
+        break;
       case 'explore':
         page = <Explore lang={lang} go={go} routeGrade={route.id} user={user} />;
         break;
@@ -294,7 +304,7 @@ export default function App() {
 
   // Unknown hash routes get a real 404 (with a way home), not a silent
   // landing render — deep links stay honest about where they point.
-  const knownPages = ['home', 'login', 'dashboard', 'explore', 'courses', 'course',
+  const knownPages = ['home', 'login', 'dashboard', 'studio', 'explore', 'courses', 'course',
     'lesson', 'practice', 'materials', 'textbooks', 'doubts', 'downloads',
     'progress', 'teacher', 'parent', 'admin', 'about', 'contact', 'privacy', 'terms'];
   if (!knownPages.includes(route.page)) {
@@ -310,8 +320,8 @@ export default function App() {
 
   const sidebarItems: [string, string][] = authenticated
     ? user?.role === 'student'
-      ? [['dashboard', t('todaysLearning', lang)], ['explore', t('explore', lang)], ['textbooks', t('textbooks', lang)], ['practice', t('practice', lang)], ['doubts', t('doubts', lang)], ['progress', t('progress', lang)]]
-      : [['home', t('home', lang)], ['explore', t('explore', lang)], ['materials', t('materials', lang)], ['doubts', t('doubts', lang)], [roleHome, roleHome === 'teacher' ? t('teacher', lang) : roleHome === 'parent' ? t('parent', lang) : 'Admin']]
+      ? [['dashboard', t('todaysLearning', lang)], ['studio', t('studio', lang)], ['explore', t('explore', lang)], ['textbooks', t('textbooks', lang)], ['practice', t('practice', lang)], ['doubts', t('doubts', lang)], ['progress', t('progress', lang)]]
+      : [['home', t('home', lang)], ['studio', t('studio', lang)], ['explore', t('explore', lang)], ['materials', t('materials', lang)], ['doubts', t('doubts', lang)], [roleHome, roleHome === 'teacher' ? t('teacher', lang) : roleHome === 'parent' ? t('parent', lang) : 'Admin']]
     : [];
 
   return (

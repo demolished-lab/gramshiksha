@@ -12,6 +12,7 @@ const S: Record<string, [string, string, string]> = {
   textbooks: ['Textbooks', 'पाठ्यपुस्तकें', 'पाठ्यपुस्तके'],
   materials: ['Study Material', 'अध्ययन सामग्री', 'अभ्यास साहित्य'],
   practice: ['Practice', 'अभ्यास', 'सराव'],
+  studio: ['Study Studio', 'अध्ययन स्टूडियो', 'अभ्यास स्टुडिओ'],
   doubts: ['Doubts', 'प्रश्न', 'शंका'],
   downloads: ['My Downloads', 'मेरे डाउनलोड', 'माझे डाउनलोड'],
   progress: ['Progress', 'प्रगति', 'प्रगती'],
