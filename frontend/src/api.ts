@@ -141,7 +141,7 @@ const post = <T>(path: string, body?: unknown, settings: FetchSettings = {}) =>
 
 // ---------- auth ----------
 export const apiRegister = (payload: Record<string, unknown>) =>
-  post<{ access_token: string }>('/auth/register', payload);
+  post<LoginResponse>('/auth/register', payload);
 export const apiResetRequest = (email: string) =>
   post<{ ok: boolean }>('/auth/reset-request', { email });
 export const apiResetConfirm = (email: string, code: string, newPassword: string) =>

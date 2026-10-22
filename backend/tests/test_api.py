@@ -32,6 +32,40 @@ def test_register_login_me(client):
     assert me["role"] == "student" and me["class_grade"] == 6
 
 
+def test_register_normalizes_email_and_returns_a_usable_session(client):
+    # Mobile keyboards can capitalise the first letter. Registration must store
+    # the same lowercase address that /auth/token looks up, and the returned
+    # token must work immediately without a second credential round-trip.
+    r = client.post("/auth/register", json={
+        "email": "  Mobile.User@Example.COM ", "name": "  Mobile Learner  ",
+        "password": "Passw0rd@1", "role": "student", "class_grade": 7,
+        "board": "CBSE"})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["name"] == "Mobile Learner"
+    assert body["role"] == "student" and body["class_grade"] == 7
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"})
+    assert me.status_code == 200, me.text
+    assert me.json()["email"] == "mobile.user@example.com"
+
+    # The same address in any case is the same account, both for duplicate
+    # prevention and for login.
+    duplicate = client.post("/auth/register", json={
+        "email": "MOBILE.USER@example.com", "name": "Second", "password": "Passw0rd@1",
+        "role": "student"})
+    assert duplicate.status_code == 409
+    login = client.post("/auth/token", data={
+        "username": "MOBILE.USER@EXAMPLE.COM", "password": "Passw0rd@1"})
+    assert login.status_code == 200, login.text
+
+
+def test_register_rejects_whitespace_only_name(client):
+    r = client.post("/auth/register", json={
+        "email": "blank-name@x.in", "name": "   ", "password": "Passw0rd@1",
+        "role": "student"})
+    assert r.status_code == 422
+
+
 def test_register_rejects_admin_role(client):
     r = client.post("/auth/register", json={
         "email": "hack@x.in", "name": "H", "password": "Passw0rd@1", "role": "platform_admin"})

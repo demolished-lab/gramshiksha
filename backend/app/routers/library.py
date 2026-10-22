@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..config import settings
@@ -216,7 +217,7 @@ def _optional_user(token: Optional[str] = Depends(_optional_oauth2),
         return None
     if not email:
         return None
-    return session.exec(select(User).where(User.email == email)).first()
+    return session.exec(select(User).where(func.lower(User.email) == email.lower())).first()
 
 
 class LocateIn(BaseModel):

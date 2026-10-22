@@ -9,10 +9,10 @@ const BOARDS = ['Maharashtra SSC', 'Maharashtra HSC', 'CBSE'];
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 type AuthMode = 'login' | 'register' | 'reset-request' | 'reset-confirm';
 
-export default function AuthModal({ lang, onClose, onAuthed }: {
-  lang: Lang; onClose: () => void; onAuthed: () => void;
+export default function AuthModal({ lang, initialMode = 'login', onClose, onAuthed }: {
+  lang: Lang; initialMode?: 'login' | 'register'; onClose: () => void; onAuthed: () => void;
 }) {
-  const [mode, setMode] = useState<AuthMode>('login');
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -81,13 +81,29 @@ export default function AuthModal({ lang, onClose, onAuthed }: {
     };
   }, []);
 
+  // Parent may open the same mounted dialog in a different mode (for example
+  // "Create account" from a designated login page). Keep the form in sync.
+  useEffect(() => {
+    setMode(initialMode);
+    setErr('');
+    setNotice('');
+  }, [initialMode]);
+
   // After "Send code", move straight to the code field instead of leaving
   // focus on a button that has just changed its meaning.
   useEffect(() => {
     if (mode === 'reset-confirm') {
       cardRef.current?.querySelector<HTMLInputElement>('input[autocomplete="one-time-code"]')?.focus();
+    } else {
+      cardRef.current?.querySelector<HTMLElement>('input:not([disabled]), select:not([disabled])')?.focus();
     }
   }, [mode]);
+
+  // On a phone the error can be just below the keyboard. Bring it back into
+  // view instead of leaving the learner staring at a disabled button.
+  useEffect(() => {
+    if (err) cardRef.current?.querySelector('[role="alert"]')?.scrollIntoView({ block: 'nearest' });
+  }, [err]);
 
   const changeMode = (next: AuthMode) => {
     setMode(next);
@@ -95,29 +111,56 @@ export default function AuthModal({ lang, onClose, onAuthed }: {
     setNotice('');
   };
 
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanName = name.trim();
+  const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail);
+  const showEmailError = Boolean(email.trim()) && !emailLooksValid;
+  const canSubmit = !busy && emailLooksValid && (
+    mode === 'login' ? password.length > 0
+      : mode === 'register' ? cleanName.length > 0 && password.length >= 8
+        : mode === 'reset-request' ? true
+          : resetCode.length === 6 && newPassword.length >= 8
+  );
+
   const submit = async () => {
+    if (!emailLooksValid) {
+      setErr(t('emailInvalid', lang));
+      return;
+    }
+    if (mode === 'register' && !cleanName) {
+      setErr(t('nameRequired', lang));
+      return;
+    }
+    if (mode === 'register' && password.length < 8) {
+      setErr(t('passwordTooShort', lang));
+      return;
+    }
     setBusy(true); setErr(''); setNotice('');
     try {
       if (mode === 'login') {
-        saveSession(await apiLogin(email, password));
+        saveSession(await apiLogin(cleanEmail, password));
         onAuthed();
       } else if (mode === 'register') {
-        await apiRegister({
-          email, name, password, role, lang_pref: prefLang,
-          class_grade: role === 'student' ? classGrade : null, board: role === 'student' ? board : null,
+        // Register now returns the same session shape as login, so a mobile
+        // user enters the app even if the network drops between the two old
+        // requests. The backend also lowercases the address: a keyboard that
+        // auto-capitalises it can no longer strand the new account.
+        saveSession(await apiRegister({
+          email: cleanEmail, name: cleanName, password, role, lang_pref: prefLang,
+          class_grade: role === 'student' ? classGrade : null,
+          board: role === 'student' ? board : null,
           ref: getReferral(),
-        });
+        }));
         // The captured invite is spent — a second signup on this device must
         // not credit the same referrer again.
         clearReferral();
-        saveSession(await apiLogin(email, password));
         onAuthed();
       } else if (mode === 'reset-request') {
-        await apiResetRequest(email.trim());
+        await apiResetRequest(cleanEmail);
         setMode('reset-confirm');
         setNotice(t('resetSent', lang));
       } else {
-        await apiResetConfirm(email.trim(), resetCode.trim(), newPassword);
+        await apiResetConfirm(cleanEmail, resetCode.trim(), newPassword);
         setMode('login');
         setPassword('');
         setResetCode('');
@@ -136,88 +179,104 @@ export default function AuthModal({ lang, onClose, onAuthed }: {
       <div className="card auth-card" ref={cardRef} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
         <h3 id="auth-title">{mode === 'login' ? t('login', lang)
           : mode === 'register' ? t('register', lang) : t('resetPassword', lang)}</h3>
-        {notice && <p className="success" role="status">{notice}</p>}
-        {mode === 'register' && (
-          <>
-            <label>{t('name', lang)}</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} />
-            <label>Role</label>
-            <select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="student">{t('student', lang)}</option>
-              <option value="teacher">{t('teacher', lang)}</option>
-              <option value="parent">{t('parent', lang)}</option>
-            </select>
-            {role === 'student' && (
-              <>
-                <label>{t('classes', lang)}</label>
-                <select value={classGrade} onChange={(e) => setClassGrade(Number(e.target.value))}>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
-                    <option key={g} value={g}>Class {g} / कक्षा {g} / इयत्ता {g}</option>
-                  ))}
-                </select>
-                <label>Board</label>
-                <select value={board} onChange={(e) => setBoard(e.target.value)}>
-                  {BOARDS.map((b) => <option key={b} value={b}>{b}</option>)}
-                </select>
-                <label>Language / भाषा / भाषा</label>
-                <select value={prefLang} onChange={(e) => setPrefLang(e.target.value as Lang)}>
-                  <option value="en">English</option>
-                  <option value="hi">हिंदी</option>
-                  <option value="mr">मराठी</option>
-                </select>
-              </>
-            )}
-          </>
-        )}
-        <label>{t('email', lang)}</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
-        {(mode === 'login' || mode === 'register') && (
-          <>
-            <label>{t('password', lang)}</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
-          </>
-        )}
-        {mode === 'reset-confirm' && (
-          <>
-            <label htmlFor="reset-code">{t('resetCode', lang)}</label>
-            <input id="reset-code" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
-              value={resetCode} onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ''))}
-              autoComplete="one-time-code" />
-            <label htmlFor="reset-new-password">{t('newPassword', lang)}</label>
-            <input id="reset-new-password" type="password" value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)} minLength={8}
-              autoComplete="new-password" />
-          </>
-        )}
-        {mode === 'login' && (
-          <button type="button" className="auth-forgot" onClick={() => changeMode('reset-request')}>
-            {t('forgotPassword', lang)}
-          </button>
-        )}
-        {err && <p className="error" role="alert">{err}</p>}
-        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-          <button className="btn" disabled={busy || !email
-            || ((mode === 'login' || mode === 'register') && !password)
-            || (mode === 'reset-confirm' && (resetCode.length !== 6 || newPassword.length < 8))}
-            onClick={submit}>
-            {mode === 'login' ? t('login', lang)
-              : mode === 'register' ? t('register', lang)
-                : mode === 'reset-request' ? t('sendCode', lang) : t('updatePassword', lang)}
-          </button>
+        <form noValidate onSubmit={(e) => { e.preventDefault(); if (canSubmit) void submit(); }}>
+          {notice && <p className="success" role="status">{notice}</p>}
+          {mode === 'register' && (
+            <>
+              <label htmlFor="auth-name">{t('name', lang)}</label>
+              <input id="auth-name" value={name} onChange={(e) => setName(e.target.value)}
+                autoComplete="name" required />
+              <label htmlFor="auth-role">Role</label>
+              <select id="auth-role" value={role} onChange={(e) => setRole(e.target.value)}>
+                <option value="student">{t('student', lang)}</option>
+                <option value="teacher">{t('teacher', lang)}</option>
+                <option value="parent">{t('parent', lang)}</option>
+              </select>
+              {role === 'student' && (
+                <>
+                  <label htmlFor="auth-class">{t('classes', lang)}</label>
+                  <select id="auth-class" value={classGrade} onChange={(e) => setClassGrade(Number(e.target.value))}>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((g) => (
+                      <option key={g} value={g}>Class {g} / कक्षा {g} / इयत्ता {g}</option>
+                    ))}
+                  </select>
+                  <label htmlFor="auth-board">Board</label>
+                  <select id="auth-board" value={board} onChange={(e) => setBoard(e.target.value)}>
+                    {BOARDS.map((b) => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                  <label htmlFor="auth-lang">Language / भाषा / भाषा</label>
+                  <select id="auth-lang" value={prefLang} onChange={(e) => setPrefLang(e.target.value as Lang)}>
+                    <option value="en">English</option>
+                    <option value="hi">हिंदी</option>
+                    <option value="mr">मराठी</option>
+                  </select>
+                </>
+              )}
+            </>
+          )}
+          <label htmlFor="auth-email">{t('email', lang)}</label>
+          <input id="auth-email" type="email" inputMode="email" value={email}
+            onChange={(e) => setEmail(e.target.value)} autoComplete="username"
+            autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            aria-invalid={showEmailError} aria-describedby={showEmailError ? 'auth-email-error' : undefined}
+            required />
+          {showEmailError && (
+            <p id="auth-email-error" className="error" role="alert">{t('emailInvalid', lang)}</p>
+          )}
+          {(mode === 'login' || mode === 'register') && (
+            <>
+              <label htmlFor="auth-password">{t('password', lang)}</label>
+              <input id="auth-password" type="password" value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                minLength={mode === 'register' ? 8 : undefined}
+                aria-describedby={mode === 'register' ? 'auth-password-hint auth-error' : 'auth-error'}
+                required />
+              {mode === 'register' && (
+                <p id="auth-password-hint" className="muted" style={{ margin: '4px 0 0', fontSize: '.78rem' }}>
+                  {t('passwordHint', lang)}
+                </p>
+              )}
+            </>
+          )}
+          {mode === 'reset-confirm' && (
+            <>
+              <label htmlFor="reset-code">{t('resetCode', lang)}</label>
+              <input id="reset-code" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
+                value={resetCode} onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ''))}
+                autoComplete="one-time-code" required />
+              <label htmlFor="reset-new-password">{t('newPassword', lang)}</label>
+              <input id="reset-new-password" type="password" value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)} minLength={8}
+                autoComplete="new-password" required />
+            </>
+          )}
           {mode === 'login' && (
-            <button className="btn ghost" onClick={() => changeMode('register')}>
-              {t('register', lang)}
+            <button type="button" className="auth-forgot" onClick={() => changeMode('reset-request')}>
+              {t('forgotPassword', lang)}
             </button>
           )}
-          {mode !== 'login' && (
-            <button className="btn ghost" onClick={() => changeMode('login')}>
-              {t('backToLogin', lang)}
+          {err && <p id="auth-error" className="error" role="alert">{err}</p>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+            <button className="btn" type="submit" disabled={!canSubmit} aria-busy={busy}>
+              {mode === 'login' ? t('login', lang)
+                : mode === 'register' ? t('register', lang)
+                  : mode === 'reset-request' ? t('sendCode', lang) : t('updatePassword', lang)}
             </button>
-          )}
-          <span style={{ flex: 1 }} />
-          <button className="btn ghost small" onClick={onClose} aria-label="Close">✕</button>
-        </div>
+            {mode === 'login' && (
+              <button type="button" className="btn ghost" onClick={() => changeMode('register')}>
+                {t('register', lang)}
+              </button>
+            )}
+            {mode !== 'login' && (
+              <button type="button" className="btn ghost" onClick={() => changeMode('login')}>
+                {t('backToLogin', lang)}
+              </button>
+            )}
+            <span style={{ flex: 1 }} />
+            <button type="button" className="btn ghost small" onClick={onClose} aria-label="Close">✕</button>
+          </div>
+        </form>
       </div>
     </div>
   );

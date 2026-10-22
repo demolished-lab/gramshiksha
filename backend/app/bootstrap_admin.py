@@ -22,6 +22,7 @@ SQL with a checked command.
 """
 import sys
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from . import db
@@ -37,7 +38,7 @@ def bootstrap(session: Session, email: str, password: str) -> tuple[str, int]:
     Returns (action, user_id) where action is "created" | "updated".
     """
     email = email.strip().lower()
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(select(User).where(func.lower(User.email) == email)).first()
     action = "updated" if user else "created"
     if user is None:
         user = User(email=email, name="Administrator")

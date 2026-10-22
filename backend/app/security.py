@@ -4,6 +4,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from .config import settings
@@ -44,7 +45,7 @@ def get_current_user(
             raise cred_exc
     except JWTError:
         raise cred_exc
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(select(User).where(func.lower(User.email) == email.lower())).first()
     if user is None:
         raise cred_exc
     return user
@@ -72,7 +73,7 @@ def optional_user(
         return None
     if email is None:
         return None
-    return session.exec(select(User).where(User.email == email)).first()
+    return session.exec(select(User).where(func.lower(User.email) == email.lower())).first()
 
 
 def has_role(user: User, *roles: str) -> bool:

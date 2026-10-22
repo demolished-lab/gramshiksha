@@ -9,8 +9,8 @@ import type { Lang } from '../types';
  * Download, pre-filtered to their class/board); "Today's learning" stays one
  * tap away in the nav. Same landing as auth.ts landingAfterAuth gives the
  * generic modal — kept explicit here so the page owns its destination. */
-export default function StudentLogin({ lang, go, onAuthed }: {
-  lang: Lang; go: (p: string) => void; onAuthed: () => void;
+export default function StudentLogin({ lang, go, onAuthed, onSignup }: {
+  lang: Lang; go: (p: string) => void; onAuthed: () => void; onSignup?: () => void;
 }) {
   return (
     <RoleLoginForm
@@ -21,6 +21,7 @@ export default function StudentLogin({ lang, go, onAuthed }: {
       onDone={() => { onAuthed(); go('textbooks'); }}
       switchHref="/login/teacher"
       switchLabel={t('teacherLogin', lang)}
+      onSignup={onSignup}
     />
   );
 }

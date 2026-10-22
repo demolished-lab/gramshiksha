@@ -6,7 +6,7 @@ import type { Lang, LoginResponse } from '../types';
 /** Shared email+password form behind both designated login pages. The only
  * thing that differs per role is which api*Login function (and backend
  * endpoint) backs it — the server, not just the UI, enforces the role. */
-export default function RoleLoginForm({ lang, title, subtitle, loginFn, onDone, switchHref, switchLabel }: {
+export default function RoleLoginForm({ lang, title, subtitle, loginFn, onDone, switchHref, switchLabel, onSignup }: {
   lang: Lang;
   title: string;
   subtitle: string;
@@ -14,6 +14,7 @@ export default function RoleLoginForm({ lang, title, subtitle, loginFn, onDone, 
   onDone: () => void;
   switchHref: string;
   switchLabel: string;
+  onSignup?: () => void;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,7 +24,7 @@ export default function RoleLoginForm({ lang, title, subtitle, loginFn, onDone, 
   const submit = async () => {
     setBusy(true); setErr('');
     try {
-      saveSession(await loginFn(email, password));
+      saveSession(await loginFn(email.trim().toLowerCase(), password));
       onDone();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -36,20 +37,28 @@ export default function RoleLoginForm({ lang, title, subtitle, loginFn, onDone, 
     <div className="card" style={{ maxWidth: 420, margin: '32px auto' }}>
       <h2>{title}</h2>
       <p className="muted">{subtitle}</p>
-      <label>{t('email', lang)}</label>
-      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-        autoComplete="username" />
-      <label>{t('password', lang)}</label>
-      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-        autoComplete="current-password"
-        onKeyDown={(e) => { if (e.key === 'Enter' && email && password && !busy) void submit(); }} />
-      {err && <p className="error">{err}</p>}
-      <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
-        <button className="btn accent" disabled={busy || !email || !password} onClick={() => void submit()}>
-          {t('login', lang)}
-        </button>
-        <a href={switchHref}>{switchLabel}</a>
-      </div>
+      <form noValidate onSubmit={(e) => { e.preventDefault(); if (email.trim() && password && !busy) void submit(); }}>
+        <label htmlFor="role-login-email">{t('email', lang)}</label>
+        <input id="role-login-email" type="email" inputMode="email" value={email}
+          onChange={(e) => setEmail(e.target.value)} autoComplete="username"
+          autoCapitalize="none" autoCorrect="off" spellCheck={false} required />
+        <label htmlFor="role-login-password">{t('password', lang)}</label>
+        <input id="role-login-password" type="password" value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password" required />
+        {err && <p className="error" role="alert">{err}</p>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn accent" type="submit" disabled={busy || !email.trim() || !password}>
+            {t('login', lang)}
+          </button>
+          <a href={switchHref}>{switchLabel}</a>
+          {onSignup && (
+            <button type="button" className="auth-forgot" onClick={onSignup}>
+              {t('createAccount', lang)}
+            </button>
+          )}
+        </div>
+      </form>
     </div>
   );
 }

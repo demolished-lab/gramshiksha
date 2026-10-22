@@ -7,8 +7,8 @@ import type { Lang } from '../types';
  * /auth/token/teacher, which only ever yields teacher sessions — a student
  * credential gets a 403 naming the teacher page, not a session. Pending
  * teachers land on the approval notice via the router's approval gate. */
-export default function TeacherLogin({ lang, go, onAuthed }: {
-  lang: Lang; go: (p: string) => void; onAuthed: () => void;
+export default function TeacherLogin({ lang, go, onAuthed, onSignup }: {
+  lang: Lang; go: (p: string) => void; onAuthed: () => void; onSignup?: () => void;
 }) {
   return (
     <RoleLoginForm
@@ -19,6 +19,7 @@ export default function TeacherLogin({ lang, go, onAuthed }: {
       onDone={() => { onAuthed(); go('teacher'); }}
       switchHref="/login/student"
       switchLabel={t('studentLogin', lang)}
+      onSignup={onSignup}
     />
   );
 }

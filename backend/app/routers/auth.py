@@ -7,7 +7,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import delete as sqlalchemy_delete
+from sqlalchemy import delete as sqlalchemy_delete, func
 from sqlmodel import Session, select
 
 from ..config import settings
@@ -83,7 +83,15 @@ def register(payload: RegisterIn, request: Request, session: Session = Depends(g
     _check_rate(request, "register")
     if payload.role not in ("student", "teacher", "parent"):
         raise HTTPException(422, "Self-registration allowed for student, teacher, parent only")
-    if session.exec(select(User).where(User.email == payload.email)).first():
+    # Login always lowercases the address. Store it the same way, or a phone
+    # keyboard that capitalises the first letter creates an account nobody can
+    # sign back into. Case-insensitive duplicate check also closes the
+    # Learner@x.in / learner@x.in double-account hole.
+    email = str(payload.email).strip().lower()
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(422, "Name is required")
+    if session.exec(select(User).where(func.lower(User.email) == email)).first():
         raise HTTPException(409, "Email already registered")
 
     school_id = None
@@ -96,8 +104,8 @@ def register(payload: RegisterIn, request: Request, session: Session = Depends(g
         school_id = school.id
 
     user = User(
-        email=payload.email,
-        name=payload.name,
+        email=email,
+        name=name,
         hashed_password=hash_password(payload.password),
         role=payload.role,
         # Anyone may type "teacher" at signup, so the role alone must not
@@ -118,10 +126,11 @@ def register(payload: RegisterIn, request: Request, session: Session = Depends(g
     session.commit()
     session.refresh(user)
     seed_badges(session)
-    token = create_access_token(user.email, user.role)
-    return {"id": user.id, "email": user.email, "name": user.name, "role": user.role,
-            "role_status": user.role_status,
-            "access_token": token, "token_type": "bearer"}
+    # Return the same session shape as login. The browser can enter the app
+    # immediately instead of making a second credential round-trip that can
+    # fail on a flaky mobile connection (or because of a keyboard-typed
+    # uppercase email that the old login lookup did not match).
+    return _login_payload(user)
 
 
 @router.post("/token")
@@ -130,7 +139,7 @@ def login(request: Request, form: OAuth2PasswordRequestForm = Depends(),
     _check_rate(request, "token")
     email = form.username.strip().lower()
     _check_login_lock(email)
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(select(User).where(func.lower(User.email) == email)).first()
     if not user or not verify_password(form.password, user.hashed_password):
         _record_login_failure(email)
         raise HTTPException(401, "Incorrect email or password")
@@ -178,6 +187,7 @@ def _login_payload(user: User) -> dict:
     # pending/suspended notice immediately, without a second /auth/me round
     # trip that would first show the privileged page and then its 403.
     return {"access_token": token, "token_type": "bearer",
+            "id": user.id, "email": user.email,
             "role": user.role, "role_status": user.role_status,
             "name": user.name, "lang_pref": user.lang_pref,
             "class_grade": user.class_grade, "board": user.board, "xp": user.xp,
@@ -194,7 +204,7 @@ def _role_login(request: Request, form: OAuth2PasswordRequestForm,
     them the role anyway."""
     _check_rate(request, rate_key)
     email = form.username.strip().lower()
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(select(User).where(func.lower(User.email) == email)).first()
     if not user or not verify_password(form.password, user.hashed_password):
         raise HTTPException(401, "Incorrect email or password")
     if user.role != role:
@@ -254,7 +264,7 @@ def reset_request(payload: ResetRequest, request: Request, session: Session = De
     # Always the same 200 shape — never reveal whether the account exists
     # (account enumeration).
     ok = {"ok": True}
-    if not session.exec(select(User).where(User.email == email)).first():
+    if not session.exec(select(User).where(func.lower(User.email) == email)).first():
         return ok
 
     # 6 cryptographically-random digits; only a salted hash is persisted.
@@ -319,7 +329,7 @@ def reset_confirm(payload: ResetConfirm, request: Request, session: Session = De
         session.commit()
         raise HTTPException(400, "Invalid or expired code")
 
-    user = session.exec(select(User).where(User.email == email)).first()
+    user = session.exec(select(User).where(func.lower(User.email) == email)).first()
     if not user:
         raise HTTPException(404, "User not found")
 

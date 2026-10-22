@@ -48,6 +48,7 @@ export default function App() {
   const [online, setOnline] = useState(navigator.onLine);
   const [saver, setSaver] = useState(dataSaver());
   const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notifCount] = useState(0);
 
@@ -165,6 +166,10 @@ export default function App() {
   };
 
   const switchLang = (l: Lang) => { setLang(l); setLangState(l); };
+  const openAuth = (mode: 'login' | 'register' = 'login') => {
+    setAuthMode(mode);
+    setShowAuth(true);
+  };
   const onAuthed = () => {
     const u = getUser();
     setUser(u);
@@ -251,10 +256,12 @@ export default function App() {
     switch (route.page) {
       case 'login':
         page = route.sub === 'teacher'
-          ? <TeacherLogin lang={lang} go={go} onAuthed={onAuthed} />
+          ? <TeacherLogin lang={lang} go={go} onAuthed={onAuthed}
+              onSignup={() => openAuth('register')} />
           : route.sub === 'student'
-            ? <StudentLogin lang={lang} go={go} onAuthed={onAuthed} />
-            : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
+            ? <StudentLogin lang={lang} go={go} onAuthed={onAuthed}
+                onSignup={() => openAuth('register')} />
+            : <Landing lang={lang} go={go} onLogin={() => openAuth('login')} />;
         break;
       case 'dashboard': page = <StudentDashboard lang={lang} go={go} />; break;
       case 'explore':
@@ -269,7 +276,7 @@ export default function App() {
       case 'doubts': page = <Doubts lang={lang} user={user} />; break;
       case 'downloads': page = user
         ? <Downloads lang={lang} go={go} />
-        : <div className="card empty-state"><div className="icon">🔒</div><p>{t('privateDownloadsLogin', lang)}</p><button className="btn" onClick={() => setShowAuth(true)}>{t('login', lang)}</button></div>;
+        : <div className="card empty-state"><div className="icon">🔒</div><p>{t('privateDownloadsLogin', lang)}</p><button className="btn" onClick={() => openAuth('login')}>{t('login', lang)}</button></div>;
         break;
       case 'progress': page = <ProgressPage lang={lang} />; break;
       case 'teacher': page = approvalGated(<TeacherDashboard lang={lang} />); break;
@@ -281,7 +288,7 @@ export default function App() {
       case 'terms': page = <TermsPage lang={lang} />; break;
       default: page = user && isStudent
         ? <StudentDashboard lang={lang} go={go} />
-        : <Landing lang={lang} go={go} onLogin={() => setShowAuth(true)} />;
+        : <Landing lang={lang} go={go} onLogin={() => openAuth('login')} />;
     }
   }
 
@@ -345,7 +352,7 @@ export default function App() {
             </button>
           </>
         ) : (
-          <button className="btn small" onClick={() => setShowAuth(true)}>{t('login', lang)}</button>
+          <button className="btn small" onClick={() => openAuth('login')}>{t('login', lang)}</button>
         )}
       </header>
 
@@ -372,7 +379,7 @@ export default function App() {
         ))}
       </nav>
 
-      {showAuth && <AuthModal lang={lang} onClose={() => setShowAuth(false)} onAuthed={onAuthed} />}
+      {showAuth && <AuthModal lang={lang} initialMode={authMode} onClose={() => setShowAuth(false)} onAuthed={onAuthed} />}
       {notifCount > 0 && <span aria-hidden style={{ display: 'none' }}>{notifCount}</span>}
       </div>
     </div>
