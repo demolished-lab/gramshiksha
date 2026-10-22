@@ -103,6 +103,8 @@ def test_studio_extract_rejects_unsupported_and_empty_files(client, headers):
     assert empty.status_code == 422
     too_short = upload(client, headers, "notes.txt", b"tiny")
     assert too_short.status_code == 422
+    broken_docx = upload(client, headers, "notes.docx", b"PK\x03\x04 not a zip")
+    assert broken_docx.status_code == 422
 
 
 def test_studio_extract_rejects_a_broken_pdf(client, headers):

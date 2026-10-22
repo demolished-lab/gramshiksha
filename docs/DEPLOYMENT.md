@@ -113,6 +113,20 @@ integration — pushes to `main` deploy Render only, and that is intentional
    or stale local `.vercel` link can never send a build to another project.
    Run `scripts/deploy.sh --check` for the same checks without deploying.
 
+   **CLI fallback (used when `npx vercel` prints `fetch failed`):**
+   build first, then upload the prebuilt `dist/` through Vercel's REST API:
+
+   ```sh
+   cd frontend
+   npm run build
+   npm run deploy:api   # reads VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID
+   ```
+
+   This uploads the already-built files with a no-op build command, so it cannot
+   be used before `npm run build`. A `VITE_*` value (for example
+   `VITE_GOOGLE_CLIENT_ID`) must be set during that build; Vercel does not rebuild
+   the uploaded output.
+
 4. Production URL: `https://gramshiksha-academy.vercel.app` (the apex
    `gramshiksha.vercel.app` belongs to another team, so the project carries
    this alias instead). Deployment Protection is **Standard** (public).

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import re
+import zipfile
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -103,8 +104,18 @@ def _pdf_text(data: bytes) -> str:
 
 
 def _docx_text(data: bytes) -> str:
+    # A 10 MB zip can expand to gigabytes. Check the central directory before
+    # python-docx opens it so a malicious upload cannot exhaust the free worker.
     try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            entries = archive.infolist()
+            if len(entries) > 5_000:
+                raise ValueError("This DOCX has too many parts to import.")
+            if sum(entry.file_size for entry in entries) > 64 * 1024 * 1024:
+                raise ValueError("This DOCX expands beyond the 64 MB import limit.")
         doc = Document(io.BytesIO(data))
+    except ValueError:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise ValueError("This DOCX file could not be read. Try another export.") from exc
     parts = [paragraph.text for paragraph in doc.paragraphs]
