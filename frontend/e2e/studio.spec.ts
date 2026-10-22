@@ -97,8 +97,41 @@ test('a NotebookLM export file can be imported from the device', async ({ page }
   await expect(page.getByRole('button', { name: /build study pack/i })).toBeEnabled();
 });
 
-test('a Google Doc can be picked after a read-only Google connection', async ({ page }) => {
+test('a Google Doc can be picked with the per-file Drive scope', async ({ page }) => {
   await page.addInitScript(() => {
+    type PickerData = { action?: string; docs?: Array<Record<string, unknown>> };
+    let callback: ((data: PickerData) => void) | undefined;
+
+    class MockDocsView {
+      setIncludeFolders() { return this; }
+      setSelectFolderEnabled() { return this; }
+      setMode() { return this; }
+      setMimeTypes() { return this; }
+    }
+
+    class MockPickerBuilder {
+      addView() { return this; }
+      setOAuthToken() { return this; }
+      setDeveloperKey() { return this; }
+      setAppId() { return this; }
+      setCallback(next: (data: PickerData) => void) { callback = next; return this; }
+      build() {
+        return {
+          setVisible: () => {
+            window.setTimeout(() => callback?.({
+              action: 'picked',
+              docs: [{
+                id: 'doc-1',
+                name: 'Photosynthesis notes',
+                mimeType: 'application/vnd.google-apps.document',
+                url: 'https://docs.google.com/document/d/doc-1/edit',
+              }],
+            }), 0);
+          },
+        };
+      }
+    }
+
     (window as unknown as { google: unknown }).google = {
       accounts: {
         oauth2: {
@@ -108,6 +141,14 @@ test('a Google Doc can be picked after a read-only Google connection', async ({ 
             },
           }),
         },
+      },
+      picker: {
+        PickerBuilder: MockPickerBuilder,
+        DocsView: MockDocsView,
+        ViewId: { DOCS: 'docs' },
+        DocsViewMode: { LIST: 'list' },
+        Action: { PICKED: 'picked', CANCEL: 'cancel' },
+        Response: { ACTION: 'action', DOCUMENTS: 'docs' },
       },
     };
   });
@@ -120,26 +161,14 @@ test('a Google Doc can be picked after a read-only Google connection', async ({ 
         body: 'Photosynthesis is how green plants use sunlight, water and carbon dioxide to make food. Chlorophyll absorbs the light.',
       });
     }
-    return route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        files: [{
-          id: 'doc-1',
-          name: 'Photosynthesis notes',
-          mimeType: 'application/vnd.google-apps.document',
-          webViewLink: 'https://docs.google.com/document/d/doc-1/edit',
-        }],
-      }),
-    });
+    return route.fulfill({ status: 404, body: 'Unexpected Drive request' });
   });
 
   await page.goto('/studio');
-  await page.getByRole('button', { name: /connect google drive/i }).click();
-  await expect(page.locator('#studio-drive-file')).toHaveValue('doc-1');
-  await page.getByRole('button', { name: /import selected doc/i }).click();
+  await page.getByRole('button', { name: /choose from google drive/i }).click();
   await expect(page.locator('#studio-text')).toHaveValue(/green plants use sunlight/);
   await expect(page.locator('#studio-title')).toHaveValue('Photosynthesis notes');
+  await expect(page.locator('#studio-source')).toHaveValue('https://docs.google.com/document/d/doc-1/edit');
 });
 
 test('the install suggestion uses the browser prompt and then gets out of the way', async ({ page }) => {

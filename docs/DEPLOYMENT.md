@@ -123,9 +123,11 @@ integration — pushes to `main` deploy Render only, and that is intentional
    ```
 
    This uploads the already-built files with a no-op build command, so it cannot
-   be used before `npm run build`. A `VITE_*` value (for example
-   `VITE_GOOGLE_CLIENT_ID`) must be set during that build; Vercel does not rebuild
-   the uploaded output.
+   be used before `npm run build`. Public `VITE_*` values must be present during
+   that build; Vercel does not rebuild the uploaded output. For Study Studio's
+   Drive card, provide all three: `VITE_GOOGLE_CLIENT_ID`,
+   `VITE_GOOGLE_PICKER_KEY` and `VITE_GOOGLE_APP_ID` (see
+   [GOOGLE-DRIVE.md](GOOGLE-DRIVE.md)).
 
 4. Production URL: `https://gramshiksha-academy.vercel.app` (the apex
    `gramshiksha.vercel.app` belongs to another team, so the project carries

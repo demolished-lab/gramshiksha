@@ -44,11 +44,12 @@ credentials.
 - **File import** — upload a NotebookLM export as PDF, DOCX, HTML, Markdown or
   TXT (up to 10 MB). The backend extracts text in memory and never stores the
   upload; `/api/studio/extract` requires a signed-in GramShiksha account.
-- **Google Drive import (opt-in)** — a learner can connect their own Google
-  account with read-only Drive access, pick the Google Doc they exported from
-  NotebookLM, and import its text. The token stays in the browser tab. The card
-  is hidden until `VITE_GOOGLE_CLIENT_ID` is configured; see
-  [GOOGLE-DRIVE.md](GOOGLE-DRIVE.md).
+- **Google Drive import (opt-in)** — a learner signs in to their own Google
+  account, picks the Google Doc they exported from NotebookLM in Google's own
+  Picker, and imports its text. Only the non-sensitive `drive.file` scope is
+  requested, so GramShiksha can read the selected file and nothing else. The
+  token stays in the browser tab. The card is hidden until the client ID, Picker
+  key and project number are configured; see [GOOGLE-DRIVE.md](GOOGLE-DRIVE.md).
 - **PWA install prompt** — when the browser says the app is installable, Studio
   shows a one-tap **Install app** card. Once installed, the learner can tap
   **Share → GramShiksha** from their own NotebookLM app; the shared title, text
@@ -71,8 +72,9 @@ credentials.
 5. Build the pack and study it in GramShiksha.
 6. Keep it on the device, print it, or download the HTML copy.
 
-If the owner configures a Google OAuth client ID, step 3 can also be
-**Export to Google Docs → Connect Google Drive → pick the Doc** inside Studio.
+Step 3 can also be **Export to Google Docs → Choose from Google Drive → pick the
+Doc** inside Studio. This is optional; downloading a DOCX and using **Import a
+file** avoids Google authorization entirely.
 
 On a phone, the copy/paste flow works in every browser. It does not depend on a
 Chrome extension, a desktop-only connector, or a paid API. On Android, installing
@@ -89,7 +91,7 @@ GramShiksha as a PWA adds it to the system share sheet, so the learner can tap
 | Browser extension running in the user's own session | More automatic | Possible later; must be installed by the user and still respects Google's terms |
 | PWA share target | One-tap "Share to GramShiksha" on mobile | **Shipped for text and links** |
 | Upload a PDF/DOCX/HTML file | Import an exported notebook directly | **Shipped** |
-| Google Drive import | Pick an exported Google Doc | **Shipped, opt-in via OAuth client ID** |
+| Google Drive import | Pick one exported Google Doc in Google's Picker | **Shipped, opt-in; `drive.file`, no verification** |
 
 The share target still runs in the learner's session and sends only the content
 the learner chooses to share. It does not need Google credentials.
@@ -101,7 +103,7 @@ frontend /studio
         │
         ├── paste / clipboard / example
         ├── file upload ── POST /studio/extract ── PDF/DOCX/HTML/MD/TXT
-        ├── Google Drive ── Google Identity Services (read-only, opt-in)
+        ├── Google Drive ── GIS + Picker (drive.file, one selected Doc)
         ├── local deterministic parser  (no network, no API key)
         ├── native flashcards, quiz, checklist
         └── localStorage library
@@ -141,13 +143,13 @@ same pack, which makes the feature testable and cheap to run.
 |---|---|
 | `frontend/src/studio.ts` | Parser, pack type, safe HTML export |
 | `frontend/src/pages/Studio.tsx` | `/studio` UI and local library |
-| `frontend/src/googleDrive.ts` | Opt-in Google Drive listing/export helpers |
+| `frontend/src/googleDrive.ts` | Opt-in Google Picker, token and Doc export helpers |
 | `frontend/src/components/InstallPrompt.tsx` | PWA install suggestion |
 | `backend/app/routers/studio.py` | In-memory PDF/DOCX/HTML/text extraction |
 | `frontend/src/__tests__/studio.test.ts` | Parser and escaping tests |
-| `frontend/src/__tests__/googleDrive.test.ts` | Drive request/token/Error tests |
-| `frontend/e2e/studio.spec.ts` | Desktop/mobile import, share, install and export tests |
-| `docs/GOOGLE-DRIVE.md` | OAuth client setup and consent-screen limits |
+| `frontend/src/__tests__/googleDrive.test.ts` | Drive Picker/token/scaffold tests |
+| `frontend/e2e/studio.spec.ts` | Desktop/mobile import, Picker, share, install and export tests |
+| `docs/GOOGLE-DRIVE.md` | OAuth client, Picker key, scope and troubleshooting |
 | `frontend/src/App.tsx` | Route, navigation and signed-out gate |
 | `frontend/public/manifest.webmanifest` | PWA share-target registration |
 | `frontend/seo-routes.json` | Private `noindex` SEO entry |
@@ -158,7 +160,8 @@ same pack, which makes the feature testable and cheap to run.
 
 - Share-target support for PDF/file shares (text and links already work).
 - Optional owner-only batch authoring for teacher-published packs.
-- Google OAuth verification and a production consent screen for Drive import.
+- Rotate the public Picker key and re-check the OAuth client if the site moves to
+  a custom domain.
 - Provider adapter for a free model, with the native parser as fallback.
 - Backend persistence and cross-device sync, with per-user quotas and moderation.
 - Official Gemini Notebook Enterprise API only if the no-spend rule changes.

@@ -4,7 +4,7 @@ import { t } from '../i18n';
 import type { SessionUser } from '../auth';
 import type { Lang } from '../types';
 import { buildStudyPack, packHtml, type StudyPack } from '../studio';
-import { driveImportEnabled, exportGoogleDoc, googleClientId, listGoogleDocs, requestDriveToken, type DriveFile } from '../googleDrive';
+import { driveImportEnabled, exportGoogleDoc, googleClientId, pickGoogleDoc, requestDriveToken } from '../googleDrive';
 import InstallPrompt from '../components/InstallPrompt';
 
 type Tab = 'overview' | 'flashcards' | 'quiz' | 'checklist';
@@ -80,8 +80,6 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
   const fileInput = useRef<HTMLInputElement | null>(null);
   const driveOn = driveImportEnabled();
   const [driveToken, setDriveToken] = useState('');
-  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
-  const [drivePick, setDrivePick] = useState('');
   const [driveBusy, setDriveBusy] = useState(false);
   const [driveError, setDriveError] = useState('');
 
@@ -188,37 +186,22 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
     setDriveError('');
     setDriveBusy(true);
     try {
-      const token = await requestDriveToken(googleClientId());
-      const files = await listGoogleDocs(token);
+      const token = driveToken || await requestDriveToken(googleClientId());
       setDriveToken(token);
-      setDriveFiles(files);
-      setDrivePick(files[0]?.id ?? '');
-      setToast(files.length
-        ? 'Google Drive connected. Choose a document to import.'
-        : 'Google Drive connected, but no Google Docs were found.');
-    } catch (err) {
-      setDriveError(err instanceof Error ? err.message : 'Google Drive could not connect.');
-    } finally {
-      setDriveBusy(false);
-    }
-  };
-
-  const importDrive = async () => {
-    const file = driveFiles.find((item) => item.id === drivePick);
-    if (!file) {
-      setDriveError('Choose a Google Doc first.');
-      return;
-    }
-    setDriveError('');
-    setDriveBusy(true);
-    try {
-      const text = await exportGoogleDoc(driveToken, file);
-      setText(text);
+      const file = await pickGoogleDoc(token);
+      if (!file) {
+        setToast('No document selected. You can try again whenever you are ready.');
+        return;
+      }
+      const imported = await exportGoogleDoc(token, file);
+      setText(imported);
       setTitle(file.name.replace(/\.[^.]+$/, '').slice(0, 120));
       if (file.webViewLink && validHttpUrl(file.webViewLink)) setSourceUrl(file.webViewLink);
       setToast('Google Doc imported. Review it, then build your pack.');
     } catch (err) {
-      setDriveError(err instanceof Error ? err.message : 'That Google Doc could not be read.');
+      const message = err instanceof Error ? err.message : 'Google Drive could not connect.';
+      setDriveError(message);
+      if (/expired|reconnect|access/i.test(message)) setDriveToken('');
     } finally {
       setDriveBusy(false);
     }
@@ -226,8 +209,6 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
 
   const disconnectDrive = () => {
     setDriveToken('');
-    setDriveFiles([]);
-    setDrivePick('');
     setDriveError('');
     setToast('Google Drive disconnected. The access token was discarded.');
   };
@@ -528,44 +509,27 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
             <div className="studio-drive">
               <div className="studio-drive-head">
                 <strong>Google Drive</strong>
-                <span className="muted">Official · read-only</span>
+                <span className="muted">Official · you pick the file</span>
               </div>
               <p className="muted">
-                Export a NotebookLM notebook to Google Docs, then pick that document here.
-                GramShiksha reads only the document you choose and keeps the access token
-                in this tab — never on a server.
+                Export a NotebookLM notebook to Google Docs, then choose that one document
+                in Google's picker. GramShiksha can read only the file you select and keeps
+                the access token in this tab — never on a server.
               </p>
-              {!driveToken ? (
+              <div className="studio-import-actions">
                 <button className="btn ghost small" type="button" onClick={connectDrive} disabled={driveBusy}>
-                  {driveBusy ? 'Connecting…' : 'Connect Google Drive'}
+                  {driveBusy
+                    ? 'Opening Google Drive…'
+                    : driveToken
+                      ? 'Choose another Google Doc'
+                      : 'Choose from Google Drive'}
                 </button>
-              ) : (
-                <>
-                  <label className="sr-only" htmlFor="studio-drive-file">Google Doc</label>
-                  <select
-                    id="studio-drive-file"
-                    value={drivePick}
-                    onChange={(event) => setDrivePick(event.target.value)}
-                    disabled={driveBusy}
-                  >
-                    <option value="">{driveFiles.length ? 'Choose a document' : 'No Google Docs found'}</option>
-                    {driveFiles.map((file) => (
-                      <option key={file.id} value={file.id}>{file.name}</option>
-                    ))}
-                  </select>
-                  <div className="studio-import-actions">
-                    <button className="btn small" type="button" onClick={importDrive} disabled={driveBusy || !drivePick}>
-                      {driveBusy ? 'Importing…' : 'Import selected doc'}
-                    </button>
-                    <button className="btn ghost small" type="button" onClick={connectDrive} disabled={driveBusy}>
-                      Refresh list
-                    </button>
-                    <button className="btn ghost small" type="button" onClick={disconnectDrive} disabled={driveBusy}>
-                      Disconnect
-                    </button>
-                  </div>
-                </>
-              )}
+                {driveToken && (
+                  <button className="btn ghost small" type="button" onClick={disconnectDrive} disabled={driveBusy}>
+                    Disconnect
+                  </button>
+                )}
+              </div>
               {driveError && <p className="error" role="alert">{driveError}</p>}
             </div>
           )}

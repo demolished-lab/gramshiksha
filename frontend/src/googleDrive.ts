@@ -1,15 +1,20 @@
 /**
  * Google Drive import for Study Studio.
  *
- * This is the official, user-consented route: the learner signs in to their own
- * Google account with Google Identity Services, grants read-only Drive access,
- * and picks a Google Doc that NotebookLM exported. The access token stays in
- * memory for this tab; GramShiksha never receives a refresh token, a password
- * or a cookie.
+ * The learner signs in to their own Google account with Google Identity
+ * Services, then chooses one document in Google's own Picker. We request only
+ * `drive.file`, so GramShiksha can read the file the learner selected and
+ * nothing else. The access token stays in memory for this tab; GramShiksha
+ * never receives a refresh token, a password or a cookie.
  *
- * It is disabled until a public OAuth client ID is present at build time:
+ * The card is disabled until all three public values are present at build time:
  *   VITE_GOOGLE_CLIENT_ID=...apps.googleusercontent.com
- * The authorized JavaScript origin must be the production site.
+ *   VITE_GOOGLE_PICKER_KEY=...        (browser API key, Picker API only)
+ *   VITE_GOOGLE_APP_ID=...            (Google Cloud project number)
+ *
+ * The OAuth client's authorized JavaScript origin must include the site, and
+ * the API key must allow the site plus https://docs.google.com/* (the Picker
+ * iframe's origin). No client secret is used or needed.
  */
 
 export interface DriveFile {
@@ -39,34 +44,96 @@ interface OAuth2 {
   }) => TokenClient;
 }
 
+interface PickerDocument {
+  id: string;
+  name: string;
+  mimeType: string;
+  url?: string;
+  lastEditedUtc?: number;
+}
+
+interface PickerResponse {
+  action?: string;
+  docs?: PickerDocument[];
+}
+
+interface PickerView {
+  setIncludeFolders: (include: boolean) => PickerView;
+  setSelectFolderEnabled: (enabled: boolean) => PickerView;
+  setMode: (mode: string) => PickerView;
+  setMimeTypes: (mimeTypes: string) => PickerView;
+}
+
+interface PickerInstance {
+  setVisible: (visible: boolean) => void;
+}
+
+interface PickerBuilder {
+  addView: (view: PickerView) => PickerBuilder;
+  setOAuthToken: (token: string) => PickerBuilder;
+  setDeveloperKey: (key: string) => PickerBuilder;
+  setAppId: (appId: string) => PickerBuilder;
+  setCallback: (callback: (data: PickerResponse) => void) => PickerBuilder;
+  build: () => PickerInstance;
+}
+
+interface PickerNamespace {
+  PickerBuilder: new () => PickerBuilder;
+  DocsView: new (viewId?: string) => PickerView;
+  ViewId: { DOCS: string };
+  DocsViewMode: { LIST: string };
+  Action: { PICKED: 'picked'; CANCEL: 'cancel' };
+  Response: { ACTION: 'action'; DOCUMENTS: 'docs' };
+}
+
 declare global {
   interface Window {
-    google?: { accounts?: { oauth2?: OAuth2 } };
+    gapi?: { load: (library: string, callback: () => void) => void };
+    google?: {
+      accounts?: { oauth2?: OAuth2 };
+      picker?: PickerNamespace;
+    };
   }
 }
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
-const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+const GAPI_SRC = 'https://apis.google.com/js/api.js';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const DOC_MIME = 'application/vnd.google-apps.document';
 const MAX_TEXT = 120_000;
 
-let loader: Promise<void> | null = null;
+let identityLoader: Promise<void> | null = null;
+let pickerLoader: Promise<void> | null = null;
 
 const env = (key: string): string => {
-  const value = (import.meta as unknown as { env?: Record<string, string> }).env?.[key];
-  return typeof value === 'string' ? value.trim() : '';
+  const viteValue = (import.meta as unknown as { env?: Record<string, string> }).env?.[key];
+  if (typeof viteValue === 'string' && viteValue.trim()) return viteValue.trim();
+  // Vitest can stub process.env but not Vite's frozen import.meta.env object.
+  // The browser has no process global, so this fallback never runs in prod.
+  const processEnv = (globalThis as {
+    process?: { env?: Record<string, string | undefined> };
+  }).process?.env;
+  const processValue = processEnv?.[key];
+  return typeof processValue === 'string' ? processValue.trim() : '';
 };
 
-/** Public client ID. Empty means the Drive card is not rendered at all. */
+/** Public OAuth client ID. Empty means the Drive card is not rendered at all. */
 export const googleClientId = (): string => env('VITE_GOOGLE_CLIENT_ID');
 
-export const driveImportEnabled = (): boolean => Boolean(googleClientId());
+/** Public browser key restricted to the Picker API and the Studio origins. */
+export const googlePickerKey = (): string => env('VITE_GOOGLE_PICKER_KEY');
+
+/** Google Cloud project number, used by the Picker to identify the app. */
+export const googleAppId = (): string => env('VITE_GOOGLE_APP_ID');
+
+export const driveImportEnabled = (): boolean =>
+  Boolean(googleClientId() && googlePickerKey() && googleAppId());
 
 export function loadGoogleIdentity(): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject(new Error('Google sign-in only runs in a browser.'));
   if (window.google?.accounts?.oauth2) return Promise.resolve();
-  if (loader) return loader;
-  loader = new Promise<void>((resolve, reject) => {
+  if (identityLoader) return identityLoader;
+  identityLoader = new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${GIS_SRC}"]`);
     if (existing) {
       existing.addEventListener('load', () => resolve(), { once: true });
@@ -79,12 +146,63 @@ export function loadGoogleIdentity(): Promise<void> {
     script.defer = true;
     script.onload = () => resolve();
     script.onerror = () => {
-      loader = null;
+      identityLoader = null;
       reject(new Error('Google sign-in could not load. Check your connection and try again.'));
     };
     document.head.appendChild(script);
   });
-  return loader;
+  return identityLoader;
+}
+
+export function loadGooglePicker(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('Google Picker only runs in a browser.'));
+  if (window.google?.picker) return Promise.resolve();
+  if (pickerLoader) return pickerLoader;
+
+  pickerLoader = new Promise<void>((resolve, reject) => {
+    const loadLibrary = () => {
+      const gapi = window.gapi;
+      if (!gapi?.load) {
+        reject(new Error('Google Picker could not load.'));
+        return;
+      }
+      try {
+        gapi.load('picker', () => {
+          if (window.google?.picker) resolve();
+          else reject(new Error('Google Picker could not load.'));
+        });
+      } catch {
+        reject(new Error('Google Picker could not load.'));
+      }
+    };
+
+    if (window.gapi?.load) {
+      loadLibrary();
+      return;
+    }
+
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${GAPI_SRC}"]`);
+    if (existing) {
+      existing.addEventListener('load', loadLibrary, { once: true });
+      existing.addEventListener('error', () => {
+        pickerLoader = null;
+        reject(new Error('Google Picker could not load. Check your connection and try again.'));
+      }, { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = GAPI_SRC;
+    script.async = true;
+    script.defer = true;
+    script.onload = loadLibrary;
+    script.onerror = () => {
+      pickerLoader = null;
+      reject(new Error('Google Picker could not load. Check your connection and try again.'));
+    };
+    document.head.appendChild(script);
+  });
+  return pickerLoader;
 }
 
 export async function requestDriveToken(clientId = googleClientId()): Promise<string> {
@@ -106,23 +224,71 @@ export async function requestDriveToken(clientId = googleClientId()): Promise<st
   });
 }
 
-const authHeaders = (token: string): HeadersInit => ({ Authorization: `Bearer ${token}` });
+/**
+ * Open Google's own file picker. Resolves with the learner's chosen Google Doc,
+ * or `null` when they close the picker without choosing anything.
+ */
+export async function pickGoogleDoc(token: string): Promise<DriveFile | null> {
+  const pickerKey = googlePickerKey();
+  const appId = googleAppId();
+  if (!pickerKey) throw new Error('Google Picker is not configured yet.');
+  await loadGooglePicker();
+  const picker = window.google?.picker;
+  if (!picker) throw new Error('Google Picker is unavailable in this browser.');
 
-export async function listGoogleDocs(token: string): Promise<DriveFile[]> {
-  const params = new URLSearchParams({
-    q: `trashed = false and mimeType = '${DOC_MIME}'`,
-    orderBy: 'modifiedTime desc',
-    pageSize: '20',
-    fields: 'files(id,name,mimeType,modifiedTime,webViewLink)',
+  return new Promise<DriveFile | null>((resolve, reject) => {
+    let settled = false;
+    const finish = (file: DriveFile | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(file);
+    };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+
+    try {
+      const view = new picker.DocsView(picker.ViewId.DOCS)
+        .setIncludeFolders(false)
+        .setSelectFolderEnabled(false)
+        .setMode(picker.DocsViewMode.LIST)
+        .setMimeTypes(DOC_MIME);
+      const builder = new picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(token)
+        .setDeveloperKey(pickerKey)
+        .setCallback((data) => {
+          const action = data.action;
+          const doc = data.docs?.[0];
+          if (action === picker.Action.PICKED) {
+            if (!doc) {
+              fail(new Error('Google did not return a document.'));
+              return;
+            }
+            finish({
+              id: doc.id,
+              name: doc.name,
+              mimeType: doc.mimeType,
+              webViewLink: doc.url,
+              modifiedTime: typeof doc.lastEditedUtc === 'number'
+                ? new Date(doc.lastEditedUtc).toISOString()
+                : undefined,
+            });
+          } else if (action === picker.Action.CANCEL) {
+            finish(null);
+          }
+        });
+      if (appId) builder.setAppId(appId);
+      builder.build().setVisible(true);
+    } catch {
+      fail(new Error('Google Picker could not open.'));
+    }
   });
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, {
-    headers: authHeaders(token),
-  });
-  if (response.status === 401) throw new Error('Google access expired. Connect again.');
-  if (!response.ok) throw new Error('Google Drive could not list your documents.');
-  const body = await response.json() as { files?: DriveFile[] };
-  return Array.isArray(body.files) ? body.files : [];
 }
+
+const authHeaders = (token: string): HeadersInit => ({ Authorization: `Bearer ${token}` });
 
 export async function exportGoogleDoc(token: string, file: DriveFile): Promise<string> {
   if (file.mimeType !== DOC_MIME) throw new Error('Choose a Google Doc exported from NotebookLM.');

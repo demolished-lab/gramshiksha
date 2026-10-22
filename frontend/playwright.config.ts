@@ -17,9 +17,13 @@ export default defineConfig({
     url: 'http://127.0.0.1:4174',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
-    // Enables the opt-in Drive card for its UI test. The production build has
-    // no client ID and therefore keeps the card hidden.
-    env: { VITE_GOOGLE_CLIENT_ID: 'test-client-id.apps.googleusercontent.com' },
+    // Enables the opt-in Drive card for its UI test. The production build is
+    // given the real public values at build time; tests use harmless stand-ins.
+    env: {
+      VITE_GOOGLE_CLIENT_ID: 'test-client-id.apps.googleusercontent.com',
+      VITE_GOOGLE_PICKER_KEY: 'test-picker-key',
+      VITE_GOOGLE_APP_ID: '1234567890',
+    },
   },
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'], browserName: 'chromium' } },
