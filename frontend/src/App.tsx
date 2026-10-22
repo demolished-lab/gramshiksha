@@ -330,7 +330,7 @@ export default function App() {
       {!online && <div className="banner-offline" role="status">📴 {t('offlineNote', lang)} <span>Cached lessons remain available.</span></div>}
       {authenticated && mobileNavOpen && <button className="drawer-backdrop" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
       <aside className={`sidebar ${mobileNavOpen ? 'drawer-open' : ''}`} aria-label="Workspace navigation">
-        <div className="sidebar-header"><a className="brand sidebar-brand" href="/" onClick={() => setMobileNavOpen(false)}><span className="brand-mark" aria-hidden="true">G</span><span><strong>GramShiksha</strong><small>Learn. Practice. Grow.</small></span></a><button className="drawer-close" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)}>×</button></div>
+        <div className="sidebar-header"><a className="brand sidebar-brand" href="/" onClick={() => setMobileNavOpen(false)}><img className="brand-mark-img" src="/images/gramshiksha-logo-192.png" alt="" width="34" height="34" /><span><strong>GramShiksha</strong><small>Learn. Practice. Grow.</small></span></a><button className="drawer-close" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)}>×</button></div>
         <div className="sidebar-label">Workspace</div>
         <nav className="sidebar-nav">
           {sidebarItems.map(([p, label]) => <a key={p} href={pathFor(p)} onClick={() => setMobileNavOpen(false)} className={route.page === p ? 'active' : ''} aria-current={route.page === p ? 'page' : undefined}><span className="nav-icon">{navIcons[p] ?? '•'}</span>{label}</a>)}
@@ -341,7 +341,7 @@ export default function App() {
       <header className="appbar">
         {authenticated && <button className="mobile-menu-toggle" aria-label="Open navigation" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen(true)}>☰</button>}
         <a className="brand" href="/">
-          <span className="brand-mark" aria-hidden="true">G</span>
+          <img className="brand-mark-img" src="/images/gramshiksha-logo-192.png" alt="" width="34" height="34" />
           {t('appName', lang)}
         </a>
         <span className="spacer" />

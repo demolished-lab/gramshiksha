@@ -85,6 +85,12 @@ export function inviteLink(code: string, siteUrl = OFF_CONFIG.site_url): string 
   return `${siteUrl.replace(/\/$/, '')}/?ref=${code}`;
 }
 
+/** Mobile UPI deep link. The payment goes straight to the configured UPI
+ *  account; GramShiksha never handles the PIN or the money. */
+export function upiPayUrl(upi: string, payee = 'GramShiksha Academy'): string {
+  return `upi://pay?pa=${encodeURIComponent(upi.trim())}&pn=${encodeURIComponent(payee)}&cu=INR`;
+}
+
 export interface ShareTargets {
   whatsapp: string;
   telegram: string;

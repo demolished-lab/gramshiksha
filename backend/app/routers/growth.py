@@ -31,6 +31,16 @@ router = APIRouter(tags=["growth"])
 
 _REF_RE = re.compile(r"^GS(\d{1,10})$")
 _PUBLISHER_RE = re.compile(r"^ca-(pub-\d{16})$")
+_UPI_RE = re.compile(r"^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9]{1,64}$")
+
+
+def _https_url(url: str) -> str | None:
+    """Only an absolute HTTPS URL with a host may reach the page. A typo or a
+    hostile env value degrades to a hidden slot, never a javascript: link."""
+    parts = urlparse((url or "").strip())
+    if parts.scheme == "https" and parts.netloc:
+        return parts.geturl()
+    return None
 
 
 def referral_code(user_id: int) -> str:
@@ -77,11 +87,17 @@ def growth_config():
     if settings.adsense_client and settings.adsense_slot:
         ads = {"client": settings.adsense_client, "slot": settings.adsense_slot}
     donate = None
-    if settings.donate_upi or settings.donate_url:
-        donate = {"upi": settings.donate_upi or None, "url": settings.donate_url or None}
+    upi = (settings.donate_upi or "").strip()
+    if upi and not _UPI_RE.match(upi):
+        log.warning("DONATE_UPI is not a valid UPI id — donate slot hidden")
+        upi = ""
+    donate_url = _https_url(settings.donate_url)
+    if upi or donate_url:
+        donate = {"upi": upi or None, "url": donate_url}
     sponsor = None
-    if settings.sponsor_text and settings.sponsor_url:
-        sponsor = {"text": settings.sponsor_text, "url": settings.sponsor_url}
+    sponsor_url = _https_url(settings.sponsor_url)
+    if settings.sponsor_text.strip() and sponsor_url:
+        sponsor = {"text": settings.sponsor_text.strip()[:120], "url": sponsor_url}
     return {
         "site_url": settings.site_url,
         "referral_enabled": settings.referral_enabled,
@@ -89,7 +105,7 @@ def growth_config():
         "donate": donate,
         "affiliates": affiliate_links(),
         "sponsor": sponsor,
-        "premium_url": settings.premium_url or None,
+        "premium_url": _https_url(settings.premium_url),
     }
 
 

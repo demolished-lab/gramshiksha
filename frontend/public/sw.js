@@ -18,10 +18,10 @@
    - responses marked `no-store` or `private` are the server saying "don't
      keep this" — we only keep the private ones in the per-account cache,
      which is exactly the scope the header allows. */
-const CACHE = 'gramshiksha-v4';
+const CACHE = 'gramshiksha-v5';
 const API_PREFIX = 'gramshiksha-api:';
 const OFFLINE_MATERIALS = 'gramshiksha-offline-materials';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg'];
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/images/gramshiksha-logo.png', '/images/gramshiksha-logo-192.png', '/images/favicon-32.png'];
 
 const OFFLINE = new Response('Offline', { status: 503, statusText: 'Offline' });
 

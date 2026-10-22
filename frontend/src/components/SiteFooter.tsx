@@ -10,6 +10,7 @@ import ShareButtons from './ShareButtons';
 export default function SiteFooter({ lang }: { lang: Lang }) {
   return (
     <footer className="site">
+      <img className="footer-logo" src="/images/gramshiksha-wordmark.png" alt="GramShiksha" width="699" height="118" loading="lazy" />
       <nav className="footer-links" aria-label="Site information">
         <a href="/about">{t('about', lang)}</a>
         <a href="/contact">{t('contact', lang)}</a>

@@ -87,11 +87,15 @@ useful content, a custom domain later, and genuine links.
 
 Set one or both in Render:
 
-- `DONATE_UPI=name@upi`
-- `DONATE_URL=https://ko-fi.com/yourpage` (or another free page)
+- `DONATE_UPI=name@upi` — a valid UPI id. The card shows **Donate with UPI**
+  (opens the learner's UPI app) and a **Copy UPI** button. The payment goes
+  straight to that account; GramShiksha never sees the PIN.
+- `DONATE_URL=https://ko-fi.com/yourpage` (or another free page). Only an
+  absolute `https://` link is accepted.
 
 The support card appears automatically. Never put a bank password, card number
-or UPI PIN in the repo or an env value.
+or UPI PIN in the repo or an env value. A malformed UPI id or non-HTTPS link is
+hidden rather than rendered as a broken button.
 
 ### 4. Affiliates
 

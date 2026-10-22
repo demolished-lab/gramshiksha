@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  captureReferral, fetchGrowthConfig, getReferral, inviteLink, OFF_CONFIG, shareLinks,
+  captureReferral, fetchGrowthConfig, getReferral, inviteLink, OFF_CONFIG, shareLinks, upiPayUrl,
 } from '../growth';
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -50,6 +50,11 @@ describe('share links', () => {
       expect(url).toContain(encodeURIComponent('https://example.in/#/courses'));
     }
     expect(targets.nativeAvailable).toBe(false); // node has no navigator.share
+  });
+
+  it('builds a mobile UPI payment link without handling the PIN', () => {
+    expect(upiPayUrl('gramshiksha@upi')).toBe(
+      'upi://pay?pa=gramshiksha%40upi&pn=GramShiksha%20Academy&cu=INR');
   });
 });
 

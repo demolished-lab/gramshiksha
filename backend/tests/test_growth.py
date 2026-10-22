@@ -44,6 +44,32 @@ def test_config_defaults_have_every_money_slot_off(client):
     assert client.get("/api/growth/config").status_code == 200
 
 
+def test_money_links_reject_invalid_or_unsafe_values(client, monkeypatch):
+    monkeypatch.setattr(settings, "donate_upi", "gramshiksha@upi")
+    monkeypatch.setattr(settings, "donate_url", "https://example.org/donate")
+    monkeypatch.setattr(settings, "premium_url", "https://example.org/premium")
+    monkeypatch.setattr(settings, "sponsor_text", "A local bookshop")
+    monkeypatch.setattr(settings, "sponsor_url", "https://example.org/sponsor")
+    cfg = client.get("/growth/config").json()
+    assert cfg["donate"] == {"upi": "gramshiksha@upi", "url": "https://example.org/donate"}
+    assert cfg["premium_url"] == "https://example.org/premium"
+    assert cfg["sponsor"]["url"] == "https://example.org/sponsor"
+
+    # A malformed UPI id is hidden, but a safe donation URL still works.
+    monkeypatch.setattr(settings, "donate_upi", "not a upi id")
+    cfg = client.get("/growth/config").json()
+    assert cfg["donate"] == {"upi": None, "url": "https://example.org/donate"}
+
+    # Non-HTTPS and javascript: URLs never reach the page.
+    monkeypatch.setattr(settings, "donate_url", "javascript:alert(1)")
+    monkeypatch.setattr(settings, "premium_url", "http://example.org/premium")
+    monkeypatch.setattr(settings, "sponsor_url", "javascript:alert(1)")
+    cfg = client.get("/growth/config").json()
+    assert cfg["donate"] is None
+    assert cfg["premium_url"] is None
+    assert cfg["sponsor"] is None
+
+
 def test_referral_loop_credits_inviter_and_lists_leaderboard(client):
     h_alice, _ = register(client, "alice-growth@x.in")
     my_code = client.get("/growth/me", headers=h_alice).json()
