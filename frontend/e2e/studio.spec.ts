@@ -62,6 +62,17 @@ test('a learner can import notes and use the native study pack', async ({ page }
   await expect(page.getByText(/1 on this device|on this device/i).first()).toBeVisible();
 });
 
+test('a share from the learner’s own NotebookLM app prefills the import form', async ({ page }) => {
+  const shared = 'Photosynthesis is how green plants use sunlight, water and carbon dioxide to make food. Chlorophyll absorbs the light. Oxygen is released.';
+  const url = `/studio?title=${encodeURIComponent('Shared notes')}&text=${encodeURIComponent(shared)}&url=${encodeURIComponent('https://notebooklm.google.com/')}`;
+  await page.goto(url);
+  await expect(page.locator('#studio-title')).toHaveValue('Shared notes');
+  await expect(page.locator('#studio-text')).toHaveValue(shared);
+  await expect(page.locator('#studio-source')).toHaveValue('https://notebooklm.google.com/');
+  await expect(page.getByText(/shared from your device/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: /build study pack/i })).toBeEnabled();
+});
+
 test('the study pack can be downloaded as a self-contained HTML file', async ({ page }) => {
   await page.goto('/studio');
   await page.getByRole('button', { name: /use a sample/i }).click();

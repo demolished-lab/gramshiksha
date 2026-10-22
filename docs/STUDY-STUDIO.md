@@ -41,6 +41,10 @@ credentials.
 - **Device-local library** — packs are saved in `localStorage`, scoped to the
   signed-in name and role, so they survive a reload and work offline.
 - **Export** — print / Save as PDF, or download a self-contained HTML file.
+- **PWA share target** — once the app is installed, a learner can tap
+  **Share → GramShiksha** from their own NotebookLM app; the shared title, text
+  and link prefill the import form. This is a user-initiated handoff, not a
+  background Google login.
 - **Privacy badge** — the page states that packs are saved on the device and that
   the Google session is never connected.
 - **Routing and SEO** — `/studio` is a private, `noindex` SPA route; it is not in
@@ -59,7 +63,9 @@ credentials.
 6. Keep it on the device, print it, or download the HTML copy.
 
 On a phone, the copy/paste flow works in every browser. It does not depend on a
-Chrome extension, a desktop-only connector, or a paid API.
+Chrome extension, a desktop-only connector, or a paid API. On Android, installing
+GramShiksha as a PWA adds it to the system share sheet, so the learner can tap
+**Share → GramShiksha** instead of copying and pasting manually.
 
 ## Why not fully automatic per-user NotebookLM?
 
@@ -69,12 +75,11 @@ Chrome extension, a desktop-only connector, or a paid API.
 | Official Gemini Notebook Enterprise API | Fully automatic | Paid Google Cloud; conflicts with the free-tier rule |
 | Server-side Gmail automation with stored cookies | Fully automatic | Rejected: credential custody, ToS and account-security risk |
 | Browser extension running in the user's own session | More automatic | Possible later; must be installed by the user and still respects Google's terms |
-| PWA share target | One-tap "Share to GramShiksha" on mobile | Good next step; still user-initiated |
+| PWA share target | One-tap "Share to GramShiksha" on mobile | **Shipped for text and links** |
+| Share a PDF file | Import a generated PDF directly | Later: needs a POST handler and PDF text extraction |
 
-The next safe step is a **share target**: the learner taps Share in NotebookLM
-and chooses GramShiksha. That still runs in the learner's session and sends only
-the shared text or file. It needs a service-worker POST handler and an import
-screen that accepts shared content; it does not need Google credentials.
+The share target still runs in the learner's session and sends only the content
+the learner chooses to share. It does not need Google credentials.
 
 ## Architecture as implemented
 
@@ -123,13 +128,14 @@ produces the same pack, which makes the feature testable and cheap to run.
 | `frontend/src/__tests__/studio.test.ts` | Parser and escaping tests |
 | `frontend/e2e/studio.spec.ts` | Desktop/mobile import and export tests |
 | `frontend/src/App.tsx` | Route, navigation and signed-out gate |
+| `frontend/public/manifest.webmanifest` | PWA share-target registration |
 | `frontend/seo-routes.json` | Private `noindex` SEO entry |
 | `frontend/vercel.json` | SPA rewrite and noindex header |
 | `frontend/src/styles.css` | Studio and print styles |
 
 ## Later, only with explicit approval
 
-- PWA share target for one-tap mobile import.
+- Share-target support for PDF/file shares (text and links already work).
 - Optional owner-only batch authoring for teacher-published packs.
 - Provider adapter for a free model, with the native parser as fallback.
 - Backend persistence and cross-device sync, with per-user quotas and moderation.

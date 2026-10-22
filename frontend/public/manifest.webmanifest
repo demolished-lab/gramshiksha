@@ -9,6 +9,15 @@
   "background_color": "#fdf8ef",
   "theme_color": "#1a7f37",
   "categories": ["education"],
+  "share_target": {
+    "action": "/studio",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "icons": [
     {
       "src": "/favicon.svg",

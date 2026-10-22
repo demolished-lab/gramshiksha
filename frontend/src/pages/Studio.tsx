@@ -82,6 +82,24 @@ export default function Studio({ lang, user }: { lang: Lang; user: SessionUser }
   }, [storageKey]);
 
   useEffect(() => {
+    // Android's Web Share Target opens /studio?title=…&text=…&url=… after the
+    // learner taps "Share → GramShiksha" in their own NotebookLM app. Read it
+    // once, prefill the import form, then clean the address bar.
+    const params = new URLSearchParams(window.location.search);
+    const sharedTitle = (params.get('title') ?? '').slice(0, 120);
+    const sharedText = (params.get('text') ?? '').slice(0, 120_000);
+    const sharedUrl = (params.get('url') ?? '').slice(0, 500);
+    if (!sharedTitle && !sharedText && !sharedUrl) return;
+    if (sharedTitle) setTitle(sharedTitle);
+    if (sharedText) setText(sharedText);
+    if (validHttpUrl(sharedUrl)) setSourceUrl(sharedUrl);
+    setToast(sharedText.trim().length >= 40
+      ? 'Shared from your device. Review it, then build your pack.'
+      : 'Link added. Paste the notes text from NotebookLM to build a pack.');
+    window.history.replaceState(null, '', window.location.pathname);
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(''), 3200);
     return () => window.clearTimeout(timer);
