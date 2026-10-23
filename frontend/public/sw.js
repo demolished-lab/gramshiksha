@@ -18,10 +18,18 @@
    - responses marked `no-store` or `private` are the server saying "don't
      keep this" — we only keep the private ones in the per-account cache,
      which is exactly the scope the header allows. */
-const CACHE = 'gramshiksha-v5';
+const CACHE = 'gramshiksha-v6';
 const API_PREFIX = 'gramshiksha-api:';
 const OFFLINE_MATERIALS = 'gramshiksha-offline-materials';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/images/gramshiksha-logo.png', '/images/gramshiksha-logo-192.png', '/images/favicon-32.png'];
+const SHELL = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/favicon.ico',
+  '/images/gramshiksha-logo.png?v=2',
+  '/images/gramshiksha-logo-192.png?v=2',
+  '/images/favicon-32.png?v=2',
+];
 
 const OFFLINE = new Response('Offline', { status: 503, statusText: 'Offline' });
 
@@ -40,7 +48,15 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // Cache each shell URL independently: one stale/missing asset must never
+  // block the whole service-worker update and strand the old favicon.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => Promise.all(
+        SHELL.map((url) => c.add(new Request(url, { cache: 'reload' })).catch(() => {}))
+      ))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
