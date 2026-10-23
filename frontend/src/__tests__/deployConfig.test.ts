@@ -28,7 +28,7 @@ const config = JSON.parse(rawConfig) as {
   headers: Rule[];
 };
 
-const DOCUMENT_SOURCE = '/((?!api/|assets/|images/|favicon\\.(svg|ico)|manifest\\.webmanifest|sw\\.js|robots\\.txt|sitemap\\.xml|ads\\.txt).*)';
+const DOCUMENT_SOURCE = '/((?!api/|assets/|images/|favicon\\.svg|favicon\\.ico|manifest\\.webmanifest|sw\\.js|robots\\.txt|sitemap\\.xml|ads\\.txt).*)';
 
 const headersOf = (source: string) =>
   config.headers.find((r) => r.source === source)?.headers ?? [];

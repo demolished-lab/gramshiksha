@@ -46,7 +46,7 @@
       ]
     },
     {
-      "source": "/((?!api/|assets/|images/|favicon\\.(svg|ico)|manifest\\.webmanifest|sw\\.js|robots\\.txt|sitemap\\.xml|ads\\.txt).*)",
+      "source": "/((?!api/|assets/|images/|favicon\\.svg|favicon\\.ico|manifest\\.webmanifest|sw\\.js|robots\\.txt|sitemap\\.xml|ads\\.txt).*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
